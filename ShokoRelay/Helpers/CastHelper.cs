@@ -74,7 +74,7 @@ public static class CastHelper
         {
             var asm = typeof(CastHelper).Assembly;
             if (
-                asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(ShokoRelayConstants.FileDefaultCreditOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
+                asm.GetManifestResourceNames().FirstOrDefault(resName => resName.EndsWith(ShokoRelayConstants.FileDefaultCreditOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
                 && asm.GetManifestResourceStream(resName) is { } stream
             )
             {
@@ -220,7 +220,7 @@ public static class CastHelper
             (series, record) =>
             {
                 var tmdbSeries = series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
-                var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+                var networkNames = tmdbSeries?.Networks?.Select(network => network.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
                 void Record(MetadataSource source, string? name, bool isPerson)
                 {
@@ -365,25 +365,25 @@ public static class CastHelper
         }
 
         if (item.Cast != null)
-            ProcessRoleGroup(item.Cast, c => c.Creator, c => c.Source, c => c.Character?.Title ?? c.Name);
+            ProcessRoleGroup(item.Cast, cast => cast.Creator, cast => cast.Source, cast => cast.Character?.Title ?? cast.Name);
 
         if (Settings.CrewListings && item.Crew != null)
-            foreach (var group in item.Crew.GroupBy(c => c.RoleType))
-                ProcessRoleGroup(group, c => c.Creator, c => c.Source, c => c.RoleType == CrewRoleType.Music ? "Composer" : CleanCrewRole(c.Name));
+            foreach (var group in item.Crew.GroupBy(crew => crew.RoleType))
+                ProcessRoleGroup(group, crew => crew.Creator, crew => crew.Source, crew => crew.RoleType == CrewRoleType.Music ? "Composer" : CleanCrewRole(crew.Name));
 
         if (Settings.CompanyListings && item is ISeries series)
         {
             var anidbMergedStudios = (metadataService != null && series is IShokoSeries { AnidbAnimeID: > 0 } ss) ? metadataService.GetMergedStudios(ss.AnidbAnimeID) : [];
 
-            var animationStudioNames = anidbMergedStudios.Select(s => s.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var networkNames = tmdbSeries?.Networks?.Select(n => n.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+            var animationStudioNames = anidbMergedStudios.Select(studio => studio.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var networkNames = tmdbSeries?.Networks?.Select(network => network.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
 
             // Process TMDB studios first so their high-resolution logos are cached and preferred over AniDB images
             var allStudios = (series.Studios ?? [])
                 .Concat(tmdbSeries?.Studios ?? [])
                 .Concat(anidbMergedStudios)
-                .Where(s => !string.IsNullOrWhiteSpace(s.Name) && !networkNames.Contains(s.Name) && !IsCreditBlacklisted(s.Name))
-                .OrderByDescending(s => s.ID.Source == MetadataSource.TMDB);
+                .Where(studio => !string.IsNullOrWhiteSpace(studio.Name) && !networkNames.Contains(studio.Name) && !IsCreditBlacklisted(studio.Name))
+                .OrderByDescending(studio => studio.ID.Source == MetadataSource.TMDB);
 
             var studioGroups = new Dictionary<string, (string Name, bool IsAnimationStudio, string? Thumb)>(StringComparer.OrdinalIgnoreCase);
 
@@ -408,7 +408,7 @@ public static class CastHelper
                 }
             }
 
-            var ordered = studioGroups.Values.OrderByDescending(x => x.IsAnimationStudio).ThenBy(x => x.Name);
+            var ordered = studioGroups.Values.OrderByDescending(studioItem => studioItem.IsAnimationStudio).ThenBy(studioItem => studioItem.Name);
 
             foreach (var (name, isAnimation, thumb) in ordered)
                 finalRoles.Add(
@@ -429,20 +429,20 @@ public static class CastHelper
     /// <param name="item">Item with cast/crew data.</param>
     /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing director names.</returns>
-    public static object[] GetDirectors(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, c => c.RoleType == CrewRoleType.Director, metadataService);
+    public static object[] GetDirectors(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, crew => crew.RoleType == CrewRoleType.Director, metadataService);
 
     /// <summary>Retrieve writing credits (series composers or source work) for the item.</summary>
     /// <param name="item">Source item.</param>
     /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing writer names.</returns>
     public static object[] GetWriters(IWithCastAndCrew item, IMetadataService? metadataService = null) =>
-        FilterCrew(item, c => c.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork, metadataService);
+        FilterCrew(item, crew => crew.RoleType is CrewRoleType.SeriesComposer or CrewRoleType.SourceWork, metadataService);
 
     /// <summary>Retrieve producer credits for the given item.</summary>
     /// <param name="item">Item with cast/crew data.</param>
     /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of anonymous objects containing producer names.</returns>
-    public static object[] GetProducers(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, c => c.RoleType == CrewRoleType.Producer, metadataService);
+    public static object[] GetProducers(IWithCastAndCrew item, IMetadataService? metadataService = null) => FilterCrew(item, crew => crew.RoleType == CrewRoleType.Producer, metadataService);
 
     #endregion
 
@@ -552,14 +552,14 @@ public static class CastHelper
         return
         [
             .. DeduplicateCrew(item.Crew?.Where(predicate))
-                .Select(c =>
+                .Select(crew =>
                 {
-                    if (c.Creator == null)
+                    if (crew.Creator == null)
                         return null;
-                    string? rawName = c.Creator.Title;
+                    string? rawName = crew.Creator.Title;
                     return string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName)
                         ? null
-                        : ResolvePreferredCreditName(rawName, c.Creator.Type == CreatorType.Person, c.Source == MetadataSource.TMDB ? 2 : 1);
+                        : ResolvePreferredCreditName(rawName, crew.Creator.Type == CreatorType.Person, crew.Source == MetadataSource.TMDB ? 2 : 1);
                 })
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .DistinctBy(name => NormalizeCreditKey(name!))
@@ -575,10 +575,10 @@ public static class CastHelper
         if (crewItems == null)
             yield break;
 
-        foreach (var group in crewItems.GroupBy(c => c.RoleType))
+        foreach (var group in crewItems.GroupBy(crew => crew.RoleType))
         {
-            var tmdb = group.Where(c => c.Source == MetadataSource.TMDB && c.Creator != null).ToList();
-            var anidb = group.Where(c => c.Source != MetadataSource.TMDB && c.Creator != null);
+            var tmdb = group.Where(crew => crew.Source == MetadataSource.TMDB && crew.Creator != null).ToList();
+            var anidb = group.Where(crew => crew.Source != MetadataSource.TMDB && crew.Creator != null);
 
             if (tmdb.Count == 0)
             {
@@ -587,7 +587,7 @@ public static class CastHelper
                 continue;
             }
 
-            var index = new TmdbRoleIndex<ICrew>(tmdb, t => t.Creator, t => t.Creator?.Title);
+            var index = new TmdbRoleIndex<ICrew>(tmdb, role => role.Creator, role => role.Creator?.Title);
             var matchedTmdbEntries = new HashSet<ICrew>();
 
             foreach (var crewMember in anidb)

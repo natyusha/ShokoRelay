@@ -181,7 +181,7 @@ public class DashboardController(
     public IActionResult GetConfig()
     {
         var payload = ConfigProvider.GetDashboardConfig();
-        var themes = webThemeService.GetThemes(forceRefresh: false).Select(t => new { id = t.ID, name = t.Name }).ToList();
+        var themes = webThemeService.GetThemes(forceRefresh: false).Select(theme => new { id = theme.ID, name = theme.Name }).ToList();
         var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
         return Ok(
             new
@@ -272,7 +272,7 @@ public class DashboardController(
             {
                 var valuesCss =
                     themeDef.Values.Count > 0
-                        ? $":root {{\n{string.Join("\n", themeDef.Values.Select(v => $"  --{(v.Key.StartsWith("--", StringComparison.Ordinal) ? v.Key[2..] : v.Key)}: {v.Value};"))}\n}}\n"
+                        ? $":root {{\n{string.Join("\n", themeDef.Values.Select(variable => $"  --{(variable.Key.StartsWith("--", StringComparison.Ordinal) ? variable.Key[2..] : variable.Key)}: {variable.Value};"))}\n}}\n"
                         : string.Empty;
                 var rawCss = themeDef.CssContent?.Trim() ?? string.Empty;
                 string wrappedCss = rawCss;
@@ -348,25 +348,25 @@ public class DashboardController(
 
     #region Logs
 
-    /// <summary>Returns a JSON list of all currently generated task logs that exist on disk.</summary>
-    /// <returns>A list of log file metadata objects.</returns>
+    /// <summary>Returns a JSON list of all currently generated task reports that exist on disk.</summary>
+    /// <returns>A list of report file metadata objects.</returns>
     [HttpGet("logs/list")]
     public IActionResult GetLogsList() =>
         !Directory.Exists(ConfigProvider.LogsDirectory)
             ? Ok(Array.Empty<object>())
             : Ok(
                 Directory
-                    .EnumerateFiles(ConfigProvider.LogsDirectory, "*-report.log")
+                    .EnumerateFiles(ConfigProvider.LogsDirectory, "*.report")
                     .Select(Path.GetFileName)
                     .OfType<string>()
-                    .OrderBy(f => f)
-                    .Select(file => new { name = file, friendlyName = TagHelper.TitleCase(file.Replace("-report.log", "", StringComparison.Ordinal).Replace("-", " ", StringComparison.Ordinal)) })
+                    .OrderBy(file => file)
+                    .Select(file => new { name = file, friendlyName = TagHelper.TitleCase(Path.GetFileNameWithoutExtension(file).Replace("-", " ", StringComparison.Ordinal)) })
                     .ToList()
             );
 
-    /// <summary>Serves report files from the plugin's logs directory without allowing browser caching or directory traversal.</summary>
-    /// <param name="fileName">The log filename.</param>
-    /// <returns>The log content as text/plain; charset=utf-8.</returns>
+    /// <summary>Serves report files from the plugin's reports directory without allowing browser caching or directory traversal.</summary>
+    /// <param name="fileName">The report filename.</param>
+    /// <returns>The report content as text/plain; charset=utf-8.</returns>
     [HttpGet("logs/{fileName}")]
     public IActionResult GetLog(string fileName)
     {
@@ -378,7 +378,7 @@ public class DashboardController(
         string safeFileName = Path.GetFileName(fileName);
         string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));
 
-        if (!requested.StartsWith(logsDirWithSep, VfsShared.PathComparison) || !safeFileName.EndsWith("-report.log", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!requested.StartsWith(logsDirWithSep, VfsShared.PathComparison) || !safeFileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound(new { status = "error", message = "log not found" });
 
         Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
@@ -407,7 +407,7 @@ public class DashboardController(
         var html = IoFile.ReadAllText(requested);
 
         // Replace {{ConstantName}} placeholders with values from ShokoRelayConstants
-        var fields = typeof(ShokoRelayConstants).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Where(f => f.IsLiteral && !f.IsInitOnly);
+        var fields = typeof(ShokoRelayConstants).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Where(field => field.IsLiteral && !field.IsInitOnly);
         foreach (var field in fields)
             html = Regex.Replace(html, $@"\{{\{{\s?{field.Name}\s?\}}}}", field.GetValue(null)?.ToString() ?? "");
 
@@ -459,11 +459,11 @@ public class DashboardController(
                     .Cast<object>()
                     .Select(val =>
                     {
-                        int iv = Convert.ToInt32(val);
-                        string memberName = Enum.GetName(propType, val) ?? iv.ToString();
-                        return new { name = propType.GetField(memberName)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = iv };
+                        int enumValue = Convert.ToInt32(val);
+                        string memberName = Enum.GetName(propType, val) ?? enumValue.ToString();
+                        return new { name = propType.GetField(memberName)?.GetCustomAttribute<DisplayAttribute>()?.Name ?? memberName, value = enumValue };
                     })
-                    .Where(x => !isFlags || (x.value > 0 && (x.value & (x.value - 1)) == 0))
+                    .Where(enumItem => !isFlags || (enumItem.value > 0 && (enumItem.value & (enumItem.value - 1)) == 0))
                     .ToArray();
                 props.Add(new ConfigPropertySchema(path, isFlags ? "flags" : "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild, isLanguage));
             }

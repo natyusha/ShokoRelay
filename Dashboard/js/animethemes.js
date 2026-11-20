@@ -41,17 +41,17 @@
      * @returns {Promise<void>}
      */
     atMp3Build: async () => {
-      const ps = window._sr.getAtParams();
-      const isBatch = ps.get("batch") === "true";
+      const queryParams = window._sr.getAtParams();
+      const isBatch = queryParams.get("batch") === "true";
       const label = "AnimeThemes MP3";
 
       showToast(`${label}: Generating...`, "info", TOAST_MS);
-      const res = await fetchJson(`${base}/animethemes/mp3?${ps}`);
+      const res = await fetchJson(`${base}/animethemes/mp3?${queryParams}`);
       const resData = getData(res);
 
       const status = resData?.Status || resData?.status;
       const message = resData?.Message || resData?.message;
-      const folder = resData?.Folder || resData?.folder || ps.get("path");
+      const folder = resData?.Folder || resData?.folder || queryParams.get("path");
 
       let summary = summarizeResult(res).text;
       let isNoTheme = false;
@@ -79,7 +79,7 @@
 
         // Trigger playback side effect if a theme exists locally (or play first downloaded theme from a batch)
         if (!isBatch && (status === "ok" || (status === "skipped" && message === "Theme.mp3 already exists."))) {
-          const playPath = resData?.Folder || resData?.folder || ps.get("path");
+          const playPath = resData?.Folder || resData?.folder || queryParams.get("path");
           if (playPath) playThemeMp3(playPath);
         } else if (isBatch) {
           const items = resData?.Items || resData?.items || [];

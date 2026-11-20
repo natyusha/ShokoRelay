@@ -4,7 +4,7 @@ using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
 
-#region Models
+#region Interface & Models
 
 /// <summary>Result returned by <see cref="CollectionService.BuildCollectionsAsync"/>.</summary>
 /// <param name="Processed">Number of series processed.</param>
@@ -73,10 +73,9 @@ public class CollectionService(
     {
         const string TaskName = ShokoRelayConstants.TaskPlexCollectionsBuild;
         await _buildLock.WaitAsync(cancellationToken).ConfigureAwait(false);
-        TaskHelper.StartTask(TaskName);
+        bool startedTask = TaskHelper.StartTask(TaskName);
         logger.LogInformation("CollectionService: Starting task...");
         var sw = Stopwatch.StartNew();
-
         try
         {
             var (created, uploaded, alreadyUploaded, errors, uniqueSeries) = (0, 0, 0, 0, new HashSet<int>());
@@ -89,7 +88,7 @@ public class CollectionService(
 
             var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(f => f.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct()];
+            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(folder => folder.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct()];
 
             string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
             var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -142,7 +141,7 @@ public class CollectionService(
 
                             try
                             {
-                                var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(f => f.LastWriteTimeUtc).ToList();
+                                var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(file => file.LastWriteTimeUtc).ToList();
                                 if (files.Count > 1)
                                     foreach (var file in files.SkipLast(1))
                                         try
@@ -437,7 +436,8 @@ public class CollectionService(
         finally
         {
             _buildLock.Release();
-            TaskHelper.FinishTask(TaskName);
+            if (startedTask)
+                TaskHelper.FinishTask(TaskName);
         }
     }
 

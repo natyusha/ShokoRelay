@@ -12,6 +12,8 @@ using Shoko.Abstractions.User.Services;
 
 namespace ShokoRelay.Controllers;
 
+#region Auth Helpers
+
 /// <summary>Issues and validates signed HttpOnly session cookies for Shoko Relay administrator authentication.</summary>
 /// <remarks>
 /// Cookie-authenticated requests do not carry a Shoko <see cref="ApiToken"/>, so Shoko's <see cref="IActorContext.Current"/> remains <c>null</c> (system) on triggered events.
@@ -153,6 +155,8 @@ public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilt
     }
 }
 
+#endregion
+
 /// <summary>Provides the foundational infrastructure for all Shoko Relay controllers.</summary>
 /// <remarks>Contains shared logic for logging, validation, response formatting, and Plex discovery.</remarks>
 /// <param name="configProvider">Configuration provider.</param>
@@ -213,8 +217,8 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         try
         {
             T result = await action().ConfigureAwait(false);
-            LogHelper.WriteReport($"{taskName}-report.log", result, reportBuilder, Logger);
-            IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, LogUrl: $"{ApiBase}/logs/{taskName}-report.log"));
+            ReportHelper.WriteReport($"{taskName}.report", result, reportBuilder, Logger);
+            IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, LogUrl: $"{ApiBase}/logs/{taskName}.report"));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }
@@ -424,12 +428,12 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         if (discovery.TokenValid && discovery.Servers?.Count > 0)
         {
             var servers = discovery
-                .Servers.Select(s => new PlexAvailableServer
+                .Servers.Select(server => new PlexAvailableServer
                 {
-                    Id = s.Id,
-                    Name = s.Name,
-                    PreferredUri = s.PreferredUri ?? string.Empty,
-                    HttpsRequired = s.HttpsRequired,
+                    Id = server.Id,
+                    Name = server.Name,
+                    PreferredUri = server.PreferredUri ?? string.Empty,
+                    HttpsRequired = server.HttpsRequired,
                 })
                 .ToList();
             ConfigProvider.UpdatePlexTokenInfo(servers: servers);

@@ -73,9 +73,10 @@ public class SyncToShoko(
         if (!includeAdmin && extraUsers.Count == 0)
             return result;
 
-        result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(e => e.Name), includeAdmin) };
+        result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(extraUser => extraUser.Name), includeAdmin) };
         var appliedWatchedIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
         var appliedProgressIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
+        var appliedRatedIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
         var tokenCache = new SyncHelper.PlexUserTokenCache();
         var shokoUserLookup = new Dictionary<string, IUser?>(StringComparer.OrdinalIgnoreCase);
 
@@ -85,7 +86,7 @@ public class SyncToShoko(
         // Apply Library Name Filter
         if (!string.IsNullOrWhiteSpace(libraryName))
         {
-            var matchedTarget = targets.FirstOrDefault(t => string.Equals(t.Title, libraryName, StringComparison.OrdinalIgnoreCase));
+            var matchedTarget = targets.FirstOrDefault(target => string.Equals(target.Title, libraryName, StringComparison.OrdinalIgnoreCase));
             if (matchedTarget != null)
                 targets = [matchedTarget];
             else
@@ -134,7 +135,7 @@ public class SyncToShoko(
 
                             vid = videoService
                                 .GetAllVideoFiles()
-                                ?.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v.Path) && VfsShared.NormalizeSeparators(v.Path).EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
+                                ?.FirstOrDefault(vid => !string.IsNullOrWhiteSpace(vid.Path) && VfsShared.NormalizeSeparators(vid.Path).EndsWith(suffix, StringComparison.OrdinalIgnoreCase));
                         }
                         ep = vid?.Video?.Episodes?.FirstOrDefault();
 
@@ -186,8 +187,8 @@ public class SyncToShoko(
 
             if (actualProgress)
             {
-                bool progressIncludeAdmin = includeAdmin && userBuckets.Any(b => string.Equals(b.Name, "admin", StringComparison.OrdinalIgnoreCase));
-                var progressExtraUsers = extraUsers.Where(e => userBuckets.Any(b => string.Equals(b.Name, e.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+                bool progressIncludeAdmin = includeAdmin && userBuckets.Any(bucket => string.Equals(bucket.Name, "admin", StringComparison.OrdinalIgnoreCase));
+                var progressExtraUsers = extraUsers.Where(extraUser => userBuckets.Any(bucket => string.Equals(bucket.Name, extraUser.Name, StringComparison.OrdinalIgnoreCase))).ToList();
 
                 if (progressIncludeAdmin || progressExtraUsers.Count > 0)
                 {
@@ -213,7 +214,7 @@ public class SyncToShoko(
 
                     foreach (var pb in progressBuckets)
                     {
-                        var existingIndex = userBuckets.FindIndex(b => string.Equals(b.Name, pb.Name, StringComparison.OrdinalIgnoreCase));
+                        var existingIndex = userBuckets.FindIndex(bucket => string.Equals(bucket.Name, pb.Name, StringComparison.OrdinalIgnoreCase));
                         if (existingIndex >= 0)
                             userBuckets[existingIndex].Items.AddRange(pb.Items);
                         else
@@ -271,7 +272,7 @@ public class SyncToShoko(
                     if (ep.Series != null && !prefIdCache.TryGetValue(ep.ShokoSeriesID, out prefId))
                         prefIdCache[ep.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(ep.Series);
 
-                    var coords = PlexMapping.GetPlexCoordinates(ep, prefId);
+                    var coords = PlexMapping.GetPlexCoordinates(ep, prefId, metadataService: metadataService);
                     string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
 
                     if (wouldMark)
@@ -346,7 +347,7 @@ public class SyncToShoko(
                         )
                     );
 
-                    if (actualVotes && item.UserRating.HasValue)
+                    if (actualVotes && item.UserRating.HasValue && appliedRatedIds.Add((targetShokoUser.LocalID, ep.LocalID)))
                     {
                         result = SyncHelper.IncVotesFound(result);
                         double clampedRating = Math.Clamp(item.UserRating.Value, 1.0, 10.0);

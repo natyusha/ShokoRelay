@@ -24,6 +24,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="atMapping">AnimeThemes mapping service.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="imageManager">Shoko image manager.</param>
+/// <param name="imageSyncService">Shoko image sync service.</param>
 /// <param name="vfsWatcher">VFS filesystem event watcher.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="logger">Logger instance.</param>
@@ -43,6 +44,7 @@ public class ShokoController(
     AnimeThemesMapping atMapping,
     IVideoService videoService,
     IImageManager imageManager,
+    ImageSyncService imageSyncService,
     VfsWatcher vfsWatcher,
     IScheduledActionService scheduledActionService,
     ILogger<ShokoController> logger
@@ -68,38 +70,35 @@ public class ShokoController(
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A task representing the result of the build outcome.</returns>
     [HttpGet("vfs")]
-    public Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null)
-    {
-        OverrideHelper.Reload();
-        return ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard ? Task.FromResult(guard)
-            : !run ? Task.FromResult<IActionResult>(Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS")))
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskVfsBuild,
-                LogHelper.BuildVfsReport,
-                async () =>
-                {
-                    var result = filterIds.Count > 0 ? vfsBuilder.Build(filterIds, clean) : vfsBuilder.Build((int?)null, clean);
+    public Task<IActionResult> BuildVfs([FromQuery] bool clean = true, [FromQuery] bool run = false, [FromQuery] string? filter = null) =>
+        ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard ? Task.FromResult(guard)
+        : !run ? Task.FromResult<IActionResult>(Ok(new RelayResponse<object>(Status: "skipped", Message: "Set run=true to build the VFS")))
+        : ExecuteTrackedTaskAsync(
+            ShokoRelayConstants.TaskVfsBuild,
+            ReportHelper.BuildVfsReport,
+            async () =>
+            {
+                var result = filterIds.Count > 0 ? vfsBuilder.Build(filterIds, clean) : vfsBuilder.Build((int?)null, clean);
 
-                    // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
-                    if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                        await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
+                // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
+                if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
+                    await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
-                    // Trigger standard debounced Plex updates if this is a targeted manual rebuild
-                    if (PlexLibrary.IsEnabled && filterIds.Count > 0)
-                        foreach (var id in filterIds)
-                            vfsWatcher.TriggerPlexUpdates(id);
+                // Trigger standard debounced Plex updates if this is a targeted manual rebuild
+                if (PlexLibrary.IsEnabled && filterIds.Count > 0)
+                    foreach (var id in filterIds)
+                        vfsWatcher.TriggerPlexUpdates(id);
 
-                    return result;
-                },
-                VfsShared.VfsLock
-            );
-    }
+                return result;
+            },
+            VfsShared.VfsLock
+        );
 
     /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
     /// <returns>A task representing the result of the audit operation.</returns>
     [HttpGet("vfs/audit")]
     public Task<IActionResult> AuditVfs() =>
-        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskVfsAudit, LogHelper.BuildVfsAuditReport, () => Task.Run(() => vfsBuilder.Audit(CancellationToken.None)), VfsShared.VfsLock);
+        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskVfsAudit, ReportHelper.BuildVfsAuditReport, () => Task.Run(() => vfsBuilder.Audit(CancellationToken.None)), VfsShared.VfsLock);
 
     /// <summary>Updates the local VFS overrides CSV file.</summary>
     /// <param name="content">Raw CSV text.</param>
@@ -180,12 +179,12 @@ public class ShokoController(
                 videoService
                     .GetAllManagedFolders()
                     ?.Where(VfsShared.IsVfsEnabledFolder)
-                    .Select(f => new { Path = f.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), f.Name })
-                    .OrderByDescending(f => f.Path.Length)
+                    .Select(folder => new { Path = folder.Path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), folder.Name })
+                    .OrderByDescending(folder => folder.Path.Length)
                     .ToList()
                 ?? [];
 
-            using var stream = new FileStream(VfsShared.BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var stream = new FileStream(VfsShared.BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             var data = await JsonSerializer.DeserializeAsync<Dictionary<string, Dictionary<string, VfsBlueprintSeries>>>(stream);
             if (data == null)
                 return EmptyTree();
@@ -280,7 +279,7 @@ public class ShokoController(
     public Task<IActionResult> PurgeMissingFiles([FromQuery] bool dryRun = true, [FromQuery] bool trashOnly = false, [FromQuery] int? threshold = null) =>
         ExecuteTrackedTaskAsync(
             ShokoRelayConstants.TaskShokoPurgeMissing,
-            (sb, r) => LogHelper.BuildPurgeMissingReport(sb, r.DryRun, r.Removed, r.PlexRemoved, r.PlexMessages),
+            (builder, report) => ReportHelper.BuildPurgeMissingReport(builder, report.DryRun, report.Removed, report.PlexRemoved, report.PlexMessages),
             async () =>
             {
                 List<string> removed = trashOnly ? [] : [.. await shokoImportService.PurgeMissingFilesAsync(dryRun).ConfigureAwait(false)];
@@ -296,7 +295,7 @@ public class ShokoController(
                         var (_, trashed, message) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, effThreshold, dryRun).ConfigureAwait(false);
                         plexMessages.Add($"[{target.Title}] {message}");
                         if (trashed.Count > 0)
-                            plexRemoved.AddRange(trashed.Select(i => $"[{target.Title}] {i}"));
+                            plexRemoved.AddRange(trashed.Select(item => $"[{target.Title}] {item}"));
                     }
                 }
                 else if (trashOnly)
@@ -366,7 +365,7 @@ public class ShokoController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskShokoSyncWatched,
-                (sb, r) => LogHelper.BuildSyncWatchedReport(sb, r, r.Direction, r.DryRun, ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings),
+                (builder, report) => ReportHelper.BuildSyncWatchedReport(builder, report, report.Direction, report.DryRun, ratings ?? Settings.Automation.ShokoSyncWatchedIncludeRatings),
                 async () =>
                 {
                     var result = import
@@ -449,7 +448,7 @@ public class ShokoController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "mapFile parameter is required when not purging.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskMapSymlinks,
-                LogHelper.BuildSourceLinkReport,
+                ReportHelper.BuildSourceLinkReport,
                 () =>
                 {
                     if (purgeLinks)
@@ -471,19 +470,7 @@ public class ShokoController(
     public async Task<IActionResult> PurgeLocalImages()
     {
         Logger.LogInformation("Shoko: Starting a manual purge of all Relay-owned images...");
-        var xrefs = imageManager
-            .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { XrefSource = ServiceRegistration.RelaySource })
-            .Concat(imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { XrefSource = ServiceRegistration.RelayPlexSource }))
-            .ToList();
-        int purgedCount = 0;
-
-        foreach (var xref in xrefs)
-        {
-            imageManager.RemoveImageCrossReference(xref);
-            if (imageManager.GetImageByID(xref.ImageID) is { } img && img.GetCrossReferences().Count == 0 && await imageManager.PurgeImage(img).ConfigureAwait(false))
-                purgedCount++;
-        }
-
+        int purgedCount = await imageSyncService.PurgeAllRelayImagesAsync().ConfigureAwait(false);
         Logger.LogInformation("Shoko: Purging complete. Purged {Count} images.", purgedCount);
         return Ok(new RelayResponse<object>(Data: new { purged = purgedCount }));
     }
@@ -495,7 +482,11 @@ public class ShokoController(
     {
         Logger.LogWarning("Shoko: Starting a legacy manual purge of ALL user and locally-generated images. This will remove images not uploaded by Shoko Relay!");
         int purgedCount = 0;
-        foreach (var img in imageManager.GetAllImages().Where(img => img.Source == MetadataSource.Generated || img.Source == MetadataSource.User).ToList())
+        var localImages = imageManager
+            .GetAllImages(new ImageFilteringOptions { ImageSource = MetadataSource.Generated })
+            .Concat(imageManager.GetAllImages(new ImageFilteringOptions { ImageSource = MetadataSource.User }))
+            .ToList();
+        foreach (var img in localImages)
             if (await imageManager.PurgeImage(img).ConfigureAwait(false))
                 purgedCount++;
 

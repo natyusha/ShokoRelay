@@ -55,15 +55,22 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
         var (downloaded, skipped, errors) = (0, 0, 0);
 
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-        var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).Where(path => !string.IsNullOrWhiteSpace(path)).ToList() ?? [];
+        var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(folder => folder.Path).Where(path => !string.IsNullOrWhiteSpace(path)).ToList() ?? [];
         string? targetRoot = null;
         if (!string.IsNullOrWhiteSpace(query.Destination))
         {
-            string normDest = VfsShared.NormalizeSeparators(query.Destination);
-            targetRoot = managedFolders.FirstOrDefault(p => string.Equals(p, normDest, StringComparison.OrdinalIgnoreCase)) ?? (Directory.Exists(normDest) ? normDest : null);
+            string normDest = Path.GetFullPath(VfsShared.NormalizeSeparators(query.Destination)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            targetRoot = managedFolders.FirstOrDefault(folderPath =>
+                string.Equals(Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), normDest, VfsShared.PathComparison)
+            );
+            if (targetRoot == null)
+            {
+                messages.Add($"Destination '{query.Destination}' is not a VFS-enabled Shoko managed folder.");
+                return new WebmDownloadResult(0, 0, 1, downloads, messages);
+            }
         }
 
-        targetRoot ??= managedFolders.FirstOrDefault(p => Directory.Exists(Path.Combine(p!, themeRootName))) ?? managedFolders.FirstOrDefault();
+        targetRoot ??= managedFolders.FirstOrDefault(folderPath => Directory.Exists(Path.Combine(folderPath!, themeRootName))) ?? managedFolders.FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(targetRoot))
         {
@@ -97,7 +104,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                 try
                 {
                     var parsed = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
-                    foreach (var entry in parsed.Where(e => e.AniDbId > 0))
+                    foreach (var entry in parsed.Where(entry => entry.AniDbId > 0))
                         mappedFilesWithAnidb.Add(Path.GetFileName(entry.FilePath));
                 }
                 catch { }

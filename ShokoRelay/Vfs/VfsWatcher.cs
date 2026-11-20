@@ -208,8 +208,8 @@ public class VfsWatcher(
         {
             foreach (var xref in xrefs)
             {
-                if (xref.AnidbAnimeID is { } animeId && animeId > 0 && metadataService.GetShokoSeriesByAnidbID(animeId) is { } s)
-                    seriesIds.Add(s.GetPrimaryId(metadataService));
+                if (xref.AnidbAnimeID is { } animeId && animeId > 0 && metadataService.GetShokoSeriesByAnidbID(animeId) is { } series)
+                    seriesIds.Add(series.GetPrimaryId(metadataService));
                 else if (xref.AnidbEpisodeID > 0 && metadataService.GetShokoEpisodeByAnidbID(xref.AnidbEpisodeID) is { } ep)
                     seriesIds.Add(OverrideHelper.GetPrimary(ep.ShokoSeriesID, metadataService));
             }
@@ -614,7 +614,7 @@ public class VfsWatcher(
             bool foundInAnyTarget = false;
 
             // Pre-filter targets so we only poll libraries that physically contain the VFS paths for this series, eliminating timeouts on irrelevant libraries
-            var matchingTargetIds = vfsPaths.SelectMany(plexLibrary.GetMatchingTargetsForPath).Select(x => (x.Target.ServerId, x.Target.SectionId)).ToHashSet();
+            var matchingTargetIds = vfsPaths.SelectMany(plexLibrary.GetMatchingTargetsForPath).Select(match => (match.Target.ServerId, match.Target.SectionId)).ToHashSet();
 
             // Wait for Plex to assign rating keys (primarily for users in deferred mode)
             int retryDelaySeconds = Settings.Advanced.PlexScanDelay;

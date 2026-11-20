@@ -26,7 +26,7 @@
   /** @type {string} The name of the currently selected VFS root tab. */
   let activeTabName = localStorage.getItem(TABS_KEY) || "All";
 
-  // #region Utilities
+  // #region Helpers
   /**
    * Refreshes the VFS for a specific series and displays the result toast.
    * @param {number} id - The Shoko Series ID to rebuild.
@@ -58,19 +58,31 @@
     const root = displayRoots.find((rootItem) => rootItem.name === activeTabName);
     if (!root) return [];
     const rawFt = (uiFilter?.value || "").toLowerCase();
-    const ft = rawFt.trim();
-    if (!ft) return root.series;
+    const filterText = rawFt.trim();
+    if (!filterText) return root.series;
 
     const isExact = rawFt.endsWith(" ");
     if (/^a\d+\s*$/.test(rawFt.trimStart())) {
-      const aid = ft.substring(1);
+      const aid = filterText.substring(1);
       return root.series.filter((series) => (isExact ? String(series.anidbId) === aid : String(series.anidbId).startsWith(aid)));
     }
     if (/^m\d+\s*$/.test(rawFt.trimStart())) {
-      const sid = ft.substring(1);
+      const sid = filterText.substring(1);
       return root.series.filter((series) => (isExact ? String(series.id) === sid : String(series.id).startsWith(sid)));
     }
-    return root.series.filter((series) => series.title.toLowerCase().includes(ft) || String(series.id).includes(ft));
+    return root.series.filter((series) => series.title.toLowerCase().includes(filterText) || String(series.id).includes(filterText));
+  }
+
+  /**
+   * Resolves the physical series folder path for a file, stepping out of immediate Season or Specials subfolders.
+   * @param {string} sourcePath - The full physical path to a media or metadata file.
+   * @returns {string} The resolved series directory path.
+   */
+  function getSeriesPhysicalDir(sourcePath) {
+    const parts = sourcePath.replace(/\\/g, "/").split("/");
+    parts.pop();
+    if (parts.length > 1 && /^(?:season\s*\d+|specials|s\d+)$/i.test(parts[parts.length - 1])) parts.pop();
+    return parts.join("/");
   }
 
   /**
@@ -346,7 +358,7 @@
     items.forEach((series) => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
-      const det = window._sr.createLazyDetails(
+      const details = window._sr.createLazyDetails(
         "",
         ul,
         (container) => {
@@ -354,7 +366,7 @@
         },
         false,
       );
-      const sum = det.querySelector("summary");
+      const summary = details.querySelector("summary");
 
       const refresh = document.createElement("span");
       refresh.className = "refresh-btn";
@@ -375,8 +387,9 @@
 
       if (hasTheme && firstFile && firstFile.source && window._sr.mp3Cache) {
         const sourcePath = firstFile.source.replace(/\\/g, "/");
-        const dir = sourcePath.substring(0, sourcePath.lastIndexOf("/"));
-        const entry = window._sr.mp3Cache[dir.toLowerCase()];
+        const directDir = sourcePath.substring(0, sourcePath.lastIndexOf("/"));
+        const seriesDir = getSeriesPhysicalDir(sourcePath);
+        const entry = window._sr.mp3Cache[directDir.toLowerCase()] || window._sr.mp3Cache[seriesDir.toLowerCase()];
         if (entry) {
           slug = entry.slug;
           upgrade = entry.upgrade;
@@ -410,9 +423,7 @@
             return;
           }
 
-          const parts = firstFile.source.replace(/\\/g, "/").split("/");
-          parts.pop();
-          const physicalPath = parts.join("/");
+          const physicalPath = getSeriesPhysicalDir(firstFile.source);
 
           const label = `Theme MP3 [${series.id}]`;
           showToast(`${label}: Generating...`, "info", TOAST_MS);
@@ -438,11 +449,11 @@
         anidbLink +
         `<a href="${base}/metadata/${series.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${series.id}]</a>`;
 
-      sum.appendChild(refresh);
-      sum.appendChild(theme);
-      sum.insertAdjacentHTML("beforeend", titleHtml);
-      sum.title = series.title; // Set exact title override
-      li.appendChild(det);
+      summary.appendChild(refresh);
+      summary.appendChild(theme);
+      summary.insertAdjacentHTML("beforeend", titleHtml);
+      summary.title = series.title; // Set exact title override
+      li.appendChild(details);
       rootUl.appendChild(li);
     });
 

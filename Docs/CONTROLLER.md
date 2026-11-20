@@ -64,8 +64,8 @@ GET  /logs/{fileName}                                          -> GetLog
 - `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
 - `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
 - `GetLogsList` returns a JSON list of all currently generated task logs that exist on disk.
-- `GetLog` serves report files created under the plugin's `logs` directory without browser caching.
-  - Access is restricted strictly to files ending with `-report.log` inside the `logs/` directory to prevent directory traversal.
+- `GetLog` serves report files from the plugin's `reports` cache directory without browser caching.
+  - Access is restricted strictly to files ending with `.report` inside the `reports/` cache directory to prevent directory traversal.
 
 **Notes:**
 
@@ -80,21 +80,21 @@ GET  /logs/{fileName}                                          -> GetLog
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
 
 ```
-/animethemes/vfs/build                                         -> at-vfs-build-report.log
-/animethemes/vfs/map                                           -> at-map-build-report.log
-/animethemes/mp3?batch=true                                    -> at-mp3-build-report.log
-/animethemes/mp3/audit                                         -> at-mp3-audit-report.log
-/animethemes/webm/download                                     -> at-webm-download-report.log
-/plex/auth/refresh                                             -> plex-auth-refresh-report.log
-/plex/collections/build                                        -> plex-collections-build-report.log
-/plex/ratings/apply                                            -> plex-ratings-apply-report.log
-/plex/images/sync                                              -> plex-images-sync-report.log
-/plex/automation/run                                           -> plex-automation-run-report.log
-/vfs                                                           -> shoko-vfs-build-report.log
-/vfs/audit                                                     -> shoko-vfs-audit-report.log
-/shoko/purge-missing                                           -> shoko-purge-missing-report.log
-/sync-watched                                                  -> shoko-sync-watched-report.log
-/map-symlinks                                                  -> shoko-map-symlinks-report.log
+/animethemes/vfs/build                                         -> at-vfs-build.report
+/animethemes/vfs/map                                           -> at-map-build.report
+/animethemes/mp3?batch=true                                    -> at-mp3-build.report
+/animethemes/mp3/audit                                         -> at-mp3-audit.report
+/animethemes/webm/download                                     -> at-webm-download.report
+/plex/auth/refresh                                             -> plex-auth-refresh.report
+/plex/collections/build                                        -> plex-collections-build.report
+/plex/ratings/apply                                            -> plex-ratings-apply.report
+/plex/images/sync                                              -> plex-images-sync.report
+/plex/automation/run                                           -> plex-automation-run.report
+/vfs                                                           -> shoko-vfs-build.report
+/vfs/audit                                                     -> shoko-vfs-audit.report
+/shoko/purge-missing                                           -> shoko-purge-missing.report
+/sync-watched                                                  -> shoko-sync-watched.report
+/map-symlinks                                                  -> shoko-map-symlinks.report
 ```
 
 ---
@@ -478,7 +478,7 @@ GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3
   - `offset`: (default 0) selection index when multiple themes match.
   - `batch`: (default false) set to true to recursively process subfolders.
   - `force`: (default false) set to true to overwrite existing `Theme.mp3` files.
-  - `seasonal`: (default false) if `batch=true`, filter processing to the current anime season (with a one-month early buffer).
+  - `seasonal`: (default false) if `batch=true`, filter processing to anime which started airing in the current season (with a one-month early buffer).
 - `GetAnimeThemesMp3Cache` returns the dictionary of cached `Theme.mp3` folder paths mapped to their respective theme slugs.
 - `AuditAnimeThemesMp3` audits existing non-OP `Theme.mp3` files to check if an OP is available on AnimeThemes. It also repairs missing local cache slugs via ID3 tags.
 - `AnimeThemesMp3Stream` embeds ID3v2 tags in response headers.

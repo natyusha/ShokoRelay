@@ -48,8 +48,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
     public async Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false)
     {
         const string TaskName = ShokoRelayConstants.TaskShokoPurgeMissing;
-        if (!dryRun)
-            TaskHelper.StartTask(TaskName);
+        bool startedTask = !dryRun && TaskHelper.StartTask(TaskName);
 
         logger.LogInformation("ShokoImportService: Starting purge missing files task (Mode: {Mode})", dryRun ? "Dry Run" : "Live");
 
@@ -97,7 +96,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         finally
         {
-            if (!dryRun)
+            if (startedTask)
                 TaskHelper.FinishTask(TaskName);
         }
     }

@@ -345,7 +345,7 @@ public static partial class VfsHelper
                     }
                     catch { }
 
-            var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(d => d.Length).ToList();
+            var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length).ToList();
             foreach (var dir in dirs)
             {
                 try

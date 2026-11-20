@@ -182,7 +182,7 @@ public static class OverrideHelper
         if (animeId <= 0)
             return shokoSeriesId;
 
-        // 1. Manual override takes precedence
+        // 1. Manual override takes precedence (abort entire line if primary series is not in Shoko)
         if (s_groups.TryGetValue(animeId, out var manualGrp) && manualGrp.Count > 0)
             return metadataService?.GetShokoSeriesByAnidbID(manualGrp[0])?.LocalID ?? shokoSeriesId;
 
@@ -192,7 +192,11 @@ public static class OverrideHelper
             if (series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
             {
                 if (s_tmdbGroups.TryGetValue(tmdbSeries.ID.ID, out var cachedGroup) && cachedGroup.Count > 0)
-                    return metadataService!.GetShokoSeriesByAnidbID(cachedGroup[0])?.LocalID ?? shokoSeriesId;
+                {
+                    if (metadataService!.GetShokoSeriesByAnidbID(cachedGroup[0]) is { } cachedPrimary)
+                        return cachedPrimary.LocalID;
+                    s_tmdbGroups.TryRemove(tmdbSeries.ID.ID, out _);
+                }
 
                 // Cache miss - resolve JIT via GetGroup
                 var group = GetGroup(shokoSeriesId, metadataService!);
@@ -200,7 +204,7 @@ public static class OverrideHelper
             }
 
             // Fallback when the series row has already been removed from Shoko's database
-            if (s_tmdbGroups.Values.FirstOrDefault(grp => grp.Contains(animeId)) is { Count: > 0 } cachedGrp)
+            if (s_tmdbGroups.Values.FirstOrDefault(group => group.Contains(animeId)) is { Count: > 0 } cachedGrp)
                 return metadataService?.GetShokoSeriesByAnidbID(cachedGrp[0])?.LocalID ?? shokoSeriesId;
         }
 
@@ -218,16 +222,18 @@ public static class OverrideHelper
         if (metadataService?.GetShokoSeriesByID(shokoSeriesId) is not { AnidbAnimeID: > 0 } series || !EnforceTmdbNumbering)
             return [shokoSeriesId];
 
-        // 1. Manual override takes precedence
+        // 1. Manual override takes precedence; abort the entire override line if its primary series is missing from Shoko
         if (s_groups.TryGetValue(series.AnidbAnimeID, out var manualGrp) && manualGrp.Count > 0)
-            return [.. manualGrp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)];
+            return metadataService.GetShokoSeriesByAnidbID(manualGrp[0]) is null
+                ? [shokoSeriesId]
+                : [.. manualGrp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.LocalID)];
 
         // 2. Auto TMDB Merge Just-In-Time Resolution
         if (Settings.Advanced.MergeTmdbSeries && series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
         {
             string tmdbIdStr = tmdbSeries.ID.ID;
             if (s_tmdbGroups.TryGetValue(tmdbIdStr, out var cachedGroup))
-                return [.. cachedGroup.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(ss => ss.LocalID)];
+                return [.. cachedGroup.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.LocalID)];
 
             var xrefs = metadataService.GetCrossReferencesForProviderEntry(tmdbSeries.ID).OfType<IMetadataSeriesCrossReference>().ToList();
             if (xrefs.Count > 1)
@@ -260,10 +266,14 @@ public static class OverrideHelper
     /// <param name="anidbAnimeId">The AniDB Anime ID the episode belongs to.</param>
     /// <param name="type">The source episode type to match against.</param>
     /// <param name="episodeNumber">The numeric episode number of the specific type.</param>
-    /// <returns>The overriden season and episode coordinates, or null if unconfigured.</returns>
-    public static (int Season, int Episode)? GetCustomCoords(int anidbAnimeId, EpisodeType type, int episodeNumber)
+    /// <param name="metadataService">Optional metadata service used to verify that the override line's primary series exists in Shoko.</param>
+    /// <returns>The overridden season and episode coordinates, or null if unconfigured or aborted.</returns>
+    public static (int Season, int Episode)? GetCustomCoords(int anidbAnimeId, EpisodeType type, int episodeNumber, IMetadataService? metadataService = null)
     {
         EnsureLoaded();
+        if (metadataService != null && s_groups.TryGetValue(anidbAnimeId, out var manualGrp) && manualGrp.Count > 0 && metadataService.GetShokoSeriesByAnidbID(manualGrp[0]) is null)
+            return null;
+
         if (s_coordOverrides.TryGetValue(anidbAnimeId, out var rules))
             foreach (var rule in rules)
                 if (rule.Type == type && episodeNumber >= rule.StartEp && episodeNumber <= rule.EndEp)
@@ -274,8 +284,10 @@ public static class OverrideHelper
 
     /// <summary>Determines whether the specified episode has explicit custom coordinate overrides configured.</summary>
     /// <param name="episode">The episode to check.</param>
+    /// <param name="metadataService">Optional metadata service used to verify that the override line's primary series exists in Shoko.</param>
     /// <returns><c>true</c> if custom coordinates are configured for this episode; otherwise, <c>false</c>.</returns>
-    public static bool HasCustomCoords(IEpisode episode) => episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss } && GetCustomCoords(ss.AnidbAnimeID, episode.Type, episode.EpisodeNumber).HasValue;
+    public static bool HasCustomCoords(IEpisode episode, IMetadataService? metadataService = null) =>
+        episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } shokoSeries } && GetCustomCoords(shokoSeries.AnidbAnimeID, episode.Type, episode.EpisodeNumber, metadataService).HasValue;
 
     #endregion
 }

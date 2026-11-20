@@ -7,6 +7,8 @@ namespace ShokoRelay.Actions;
 /// <summary>Scheduled action to synchronize watched states and progress from Plex into Shoko.</summary>
 public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvider configProvider, ILogger<PlexWatchedSyncAction> logger) : IScheduledAction
 {
+    #region Action Metadata
+
     /// <inheritdoc/>
     public string Name => $"{ShokoRelayConstants.Name}: Watch Sync (Plex to Shoko)";
 
@@ -19,6 +21,10 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
     /// <inheritdoc/>
     public TimeSpan? MinimumInterval => TimeSpan.FromMinutes(10);
 
+    #endregion
+
+    #region Execution
+
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
@@ -29,24 +35,27 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
         int lookback = freq > 0 ? freq + 1 : 25;
 
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
-        TaskHelper.StartTask(ShokoRelayConstants.TaskShokoSyncWatched);
+        bool startedTask = TaskHelper.StartTask(ShokoRelayConstants.TaskShokoSyncWatched);
         try
         {
             progress.Report(10);
             var result = await watchedSyncService.SyncWatchedAsync(false, lookback, cancellationToken: token).ConfigureAwait(false);
             progress.Report(100);
 
-            LogHelper.WriteReport(
-                $"{ShokoRelayConstants.TaskShokoSyncWatched}-report.log",
+            ReportHelper.WriteReport(
+                $"{ShokoRelayConstants.TaskShokoSyncWatched}.report",
                 result,
-                (sb, res) => LogHelper.BuildSyncWatchedReport(sb, res, res.Direction, res.DryRun, settings.Automation.ShokoSyncWatchedIncludeRatings),
+                (builder, report) => ReportHelper.BuildSyncWatchedReport(builder, report, report.Direction, report.DryRun, settings.Automation.ShokoSyncWatchedIncludeRatings),
                 logger
             );
         }
         finally
         {
-            TaskHelper.FinishTask(ShokoRelayConstants.TaskShokoSyncWatched);
+            if (startedTask)
+                TaskHelper.FinishTask(ShokoRelayConstants.TaskShokoSyncWatched);
             SyncHelper.SyncLock.Release();
         }
     }
+
+    #endregion
 }

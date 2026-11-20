@@ -19,10 +19,11 @@ public static class TaskHelper
 
     /// <summary>Registers a task as active.</summary>
     /// <param name="taskName">The unique identifier for the task.</param>
-    public static void StartTask(string taskName)
+    /// <returns><c>true</c> if this call registered the task as active; <c>false</c> if it was already active.</returns>
+    public static bool StartTask(string taskName)
     {
         TaskResults.TryRemove(taskName, out _);
-        ActiveTasks.TryAdd(taskName, DateTime.UtcNow);
+        return ActiveTasks.TryAdd(taskName, DateTime.UtcNow);
     }
 
     /// <summary>Unregisters an active task without saving a result.</summary>

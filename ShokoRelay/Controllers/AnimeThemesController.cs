@@ -1,6 +1,5 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using IoFile = System.IO.File;
@@ -66,7 +65,7 @@ public class AnimeThemesController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskAtVfsBuild,
-                (sb, r) => LogHelper.BuildAtVfsBuildReport(sb, r, filterIds ?? []),
+                (builder, report) => ReportHelper.BuildAtVfsBuildReport(builder, report, filterIds ?? []),
                 () => animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None),
                 VfsShared.VfsLock
             );
@@ -99,7 +98,7 @@ public class AnimeThemesController(
                 );
         }
 
-        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMapBuild, LogHelper.BuildAtVfsMapReport, () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None), VfsShared.VfsLock)
+        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMapBuild, ReportHelper.BuildAtVfsMapReport, () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None), VfsShared.VfsLock)
             .ConfigureAwait(false);
     }
 
@@ -146,12 +145,13 @@ public class AnimeThemesController(
         if (query.Batch)
             return await ExecuteTrackedTaskAsync(
                     ShokoRelayConstants.TaskAtMp3Build,
-                    LogHelper.BuildAtMp3Report,
+                    ReportHelper.BuildAtMp3Report,
                     async () =>
                     {
                         var batch = await animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None).ConfigureAwait(false);
-                        foreach (var item in batch.Items.Where(i => i.Status == "ok" && !string.IsNullOrWhiteSpace(i.Folder)))
-                            animeThemesMp3Generator.AddToThemeMp3Cache(item.Folder, AnimeThemesHelper.StandardizeSlug(item.Slug));
+                        animeThemesMp3Generator.AddBatchToThemeMp3Cache(
+                            batch.Items.Where(item => item.Status == "ok" && !string.IsNullOrWhiteSpace(item.Folder)).Select(item => (item.Folder, AnimeThemesHelper.StandardizeSlug(item.Slug)))
+                        );
                         return batch;
                     },
                     VfsShared.VfsLock
@@ -208,7 +208,7 @@ public class AnimeThemesController(
     /// <returns>A task representing the result of the audit.</returns>
     [HttpGet("animethemes/mp3/audit")]
     public Task<IActionResult> AuditAnimeThemesMp3() =>
-        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMp3Audit, LogHelper.BuildAtMp3AuditReport, () => animeThemesMp3Generator.AuditAsync(CancellationToken.None), VfsShared.VfsLock);
+        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMp3Audit, ReportHelper.BuildAtMp3AuditReport, () => animeThemesMp3Generator.AuditAsync(CancellationToken.None), VfsShared.VfsLock);
 
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
     /// <param name="path">The folder path containing the Theme.mp3.</param>
@@ -272,7 +272,9 @@ public class AnimeThemesController(
         {
             try
             {
-                entries = AnimeThemesHelper.ParseMappingContentWithComments(IoFile.ReadAllText(mapPath)).Entries;
+                using var mapStream = new FileStream(mapPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var mapReader = new StreamReader(mapStream);
+                entries = AnimeThemesHelper.ParseMappingContentWithComments(mapReader.ReadToEnd()).Entries;
                 foreach (var entry in entries)
                     videoIdToRelPath.TryAdd(entry.VideoId, entry.FilePath);
             }
@@ -288,50 +290,53 @@ public class AnimeThemesController(
         {
             try
             {
-                var lines = IoFile.ReadAllLines(cachePath).Where(line => !string.IsNullOrWhiteSpace(line));
+                using var cacheStream = new FileStream(cachePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var cacheReader = new StreamReader(cacheStream);
+                var lines = new List<string>();
+                while (cacheReader.ReadLine() is { } rawLine)
+                    if (!string.IsNullOrWhiteSpace(rawLine))
+                        lines.Add(rawLine);
+
                 foreach (var line in lines)
                 {
                     var pipeParts = line.Split('|');
                     string pathRaw = pipeParts[0];
-                    int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var vid)) ? vid : 0;
+                    int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var parsedVideoId)) ? parsedVideoId : 0;
                     int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var parsedFlags)) ? parsedFlags : 0;
 
                     var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
                     int? seriesId = null;
 
                     // Fast path: determine whether the ID preceding Shorts belongs to a Movie VFS (EpisodeID) or TV VFS (SeriesID)
-                    int shortsIdx = Array.FindIndex(segments, s => string.Equals(s, "Shorts", StringComparison.OrdinalIgnoreCase));
-                    if (shortsIdx > 0 && int.TryParse(segments[shortsIdx - 1], out int directSid))
+                    int shortsIdx = Array.FindIndex(segments, segment => string.Equals(segment, "Shorts", StringComparison.OrdinalIgnoreCase));
+                    if (shortsIdx > 0 && int.TryParse(segments[shortsIdx - 1], out int directId))
                     {
                         bool isMovieVfs = shortsIdx > 1 && string.Equals(segments[shortsIdx - 2], VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase);
                         if (isMovieVfs)
                         {
-                            if (MetadataService.GetShokoEpisodeByID(directSid) is { ShokoSeriesID: var epSeriesId })
+                            if (MetadataService.GetShokoEpisodeByID(directId) is { ShokoSeriesID: var epSeriesId })
                                 seriesId = epSeriesId;
                         }
-                        else if (MetadataService.GetShokoSeriesByID(directSid) is { } series)
+                        else if (MetadataService.GetShokoSeriesByID(directId) is { } series)
                             seriesId = series.LocalID;
                     }
-
-                    if (!seriesId.HasValue)
-                    {
-                        for (int segIdx = 0; segIdx < segments.Length; segIdx++)
+                    else if (shortsIdx < 0)
+                        for (int segIdx = segments.Length - 1; segIdx >= 0; segIdx--)
                         {
-                            if (int.TryParse(segments[segIdx], out int sid))
+                            if (int.TryParse(segments[segIdx], out int candidateId))
                             {
-                                if (MetadataService.GetShokoSeriesByID(sid) is { } series)
+                                if (MetadataService.GetShokoSeriesByID(candidateId) is { } series)
                                 {
                                     seriesId = series.LocalID;
                                     break;
                                 }
-                                if (MetadataService.GetShokoEpisodeByID(sid) is { ShokoSeriesID: var epSeriesId })
+                                if (MetadataService.GetShokoEpisodeByID(candidateId) is { ShokoSeriesID: var epSeriesId })
                                 {
                                     seriesId = epSeriesId;
                                     break;
                                 }
                             }
                         }
-                    }
 
                     if (!seriesId.HasValue || (videoId > 0 && !seenSeriesVideoKeys.Add((seriesId.Value, videoId))))
                         continue;
@@ -342,7 +347,7 @@ public class AnimeThemesController(
                         {
                             var (displayTitle, _, _) = TextHelper.ResolveFullSeriesTitles(series);
                             var group = MetadataService.GetShokoGroupByID(series.TopLevelGroupID);
-                            info = (group is IWithTitles titled && !string.IsNullOrWhiteSpace(titled.PreferredTitle?.Value) ? titled.PreferredTitle.Value : displayTitle, displayTitle, series.AnidbAnimeID);
+                            info = (!string.IsNullOrWhiteSpace(group?.PreferredTitle?.Value) ? group.PreferredTitle.Value : displayTitle, displayTitle, series.AnidbAnimeID);
                         }
                         else
                             info = ($"Series {seriesId.Value}", $"Series {seriesId.Value}", 0);
@@ -383,16 +388,16 @@ public class AnimeThemesController(
         {
             try
             {
-                var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(f => f.Path).ToList() ?? [];
+                var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(folder => folder.Path).ToList() ?? [];
                 string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
 
                 // Scan physically present .webm files once into an in-memory dictionary
                 var physicalThemes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                foreach (var mf in managedFolders)
+                foreach (var managedFolder in managedFolders)
                 {
-                    if (string.IsNullOrWhiteSpace(mf))
+                    if (string.IsNullOrWhiteSpace(managedFolder))
                         continue;
-                    string themeDir = Path.Combine(mf, themeRootName);
+                    string themeDir = Path.Combine(managedFolder, themeRootName);
                     if (Directory.Exists(themeDir))
                     {
                         foreach (var file in Directory.EnumerateFiles(themeDir, "*.webm", SearchOption.AllDirectories))
@@ -418,7 +423,7 @@ public class AnimeThemesController(
                         if (entry.AniDbId > 0)
                         {
                             if (!localSeriesHasFiles.TryGetValue(entry.AniDbId, out bool hasFiles))
-                                localSeriesHasFiles[entry.AniDbId] = hasFiles = MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } ls && ls.Episodes.Any(e => e.Videos?.Count > 0);
+                                localSeriesHasFiles[entry.AniDbId] = hasFiles = MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } ls && ls.Episodes.Any(ep => ep.Videos?.Count > 0);
                             if (hasFiles)
                                 continue;
                         }
@@ -557,7 +562,7 @@ public class AnimeThemesController(
 
         return string.IsNullOrWhiteSpace(query.Name) && string.IsNullOrWhiteSpace(query.Season)
             ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Season) is required."))
-            : await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, LogHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
+            : await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, ReportHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
                 .ConfigureAwait(false);
     }
 

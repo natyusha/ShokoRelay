@@ -293,7 +293,7 @@ public static class SyncHelper
     {
         if (!string.IsNullOrWhiteSpace(message))
             res.ErrorsList.Add(message);
-        return UpdateStat(res, perUser, user, x => x with { Errors = x.Errors + 1 }, x => x with { Errors = x.Errors + 1 });
+        return UpdateStat(res, perUser, user, stats => stats with { Errors = stats.Errors + 1 }, stats => stats with { Errors = stats.Errors + 1 });
     }
 
     #endregion
@@ -400,11 +400,11 @@ public static class SyncHelper
         try
         {
             tokenCache.HomeUsers ??= await plexAuth.GetHomeUsersAsync(adminToken, cancellationToken).ConfigureAwait(false);
-            matchedHome = tokenCache.HomeUsers.FirstOrDefault(u =>
-                string.Equals(u.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(u.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(u.Uuid, userName, StringComparison.OrdinalIgnoreCase)
-                || (int.TryParse(userName, out var exId) && u.Id == exId)
+            matchedHome = tokenCache.HomeUsers.FirstOrDefault(user =>
+                string.Equals(user.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(user.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(user.Uuid, userName, StringComparison.OrdinalIgnoreCase)
+                || (int.TryParse(userName, out var exId) && user.Id == exId)
             );
 
             if (matchedHome != null)
@@ -474,10 +474,12 @@ public static class SyncHelper
             {
                 tokenCache.AdminDevices ??= (await plexAuth.GetPlexServerListAsync(adminToken, configProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false)).Devices;
                 string normTarget = target.ServerUrl.TrimEnd('/');
-                var ownedServers = tokenCache.AdminDevices.Where(d => d.Owned && d.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true).ToList();
+                var ownedServers = tokenCache.AdminDevices.Where(device => device.Owned && device.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true).ToList();
                 serverId =
                     ownedServers
-                        .FirstOrDefault(d => d.Connections?.Any(c => !string.IsNullOrWhiteSpace(c.Uri) && string.Equals(c.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true)
+                        .FirstOrDefault(device =>
+                            device.Connections?.Any(conn => !string.IsNullOrWhiteSpace(conn.Uri) && string.Equals(conn.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true
+                        )
                         ?.ClientIdentifier
                     ?? (ownedServers.Count == 1 ? ownedServers[0].ClientIdentifier : null)
                     ?? string.Empty;

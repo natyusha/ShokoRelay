@@ -191,8 +191,8 @@
         if (forceDryRun) endpoint = endpoint.replace(/dryRun=false/i, "dryRun=true");
         let url = base + endpoint;
         if (paramFnName && typeof window._sr[paramFnName] === "function") {
-          const ps = window._sr[paramFnName]();
-          url += (url.includes("?") ? "&" : "?") + ps.toString();
+          const params = window._sr[paramFnName]();
+          url += (url.includes("?") ? "&" : "?") + params.toString();
         }
         let hideOnSucceed = persistAttr || forceDryRun ? 0 : TOAST_MS;
         if (persistIfEmptySelector) {

@@ -107,9 +107,9 @@ internal static class CacheHelper
             DefaultParallelOptions(cancellationToken),
             () =>
             {
-                var ts = new TState();
-                localStates.Add(ts);
-                return ts;
+                var threadState = new TState();
+                localStates.Add(threadState);
+                return threadState;
             },
             (series, _, local) =>
             {

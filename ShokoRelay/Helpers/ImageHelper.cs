@@ -69,16 +69,16 @@ public static class ImageHelper
 
         // Exclude Plex-synced generated thumbnails from episode metadata responses so TMDB Thumbnails remain distinct
         if (entity is IEpisode && type == ImageEntityType.Backdrop)
-            imgs = [.. imgs.Where(i => i.CrossReference?.Source != ServiceRegistration.RelayPlexSource)];
+            imgs = [.. imgs.Where(img => img.CrossReference?.Source != ServiceRegistration.RelayPlexSource)];
 
         if (entity is ISeries)
         {
             // Push TMDB Season type posters to the end of the array to prioritize TMDB Series posters
-            imgs = [.. imgs.OrderBy(i => i.CrossReference?.EntityID.EntityType == MetadataEntityType.Season ? 1 : 0)];
+            imgs = [.. imgs.OrderBy(img => img.CrossReference?.EntityID.EntityType == MetadataEntityType.Season ? 1 : 0)];
 
             // Reverse AniDB images to prioritize the newest posters in their original positions
-            var aniDbRev = new Queue<IImage>(imgs.Where(i => i.Source == MetadataSource.AniDB).Reverse());
-            imgs = [.. imgs.Select(i => i.Source == MetadataSource.AniDB ? aniDbRev.Dequeue() : i)];
+            var aniDbRev = new Queue<IImage>(imgs.Where(img => img.Source == MetadataSource.AniDB).Reverse());
+            imgs = [.. imgs.Select(img => img.Source == MetadataSource.AniDB ? aniDbRev.Dequeue() : img)];
         }
 
         return imgs;
@@ -143,9 +143,9 @@ public static class ImageHelper
         }
 
         if (addEveryImage)
-            ordered.AddRange(remaining.OrderByDescending(i => i.IsPreferred).ThenByDescending(i => i.CrossReference?.IsPreferred == true));
+            ordered.AddRange(remaining.OrderByDescending(img => img.IsPreferred).ThenByDescending(img => img.CrossReference?.IsPreferred == true));
         else if (ordered.Count == 0 && remaining.Count > 0)
-            ordered.Add(remaining.FirstOrDefault(i => i.IsPreferred) ?? remaining.FirstOrDefault(i => i.CrossReference?.IsPreferred == true) ?? remaining.First());
+            ordered.Add(remaining.FirstOrDefault(img => img.IsPreferred) ?? remaining.FirstOrDefault(img => img.CrossReference?.IsPreferred == true) ?? remaining.First());
 
         return ordered;
     }
@@ -195,17 +195,17 @@ public static class ImageHelper
             if (uniqueImage != null)
             {
                 thumbUrl = GetImageUrl(uniqueImage);
-                imagesArray.RemoveAll(i => i.Type == "coverPoster");
+                imagesArray.RemoveAll(img => img.Type == "coverPoster");
 
                 var uniqueImages = tmdbImages.Where(img => GetImageUrl(img) != defaultThumb).ToList();
                 var selectedImages = addEveryImage ? uniqueImages : uniqueImages.Take(1);
 
                 imagesArray.AddRange(
-                    selectedImages.Select(i => new ImageInfo
+                    selectedImages.Select(img => new ImageInfo
                     {
                         Alt = title,
                         Type = "coverPoster",
-                        Url = GetImageUrl(i, forceRemote: addEveryImage),
+                        Url = GetImageUrl(img, forceRemote: addEveryImage),
                     })
                 );
             }
@@ -251,11 +251,11 @@ public static class ImageHelper
             :
             [
                 .. FilterImagesByLanguage(seriesImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, addEveryImage)
-                    .Select(i => new ImageInfo
+                    .Select(img => new ImageInfo
                     {
                         Alt = alt,
                         Type = "coverPoster",
-                        Url = GetImageUrl(i, forceRemote: addEveryImage),
+                        Url = GetImageUrl(img, forceRemote: addEveryImage),
                     }),
             ];
 
@@ -268,11 +268,11 @@ public static class ImageHelper
     public static ImageInfo[] BuildSnapshotArray(IWithImages images, string alt, bool addEveryImage, string imageLanguage) =>
         [
             .. FilterImagesByLanguage(images.GetAvailableImages(ImageEntityType.Backdrop), imageLanguage, addEveryImage)
-                .Select(i => new ImageInfo
+                .Select(img => new ImageInfo
                 {
                     Alt = alt,
                     Type = "snapshot",
-                    Url = GetImageUrl(i, forceRemote: addEveryImage),
+                    Url = GetImageUrl(img, forceRemote: addEveryImage),
                 }),
         ];
 

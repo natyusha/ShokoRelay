@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json.Serialization;
+using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 
 namespace ShokoRelay.Vfs;
@@ -86,8 +87,22 @@ public record VfsBlueprintSeries(
 #region Build Session
 
 /// <summary>Holds caching dictionaries for a single VFS build session to minimize disk and database I/O.</summary>
-public sealed class VfsBuildSession
+/// <param name="videoService">Optional Shoko video service for lazy recognized-path lookups.</param>
+public sealed class VfsBuildSession(IVideoService? videoService = null)
 {
+    private readonly Lazy<HashSet<string>> _knownRecognizedVideoPaths = new(() =>
+        videoService
+            ?.GetAllVideoFiles()
+            ?.Where(videoFile => videoFile.Video?.CrossReferences?.Any(xref => xref.ShokoEpisode != null) == true)
+            .Select(videoFile => videoFile.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .ToHashSet(VfsShared.PathComparer)
+        ?? new HashSet<string>(VfsShared.PathComparer)
+    );
+
+    /// <summary>Gets the lazily-materialized set of physical file paths recognized by Shoko with episode links.</summary>
+    public HashSet<string> KnownRecognizedVideoPaths => _knownRecognizedVideoPaths.Value;
+
     /// <summary>Caches the resolved file data and Plex mappings for series to prevent redundant processing.</summary>
     public ConcurrentDictionary<int, MapHelper.SeriesFileData> SeriesFileDataCache { get; } = new();
 

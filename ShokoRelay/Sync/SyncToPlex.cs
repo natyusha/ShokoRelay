@@ -70,7 +70,7 @@ public class SyncToPlex(
         if (!includeAdmin && extraUsers.Count == 0)
             return result;
 
-        result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(e => e.Name), includeAdmin) };
+        result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(user => user.Name), includeAdmin) };
 
         var shokoWatchedByUser = new Dictionary<int, List<(IEpisodeUserData UserData, IShokoEpisode Episode)>>();
         var shokoUserLookup = new Dictionary<string, IUser?>(StringComparer.OrdinalIgnoreCase);
@@ -155,8 +155,8 @@ public class SyncToPlex(
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
                 var userWatched = GetShokoWatchedForUser(targetShokoUser);
-                foreach (var (ud, _) in userWatched)
-                    activeSourceEpisodes.Add((targetShokoUser.LocalID, ud.EpisodeID));
+                foreach (var (userData, _) in userWatched)
+                    activeSourceEpisodes.Add((targetShokoUser.LocalID, userData.EpisodeID));
 
                 result.PerUser[uName] = result.PerUser[uName] with { Processed = Math.Max(result.PerUser[uName].Processed, userWatched.Count) };
 
@@ -207,7 +207,7 @@ public class SyncToPlex(
                         if (episode!.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
                             prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                        var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                        var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
                         string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
 
                         if (scrobbled)

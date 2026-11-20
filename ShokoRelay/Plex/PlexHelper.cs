@@ -143,7 +143,7 @@ public static partial class PlexHelper
         List<string> roots =
             series != null ? [.. ResolveImportRoots(series, metadataService)]
             : globalRoots != null ? [.. globalRoots]
-            : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(s => ResolveImportRoots(s, metadataService)).Distinct(VfsShared.PathComparer)];
+            : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(series => ResolveImportRoots(series, metadataService)).Distinct(VfsShared.PathComparer)];
 
         if (roots.Count == 0)
             return null;

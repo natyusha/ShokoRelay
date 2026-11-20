@@ -143,9 +143,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                     logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, tgt.ServerUrl, tgt.SectionId);
                 }
                 else
-                {
                     logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", resp.StatusCode, guessedPath, tgt.SectionId);
-                }
             }
             catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
             {
@@ -458,12 +456,16 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             int primaryId = OverrideHelper.GetPrimary(shokoSeriesId, metadataService);
             if (target.LibraryType == PlexLibraryType.Movie)
             {
-                var series = metadataService.GetShokoSeriesByID(primaryId);
-                if (series == null)
-                    return [];
-
                 var keys = new List<int>();
-                foreach (var ep in series.Episodes.Where(ep => ep.Type == EpisodeType.Episode && ep.Videos.Count > 0 && !MapHelper.IsHidden(ep)))
+                var episodes = OverrideHelper
+                    .GetGroup(primaryId, metadataService)
+                    .Select(metadataService.GetShokoSeriesByID)
+                    .OfType<IShokoSeries>()
+                    .SelectMany(groupSeries => groupSeries.Episodes)
+                    .DistinctBy(ep => ep.LocalID)
+                    .Where(ep => ep.Type == EpisodeType.Episode && ep.Videos.Count > 0 && !MapHelper.IsHidden(ep));
+
+                foreach (var ep in episodes)
                 {
                     string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{ep.LocalID}";
                     using var req = CreateRequest(

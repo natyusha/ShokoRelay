@@ -102,6 +102,7 @@ public partial class VfsBuilder
                 state.ResolvedVfsSeriesPaths,
                 state.VideoBaseNames,
                 state.EpPad,
+                state.Session,
                 (importRoot, season, fileName, source) =>
                 {
                     string path = string.IsNullOrEmpty(season)

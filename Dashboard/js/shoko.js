@@ -56,13 +56,13 @@
    * @returns {URLSearchParams} The compiled parameters.
    */
   window._sr.getVfsParams = () => {
-    const ps = new URLSearchParams();
+    const params = new URLSearchParams();
     const filter = el("vfs-filter")?.value;
     const clean = el("vfs-clean")?.getAttribute("aria-pressed") === "true";
-    if (filter) ps.set("filter", filter);
-    ps.set("clean", clean);
-    ps.set("run", "true");
-    return ps;
+    if (filter) params.set("filter", filter);
+    params.set("clean", clean);
+    params.set("run", "true");
+    return params;
   };
   // #endregion
 
@@ -73,20 +73,20 @@
   // Wire up the VFS Overrides Editor modal.
   const overridesBtn = el("vfs-overrides");
   if (overridesBtn) {
-    const txt = el("overrides-text");
-    if (txt) txt.placeholder = OVERRIDES_PLACEHOLDER;
+    const overridesText = el("overrides-text");
+    if (overridesText) overridesText.placeholder = OVERRIDES_PLACEHOLDER;
     overridesBtn.onclick = async () => {
       const modal = el("overrides-modal");
 
       // Load current overrides content from server config.
       try {
         const cfgRes = await fetchJson(configUrl);
-        if (cfgRes.ok) txt.value = cfgRes.data?.overrides || "";
+        if (cfgRes.ok) overridesText.value = cfgRes.data?.overrides || "";
       } catch {}
       const close = openModal(modal);
       el("overrides-cancel").onclick = close;
       el("overrides-save").onclick = async () => {
-        const res = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(txt.value) });
+        const res = await fetchJson(base + "/vfs/overrides", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(overridesText.value) });
         if (res.ok) {
           showToast("VFS Overrides Saved", "success");
           close();
@@ -159,7 +159,7 @@
         await window._sr.flushSaves?.();
         const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko${isDryRun ? " (Dry Run)" : ""}...`, "info", 0);
 
-        const ps = new URLSearchParams({
+        const queryParams = new URLSearchParams({
           dryRun: isDryRun,
           ratings: el("sync-ratings").checked,
           progress: el("sync-progress").checked,
@@ -167,17 +167,17 @@
 
         const usersVal = el("sync-users").value;
         const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "advanced", 4: "none" };
-        ps.set("users", usersMap[usersVal] || "none");
+        queryParams.set("users", usersMap[usersVal] || "none");
 
         const libName = el("sync-library")?.value.trim();
-        if (libName) ps.set("libraryName", libName);
-        if (dirImport) ps.set("import", "true");
+        if (libName) queryParams.set("libraryName", libName);
+        if (dirImport) queryParams.set("import", "true");
 
-        const res = await fetchJson(`${base}/sync-watched?${ps}`);
+        const res = await fetchJson(`${base}/sync-watched?${queryParams}`);
         startToast?.remove();
         setButtonLoading(targetBtn, false);
 
-        await fetchJson(base + "/tasks/clear/shoko-sync-watched", { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
+        if (window._sr.tasks.shokoSyncWatched) await fetchJson(`${base}/tasks/clear/${window._sr.tasks.shokoSyncWatched}`, { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
         if (res.ok) {
           const syncData = getData(res);
 

@@ -207,10 +207,10 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
         var stderr = new StringBuilder();
-        process.ErrorDataReceived += (_, e) =>
+        process.ErrorDataReceived += (_, eventArgs) =>
         {
-            if (e.Data != null)
-                stderr.AppendLine(e.Data);
+            if (eventArgs.Data != null)
+                stderr.AppendLine(eventArgs.Data);
         };
 
         try
@@ -272,10 +272,10 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = false };
         var stderr = new StringBuilder();
-        process.ErrorDataReceived += (_, e) =>
+        process.ErrorDataReceived += (_, eventArgs) =>
         {
-            if (e.Data != null)
-                stderr.AppendLine(e.Data);
+            if (eventArgs.Data != null)
+                stderr.AppendLine(eventArgs.Data);
         };
 
         try

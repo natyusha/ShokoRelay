@@ -124,7 +124,7 @@ internal static class VfsShared
         var (doStandard, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
         var fileData = MapHelper.GetConsolidatedSeriesFileData(series, metadataService);
-        var mainEpIds = doMovie ? fileData.Mappings.Where(m => m.PrimaryEpisode.Type == EpisodeType.Episode).Select(m => m.PrimaryEpisode.ID.ID).Distinct().ToList() : [];
+        var mainEpIds = doMovie ? fileData.Mappings.Where(mapping => mapping.PrimaryEpisode.Type == EpisodeType.Episode).Select(mapping => mapping.PrimaryEpisode.ID.ID).Distinct().ToList() : [];
 
         foreach (var mapping in fileData.Mappings)
         {
@@ -365,15 +365,18 @@ internal static class VfsShared
                 normPath = normPath.TrimEnd(Path.DirectorySeparatorChar);
 
             var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
-                .Select(mf => mf.Path)
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Select(path =>
+                .Select(folder => folder.Path)
+                .Where(folderPath => !string.IsNullOrWhiteSpace(folderPath))
+                .Select(folderPath =>
                 {
-                    string norm = NormalizeSeparators(path);
+                    string norm = NormalizeSeparators(folderPath);
                     return norm.Length > 1 ? norm.TrimEnd(Path.DirectorySeparatorChar) : norm;
                 })
-                .OrderByDescending(p => p.Length)
-                .FirstOrDefault(p => string.Equals(normPath, p, PathComparison) || normPath.StartsWith(p.EndsWith(Path.DirectorySeparatorChar) ? p : p + Path.DirectorySeparatorChar, PathComparison));
+                .OrderByDescending(folderPath => folderPath.Length)
+                .FirstOrDefault(folderPath =>
+                    string.Equals(normPath, folderPath, PathComparison)
+                    || normPath.StartsWith(folderPath.EndsWith(Path.DirectorySeparatorChar) ? folderPath : folderPath + Path.DirectorySeparatorChar, PathComparison)
+                );
 
             if (matchedRoot != null && TryMakeRelative(matchedRoot, path, out var rel))
                 path = rel;
@@ -445,7 +448,7 @@ internal static class VfsShared
 
     #endregion
 
-    #region File Writes & Blueprint
+    #region File Writes & Cache
 
     /// <summary>Atomically writes a file via a temporary path move using the supplied writer callback.</summary>
     /// <param name="path">The target file path.</param>
@@ -504,8 +507,8 @@ internal static class VfsShared
         {
             try
             {
-                using var fs = new FileStream(BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                if (JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(fs) is { } existing)
+                using var stream = new FileStream(BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                if (JsonSerializer.Deserialize<Dictionary<string, Dictionary<int, VfsBlueprintSeries>>>(stream) is { } existing)
                     foreach (var rootPair in existing)
                     {
                         var rootDict = blueprint.GetOrAdd(rootPair.Key, _ => new());

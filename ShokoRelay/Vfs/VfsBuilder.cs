@@ -36,7 +36,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot)
     {
         var rootName = VfsShared.ResolveRootFolderName();
-        var overlapping = videoService.GetAllManagedFolders()?.Select(f => f.Path).FirstOrDefault(path => !string.IsNullOrEmpty(path) && VfsHelper.IsInVfsRoot(path, out _));
+        var overlapping = videoService.GetAllManagedFolders()?.Select(folder => folder.Path).FirstOrDefault(path => !string.IsNullOrEmpty(path) && VfsHelper.IsInVfsRoot(path, out _));
 
         if (overlapping != null)
             throw new InvalidOperationException(
@@ -52,7 +52,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         var skippedDetailsBag = new ConcurrentBag<string>();
         var ignoredFolders = VfsShared.GetIgnoredFolderNames(Settings);
         var errorsBag = new ConcurrentBag<string>();
-        var session = new VfsBuildSession();
+        var session = new VfsBuildSession(videoService);
         bool isFiltered = seriesIds?.Count > 0;
 
         var blueprint = isFiltered ? VfsShared.LoadBlueprint() : new ConcurrentDictionary<string, ConcurrentDictionary<int, VfsBlueprintSeries>>(VfsShared.PathComparer);
@@ -78,11 +78,11 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             var resolved = seriesIds!.Distinct().Select(id => (Id: id, Series: metadataService.GetShokoSeriesByID(id))).ToList();
 
             // Prune series that were completely deleted from Shoko's database
-            foreach (var (id, series) in resolved.Where(x => x.Series == null))
+            foreach (var (id, series) in resolved.Where(item => item.Series == null))
             {
                 var blueprintMovieIds = blueprint
-                    .Values.SelectMany(d => d.TryGetValue(id, out var entry) ? entry.Seasons : [])
-                    .Select(s => s.Name.StartsWith("Movie ❯ ", StringComparison.Ordinal) && int.TryParse(s.Name.AsSpan(8), out int epId) ? epId : 0)
+                    .Values.SelectMany(rootDict => rootDict.TryGetValue(id, out var entry) ? entry.Seasons : [])
+                    .Select(season => season.Name.StartsWith("Movie ❯ ", StringComparison.Ordinal) && int.TryParse(season.Name.AsSpan(8), out int epId) ? epId : 0)
                     .Where(epId => epId > 0)
                     .ToHashSet();
                 PruneSeries(rootName, id, errorsBag.Add, blueprintMovieIds);
@@ -90,7 +90,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                     rootDict.TryRemove(id, out _);
             }
 
-            seriesList = [.. resolved.Where(x => x.Series != null).Select(x => x.Series!).OfType<IShokoSeries>()];
+            seriesList = [.. resolved.Where(item => item.Series != null).Select(item => item.Series!).OfType<IShokoSeries>()];
         }
         else
             seriesList = metadataService.GetAllShokoSeries() ?? [];
@@ -100,9 +100,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (EnforceTmdbNumbering)
         {
             // Group by primary ID and count how many secondary series are being merged
-            var grouped = seriesList.GroupBy(s => OverrideHelper.GetPrimary(s.LocalID, metadataService)).ToList();
-            seriesList = [.. grouped.Select(g => metadataService.GetShokoSeriesByID(g.Key) ?? g.First())];
-            consolidatedCount = seriesList.Sum(s => Math.Max(0, OverrideHelper.GetGroup(s.LocalID, metadataService).Count - 1));
+            var grouped = seriesList.GroupBy(series => OverrideHelper.GetPrimary(series.LocalID, metadataService)).ToList();
+            seriesList = [.. grouped.Select(group => metadataService.GetShokoSeriesByID(group.Key) ?? group.First())];
+            consolidatedCount = seriesList.Sum(series => Math.Max(0, OverrideHelper.GetGroup(series.LocalID, metadataService).Count - 1));
 
             // Remove stale secondary series entries from the blueprint (and disk on filtered builds) when series are merged via overrides
             foreach (var primarySeries in seriesList)
@@ -149,17 +149,17 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                         {
                             if (string.IsNullOrEmpty(season))
                             {
-                                if (!rootFilesByRoot.TryGetValue(vfsRoot, out var rf))
-                                    rootFilesByRoot[vfsRoot] = rf = new(StringComparer.OrdinalIgnoreCase);
-                                rf.TryAdd(fileName, source ?? "Local Metadata");
+                                if (!rootFilesByRoot.TryGetValue(vfsRoot, out var rootFiles))
+                                    rootFilesByRoot[vfsRoot] = rootFiles = new(StringComparer.OrdinalIgnoreCase);
+                                rootFiles.TryAdd(fileName, source ?? "Local Metadata");
                             }
                             else
                             {
                                 if (!seasonsByRoot.TryGetValue(vfsRoot, out var rootSeasons))
                                     seasonsByRoot[vfsRoot] = rootSeasons = new(StringComparer.OrdinalIgnoreCase);
-                                if (!rootSeasons.TryGetValue(season, out var sDict))
-                                    rootSeasons[season] = sDict = new(StringComparer.OrdinalIgnoreCase);
-                                sDict.TryAdd(fileName, source ?? "Local Metadata");
+                                if (!rootSeasons.TryGetValue(season, out var seasonDict))
+                                    rootSeasons[season] = seasonDict = new(StringComparer.OrdinalIgnoreCase);
+                                seasonDict.TryAdd(fileName, source ?? "Local Metadata");
                             }
                         }
                     );
@@ -169,8 +169,8 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                     {
                         foreach (var root in rootsInvolved)
                         {
-                            var rf = rootFilesByRoot.GetValueOrDefault(root) ?? [];
-                            var sMap = seasonsByRoot.GetValueOrDefault(root) ?? [];
+                            var rootFiles = rootFilesByRoot.GetValueOrDefault(root) ?? [];
+                            var seasonMap = seasonsByRoot.GetValueOrDefault(root) ?? [];
                             blueprint
                                 .GetOrAdd(root, _ => new())
                                 .TryAdd(
@@ -179,9 +179,14 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                                         folderId,
                                         series.AnidbAnimeID,
                                         TextHelper.ResolveFullSeriesTitles(series).DisplayTitle,
-                                        rf.OrderBy(f => f.Key).Select(f => new VfsBlueprintFile(f.Key, f.Value)),
-                                        sMap.OrderBy(kvp => VfsHelper.GetSeasonSortKey(kvp.Key))
-                                            .Select(kvp => new VfsBlueprintSeason(kvp.Key, VfsHelper.GetSeasonId(kvp.Key), kvp.Value.OrderBy(f => f.Key).Select(f => new VfsBlueprintFile(f.Key, f.Value))))
+                                        rootFiles.OrderBy(file => file.Key).Select(file => new VfsBlueprintFile(file.Key, file.Value)),
+                                        seasonMap
+                                            .OrderBy(kvp => VfsHelper.GetSeasonSortKey(kvp.Key))
+                                            .Select(kvp => new VfsBlueprintSeason(
+                                                kvp.Key,
+                                                VfsHelper.GetSeasonId(kvp.Key),
+                                                kvp.Value.OrderBy(file => file.Key).Select(file => new VfsBlueprintFile(file.Key, file.Value))
+                                            ))
                                     )
                                 );
                         }
@@ -243,7 +248,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             [.. skippedDetailsBag],
             errors,
             planned,
-            [.. seriesDetailsBag.OrderBy(x => x.Name)],
+            [.. seriesDetailsBag.OrderBy(item => item.Name)],
             cleanupDetails,
             sw.Elapsed
         );
@@ -320,9 +325,6 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 : null;
             PruneSeries(rootFolderName, folderId, state.Errors.Add, staleMovieIds, pruneStandard: !doStandard, pruneMovies: !doMovie);
         }
-
-        if (!doStandard && !skipCheck)
-            PruneSeries(rootFolderName, folderId, state.Errors.Add, pruneMovies: !doMovie);
 
         if (doStandard)
             BuildVfs(state);
@@ -474,7 +476,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="state">The active series build state.</param>
     private void FlushSeriesMetadataLinks(SeriesBuildState state)
     {
-        foreach (var (srcDir, destSeriesDir, importRoot, seriesSeasonLabel, _) in state.PendingSeriesMetaDirs.OrderByDescending(x => x.IsPrimary))
+        foreach (var (srcDir, destSeriesDir, importRoot, seriesSeasonLabel, _) in state.PendingSeriesMetaDirs.OrderByDescending(item => item.IsPrimary))
         {
             assetLinker.LinkSeriesMetadata(
                 srcDir,

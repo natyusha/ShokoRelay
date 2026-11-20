@@ -158,7 +158,7 @@ public partial class VfsBuilder
             orphanedFolders,
             sw.ElapsedMilliseconds
         );
-        return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, [.. removed.OrderBy(x => x)], [.. errors.OrderBy(x => x)]);
+        return new VfsAuditResult(seriesChecked, brokenLinks, orphanedFolders, [.. removed.OrderBy(item => item)], [.. errors.OrderBy(item => item)]);
     }
 
     #endregion

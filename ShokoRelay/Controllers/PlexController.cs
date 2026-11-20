@@ -145,7 +145,7 @@ public class PlexController(
             ? Task.FromResult<IActionResult>(Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAuthRefresh,
-                LogHelper.BuildDiscoveryReport,
+                ReportHelper.BuildDiscoveryReport,
                 async () =>
                 {
                     Logger.LogInformation("Plex: Refreshing servers and libraries...");
@@ -269,7 +269,7 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexCollectionsBuild,
-                LogHelper.BuildCollectionsReport,
+                ReportHelper.BuildCollectionsReport,
                 () => collectionService.BuildCollectionsAsync(filterIds.Count > 0 ? seriesList : null, assignment, clean, CancellationToken.None),
                 SyncHelper.SyncLock
             );
@@ -283,7 +283,7 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexRatingsApply,
-                LogHelper.BuildRatingsReport,
+                ReportHelper.BuildRatingsReport,
                 () => criticRatingService.ApplyRatingsAsync(filterIds.Count > 0 ? seriesList.WhereNotNull().Select(series => series.LocalID) : null, CancellationToken.None),
                 SyncHelper.SyncLock
             );
@@ -297,7 +297,7 @@ public class PlexController(
             ? Task.FromResult(guard)
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexImagesSync,
-                LogHelper.BuildImageSyncReport,
+                ReportHelper.BuildImageSyncReport,
                 () => imageSyncService.SyncImagesAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None),
                 SyncHelper.SyncLock
             );
@@ -310,7 +310,7 @@ public class PlexController(
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAutomationRun,
-                (sb, r) => LogHelper.BuildPlexAutomationReport(sb, r, ApiBase),
+                (builder, report) => ReportHelper.BuildPlexAutomationReport(builder, report, ApiBase),
                 () => plexAutomationService.RunAutomationAsync(null, CancellationToken.None),
                 SyncHelper.SyncLock
             );

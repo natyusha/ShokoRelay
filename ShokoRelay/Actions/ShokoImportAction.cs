@@ -7,6 +7,8 @@ namespace ShokoRelay.Actions;
 /// <summary>Scheduled action to trigger Shoko to scan managed folders for new or unrecognized files.</summary>
 public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<ShokoImportAction> logger) : IScheduledAction
 {
+    #region Action Metadata
+
     /// <inheritdoc/>
     public string Name => $"{ShokoRelayConstants.Name}: Auto Import";
 
@@ -19,6 +21,10 @@ public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<Sh
     /// <inheritdoc/>
     public TimeSpan? MinimumInterval => TimeSpan.FromMinutes(10);
 
+    #endregion
+
+    #region Execution
+
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
@@ -29,4 +35,6 @@ public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<Sh
         progress.Report(100);
         logger.LogInformation("Scheduled auto import completed.");
     }
+
+    #endregion
 }

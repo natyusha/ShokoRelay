@@ -50,13 +50,13 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
         var swCollections = Stopwatch.StartNew();
         var collectionRes = await collectionService.BuildCollectionsAsync(null, cancellationToken: token).ConfigureAwait(false);
         swCollections.Stop();
-        LogHelper.WriteReport($"{ShokoRelayConstants.TaskPlexCollectionsBuild}-report.log", collectionRes, LogHelper.BuildCollectionsReport, logger);
+        ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexCollectionsBuild}.report", collectionRes, ReportHelper.BuildCollectionsReport, logger);
         progress?.Report(40);
 
         var swRatings = Stopwatch.StartNew();
         var ratingRes = await criticRatingService.ApplyRatingsAsync(null, token).ConfigureAwait(false);
         swRatings.Stop();
-        LogHelper.WriteReport($"{ShokoRelayConstants.TaskPlexRatingsApply}-report.log", ratingRes, LogHelper.BuildRatingsReport, logger);
+        ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexRatingsApply}.report", ratingRes, ReportHelper.BuildRatingsReport, logger);
         progress?.Report(70);
 
         TimeSpan? imageSyncElapsed = null;
@@ -67,7 +67,7 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
             imageSyncRes = await imageSyncService.SyncImagesAsync(cancellationToken: token).ConfigureAwait(false);
             swImages.Stop();
             imageSyncElapsed = swImages.Elapsed;
-            LogHelper.WriteReport($"{ShokoRelayConstants.TaskPlexImagesSync}-report.log", imageSyncRes, LogHelper.BuildImageSyncReport, logger);
+            ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexImagesSync}.report", imageSyncRes, ReportHelper.BuildImageSyncReport, logger);
         }
         progress?.Report(90);
 

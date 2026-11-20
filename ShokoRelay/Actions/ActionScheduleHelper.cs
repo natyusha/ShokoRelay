@@ -6,6 +6,8 @@ namespace ShokoRelay.Actions;
 /// <summary>Translates Shoko Relay dashboard configurations into native Shoko action triggers.</summary>
 public static class ActionScheduleHelper
 {
+    #region Schedule Sync
+
     /// <summary>Synchronizes the configured dashboard intervals with the native scheduled action service.</summary>
     /// <param name="settings">The current relay configuration.</param>
     /// <param name="scheduledActionService">The native scheduled action service.</param>
@@ -58,4 +60,6 @@ public static class ActionScheduleHelper
         if (!identical)
             svc.SetTriggers(actionInfo.ID, triggers);
     }
+
+    #endregion
 }

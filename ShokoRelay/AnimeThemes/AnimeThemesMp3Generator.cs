@@ -133,6 +133,25 @@ public class AnimeThemesMp3Generator(
         }
     }
 
+    /// <summary>Adds or updates multiple folder paths in the Theme.mp3 cache and persists once.</summary>
+    /// <param name="entries">Collection of folder paths and standardized slugs to store.</param>
+    public void AddBatchToThemeMp3Cache(IEnumerable<(string Folder, string Slug)> entries)
+    {
+        var list = entries.Where(entry => !string.IsNullOrWhiteSpace(entry.Folder)).ToList();
+        if (list.Count == 0)
+            return;
+
+        lock (_cacheLock)
+        {
+            if (_themeMp3Cache == null)
+                LoadCacheFromFile();
+            _themeMp3Cache ??= new(VfsShared.PathComparer);
+            foreach (var (folderPath, slug) in list)
+                _themeMp3Cache[folderPath] = $"{slug}|";
+            SaveCacheToFile();
+        }
+    }
+
     /// <summary>Updates a folder entry in the Theme.mp3 cache under the cache lock.</summary>
     /// <param name="folderPath">Absolute path of the folder to update.</param>
     /// <param name="value">The serialized slug and upgrade metadata value.</param>
@@ -150,7 +169,7 @@ public class AnimeThemesMp3Generator(
         try
         {
             var roots = (videoService.GetAllManagedFolders() ?? [])
-                .Select(mf => mf.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                .Select(folder => folder.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
                 .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
                 .Distinct(VfsShared.PathComparer)
                 .ToList();
@@ -191,9 +210,9 @@ public class AnimeThemesMp3Generator(
                 var dict = new ConcurrentDictionary<string, string>(
                     File.ReadLines(ThemeCacheFilePath)
                         .Where(line => !string.IsNullOrWhiteSpace(line))
-                        .Select(l => l.Split('|', 3))
-                        .Where(p => p.Length > 0 && !string.IsNullOrWhiteSpace(p[0]))
-                        .ToDictionary(p => p[0], p => $"{(p.Length > 1 ? p[1] : "")}|{(p.Length > 2 ? p[2] : "")}", VfsShared.PathComparer)
+                        .Select(line => line.Split('|', 3))
+                        .Where(parts => parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
+                        .ToDictionary(parts => parts[0], parts => $"{(parts.Length > 1 ? parts[1] : "")}|{(parts.Length > 2 ? parts[2] : "")}", VfsShared.PathComparer)
                 );
                 if (!dict.IsEmpty)
                 {
@@ -248,12 +267,26 @@ public class AnimeThemesMp3Generator(
         logger.LogInformation("AnimeThemes MP3: Starting batch generation for root -> {Root}", root);
         var (results, processed, skipped, errors) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
-        // Scan recursively for directories that hold videos directly (or via immediate Season/Specials subfolders), excluding ignored/VFS paths
-        var candidateDirs = Directory
-            .EnumerateDirectories(root, "*", SearchOption.AllDirectories)
-            .Prepend(root)
-            .Where(dir => !VfsShared.IsPathIgnored(dir, videoService, Settings, relativeTo: root, isDirectory: true))
-            .ToList();
+        // Scan recursively for directories that hold videos directly (or via immediate Season/Specials subfolders), pruning ignored/VFS paths before descending
+        var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
+        var candidateDirs = new List<string>();
+        var pendingDirs = new Stack<string>();
+        if (!VfsShared.IsPathIgnored(root, videoService, Settings, ignoredNames, relativeTo: root, isDirectory: true))
+            pendingDirs.Push(root);
+
+        while (pendingDirs.Count > 0)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string currentDir = pendingDirs.Pop();
+            candidateDirs.Add(currentDir);
+            try
+            {
+                foreach (var subDir in Directory.EnumerateDirectories(currentDir))
+                    if (!VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: root, isDirectory: true))
+                        pendingDirs.Push(subDir);
+            }
+            catch { }
+        }
         var candidateSet = candidateDirs.ToHashSet(VfsShared.PathComparer);
 
         var folders = candidateDirs
@@ -318,31 +351,32 @@ public class AnimeThemesMp3Generator(
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
         var searchOption = query.Batch ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
-        string? vid = Directory.EnumerateFiles(folder, "*", searchOption).FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
-        if (vid == null && query.Batch)
-            vid = Directory
+        string? videoPath = Directory.EnumerateFiles(folder, "*", searchOption).FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+        if (videoPath == null && query.Batch)
+            videoPath = Directory
                 .EnumerateDirectories(folder, "*", SearchOption.TopDirectoryOnly)
                 .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true))
                 .SelectMany(subDir => Directory.EnumerateFiles(subDir, "*", SearchOption.TopDirectoryOnly))
                 .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
 
-        if (vid == null)
+        if (videoPath == null)
         {
             logger.LogDebug("AnimeThemes MP3: No recognized video files in folder -> {Folder}", folder);
             return new(folder, "error", "No video files found.");
         }
 
-        var vf = videoService.GetVideoFileByAbsolutePath(vid);
-        var series = vf?.Video?.Episodes?.FirstOrDefault()?.Series;
+        var videoFile = videoService.GetVideoFileByAbsolutePath(videoPath);
+        var series = videoFile?.Video?.Episodes?.FirstOrDefault()?.Series;
         if (series == null)
         {
-            logger.LogWarning("AnimeThemes MP3: Series lookup failed for video -> {Video} in {Folder}", vid, folder);
-            return new(folder, "error", vf == null ? "Video not recognized." : "Series lookup failed.");
+            logger.LogWarning("AnimeThemes MP3: Series lookup failed for video -> {Video} in {Folder}", videoPath, folder);
+            return new(folder, "error", videoFile == null ? "Video not recognized." : "Series lookup failed.");
         }
 
         logger.LogDebug("AnimeThemes MP3: Folder {Folder} maps to series -> {Title} [{LocalId}] (AniDB: {AnidbId})", folder, series.GetDisplayTitle(), series.LocalID, series.AnidbAnimeID);
 
-        // Season Filter: Only applied when Batch is true. Ignored for individual folder requests.
+        // Season Filter: Intentionally targets series that started airing in the current season (with a one-month early buffer) to avoid overly aggressive downloading
+        // Only applied when Batch is true; ignored for individual folder requests
         if (query.Batch && query.Seasonal)
         {
             var now = DateTime.Now;
@@ -555,6 +589,14 @@ public class AnimeThemesMp3Generator(
         int cacheUpdated = 0;
 
         var cache = GetCachedThemeMp3s();
+        var videoFileLookup = new Lazy<Dictionary<string, IShokoSeries>>(() =>
+        {
+            var dict = new Dictionary<string, IShokoSeries>(VfsShared.PathComparer);
+            foreach (var videoFile in videoService.GetAllVideoFiles() ?? [])
+                if (!string.IsNullOrWhiteSpace(videoFile.Path) && videoFile.Video?.Episodes?.FirstOrDefault()?.Series is { } series)
+                    dict.TryAdd(videoFile.Path, series);
+            return dict;
+        });
 
         logger.LogInformation("AnimeThemes MP3: Starting audit of {Count} cached themes...", cache.Count);
 
@@ -573,7 +615,6 @@ public class AnimeThemesMp3Generator(
                     return;
 
                 if (string.IsNullOrEmpty(slug))
-                {
                     try
                     {
                         var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
@@ -586,7 +627,6 @@ public class AnimeThemesMp3Generator(
                         }
                     }
                     catch { }
-                }
 
                 logger.LogDebug("AnimeThemes MP3: Auditing file -> {ThemePath} (Slug: {Slug})", themePath, string.IsNullOrEmpty(slug) ? "Unknown" : slug);
 
@@ -608,21 +648,16 @@ public class AnimeThemesMp3Generator(
                         Interlocked.Increment(ref processed);
                         try
                         {
-                            string? vid = Directory
+                            string? videoPath = Directory
                                 .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
                                 .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
-                            if (vid == null)
-                                return;
-
-                            var vf = videoService.GetVideoFileByAbsolutePath(vid);
-                            var series = vf?.Video?.Episodes?.FirstOrDefault()?.Series;
-                            if (series == null)
+                            if (videoPath == null || !videoFileLookup.Value.TryGetValue(videoPath, out var series))
                                 return;
 
                             var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, token).ConfigureAwait(false);
                             var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
-                            var op = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsOp(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
-                            var ed = animethemes.Where(t => t.Slug != null && AnimeThemesHelper.IsEd(t.Slug)).OrderBy(t => AnimeThemesHelper.ExtractSlugNumber(t.Slug!)).FirstOrDefault();
+                            var op = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
+                            var ed = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsEd(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
 
                             int? opNum = op?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(op.Slug) : null;
                             int? edNum = ed?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(ed.Slug) : null;

@@ -79,8 +79,9 @@ public partial class ConfigProvider : IDisposable
     /// <summary>The absolute path to the plugin's cache directory.</summary>
     public string CacheDirectory { get; }
 
-    /// <summary>The absolute path to the plugin's task logs directory.</summary>
-    public string LogsDirectory => Path.Combine(ConfigDirectory, "logs");
+    /// <summary>The absolute path to the plugin's task reports directory.</summary>
+    /// <remarks>Does not use <see cref="IApplicationPaths.LogsPath"/> as these are not traditional logs but temporary report files.</remarks>
+    public string LogsDirectory => Path.Combine(CacheDirectory, "reports");
 
     /// <summary>The externally-reachable base URL of Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last discovered value, 4. Localhost fallback.</summary>
     public string ServerBaseUrl
@@ -393,7 +394,7 @@ public partial class ConfigProvider : IDisposable
             && Validator.TryValidateObject(settings.Playback, new ValidationContext(settings.Playback), validationResults, true)
             && Validator.TryValidateObject(settings.Advanced, new ValidationContext(settings.Advanced), validationResults, true);
         if (!isValid)
-            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(r => r.ErrorMessage).Where(msg => !string.IsNullOrWhiteSpace(msg)))}");
+            throw new ArgumentException($"Config validation failed: {string.Join("; ", validationResults.Select(result => result.ErrorMessage).Where(msg => !string.IsNullOrWhiteSpace(msg)))}");
         NormalizePathMappings(settings);
         NormalizeSubtitleMappings(settings);
         NormalizeCsvFields(settings);
@@ -589,7 +590,7 @@ public partial class ConfigProvider : IDisposable
     /// <summary>Checks if the provided server UUID matches a managed server known to the provider.</summary>
     /// <param name="uuid">The server UUID to check.</param>
     /// <returns>True if the server is in the discovered list.</returns>
-    public bool IsManagedServer(string? uuid) => !string.IsNullOrWhiteSpace(uuid) && GetPlexDiscoveredServers().Any(s => string.Equals(s.Id, uuid, StringComparison.OrdinalIgnoreCase));
+    public bool IsManagedServer(string? uuid) => !string.IsNullOrWhiteSpace(uuid) && GetPlexDiscoveredServers().Any(server => string.Equals(server.Id, uuid, StringComparison.OrdinalIgnoreCase));
 
     #endregion
 

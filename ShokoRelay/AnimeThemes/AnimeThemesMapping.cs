@@ -87,18 +87,18 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
     /// <returns>A build result with statistics.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken cancellationToken = default)
     {
-        TaskHelper.StartTask(ShokoRelayConstants.TaskAtMapBuild);
         logger.LogInformation("AnimeThemes Map: Starting mapping task...");
 
+        bool startedTask = TaskHelper.StartTask(ShokoRelayConstants.TaskAtMapBuild);
         try
         {
             string themeFolder = VfsShared.ResolveAnimeThemesFolderName();
             var roots = (videoService.GetAllManagedFolders() ?? [])
                 .Where(VfsShared.IsVfsEnabledFolder)
-                .Select(f => f.Path)
+                .Select(folder => folder.Path)
                 .Where(path => !string.IsNullOrWhiteSpace(path))
                 .Distinct(VfsShared.PathComparer)
-                .Select(p => Path.Combine(p, themeFolder))
+                .Select(path => Path.Combine(path, themeFolder))
                 .Where(Directory.Exists)
                 .ToList();
             if (roots.Count == 0)
@@ -202,20 +202,21 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 )
                 .ConfigureAwait(false);
 
-            var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+            var finalEntries = entries.DistinctBy(entry => entry.FilePath).OrderBy(entry => AnimeThemesHelper.GetYearForSort(entry.FilePath)).ThenBy(entry => entry.FilePath).ToList();
 
             await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
             logger.LogInformation("AnimeThemes Map: Finished mapping task -> {Count} entries written.", finalEntries.Count);
             List<string> finalMessages =
             [
-                .. errorsBag.OrderBy(x => x.Year).ThenBy(x => x.FilePath).Select(x => x.Message),
-                .. newMappingsBag.OrderBy(x => x.Year).ThenBy(x => x.FilePath).Select(x => x.Message),
+                .. errorsBag.OrderBy(errorItem => errorItem.Year).ThenBy(errorItem => errorItem.FilePath).Select(errorItem => errorItem.Message),
+                .. newMappingsBag.OrderBy(mappingItem => mappingItem.Year).ThenBy(mappingItem => mappingItem.FilePath).Select(mappingItem => mappingItem.Message),
             ];
             return new AnimeThemesMappingBuildResult(mapPath, finalEntries.Count, reusedCount, errors, finalMessages);
         }
         finally
         {
-            TaskHelper.FinishTask(ShokoRelayConstants.TaskAtMapBuild);
+            if (startedTask)
+                TaskHelper.FinishTask(ShokoRelayConstants.TaskAtMapBuild);
         }
     }
 
@@ -281,7 +282,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
             if (addedCount > 0)
             {
-                var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+                var finalEntries = entries.DistinctBy(entry => entry.FilePath).OrderBy(entry => AnimeThemesHelper.GetYearForSort(entry.FilePath)).ThenBy(entry => entry.FilePath).ToList();
                 await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
                 logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
             }
@@ -326,9 +327,9 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 try
                 {
                     (existingComments, entries) = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
-                    match = entries.FirstOrDefault(e =>
-                        string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase)
-                        || (!string.IsNullOrEmpty(relPath) && string.Equals(e.FilePath, relPath, StringComparison.OrdinalIgnoreCase))
+                    match = entries.FirstOrDefault(entry =>
+                        string.Equals(Path.GetFileName(entry.FilePath), fileName, StringComparison.OrdinalIgnoreCase)
+                        || (!string.IsNullOrEmpty(relPath) && string.Equals(entry.FilePath, relPath, StringComparison.OrdinalIgnoreCase))
                     );
                     if (string.IsNullOrEmpty(relPath) && match != null)
                         relPath = match.FilePath;
@@ -399,10 +400,12 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             if (!save)
                 return (entry, idMissing && effectiveAnidbId <= 0 ? "AniDB ID missing on AnimeThemes" : null, genFileName, false, changedFields);
 
-            entries.RemoveAll(e => string.Equals(e.FilePath, relPath, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(e.FilePath), fileName, StringComparison.OrdinalIgnoreCase));
+            entries.RemoveAll(entry =>
+                string.Equals(entry.FilePath, relPath, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(entry.FilePath), fileName, StringComparison.OrdinalIgnoreCase)
+            );
             entries.Add(entry);
 
-            var finalEntries = entries.DistinctBy(e => e.FilePath).OrderBy(e => AnimeThemesHelper.GetYearForSort(e.FilePath)).ThenBy(e => e.FilePath).ToList();
+            var finalEntries = entries.DistinctBy(entry => entry.FilePath).OrderBy(entry => AnimeThemesHelper.GetYearForSort(entry.FilePath)).ThenBy(entry => entry.FilePath).ToList();
             await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
 
             if (changedFields.Count > 0)
@@ -412,7 +415,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
             // If the entry has a valid AniDB ID, refresh the VFS symlink immediately so the renamed file is visible in Plex
             if (entry.AniDbId > 0 && metadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } shokoSeries)
-                await ApplyMappingAsync([shokoSeries.LocalID], cancellationToken).ConfigureAwait(false);
+                await ApplyMappingAsync([shokoSeries.LocalID], CancellationToken.None).ConfigureAwait(false);
 
             return (entry, null, genFileName, true, changedFields);
         }
@@ -432,9 +435,9 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
     /// <returns>An <see cref="AnimeThemesMappingApplyResult"/> with counts and results.</returns>
     public async Task<AnimeThemesMappingApplyResult> ApplyMappingAsync(IReadOnlyCollection<int>? seriesFilter = null, CancellationToken cancellationToken = default)
     {
+        bool startedTask = TaskHelper.StartTask(ShokoRelayConstants.TaskAtVfsBuild);
         try
         {
-            TaskHelper.StartTask(ShokoRelayConstants.TaskAtVfsBuild);
             logger.LogInformation("AnimeThemes VFS: Starting task...");
             string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
             if (!File.Exists(mapPath))
@@ -446,7 +449,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             string vfsRoot = VfsShared.ResolveRootFolderName();
 
             // Pre-index entries by AniDB ID for instant bucket lookups per series
-            var entriesByAniDb = entries.Where(e => e.AniDbId > 0).ToLookup(e => e.AniDbId);
+            var entriesByAniDb = entries.Where(entry => entry.AniDbId > 0).ToLookup(entry => entry.AniDbId);
 
             var seriesToQuery =
                 seriesFilter?.Count > 0
@@ -454,12 +457,12 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                         .Distinct()
                         .Select(id => OverrideHelper.GetPrimary(id, metadataService))
                         .Distinct()
-                        .SelectMany(pid => OverrideHelper.GetGroup(pid, metadataService))
+                        .SelectMany(primaryId => OverrideHelper.GetGroup(primaryId, metadataService))
                         .Distinct()
                         .Select(metadataService.GetShokoSeriesByID)
                     : metadataService.GetAllShokoSeries();
 
-            var folderGroups = seriesToQuery.Where(s => s?.AnidbAnimeID > 0).GroupBy(s => OverrideHelper.GetPrimary(s!.LocalID, metadataService)).ToList();
+            var folderGroups = seriesToQuery.Where(series => series?.AnidbAnimeID > 0).GroupBy(series => OverrideHelper.GetPrimary(series!.LocalID, metadataService)).ToList();
 
             Parallel.ForEach(
                 folderGroups,
@@ -483,7 +486,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
 
                     Interlocked.Increment(ref state.Matched);
                     var isFilteredRun = seriesFilter?.Any() == true;
-                    var myPrefixes = folderGroup.Select(s => overrideOrder.IndexOf(s!.LocalID) is var idx && idx > 0 ? $"P{idx + 1} ❯ " : null).ToHashSet();
+                    var myPrefixes = folderGroup.Select(series => overrideOrder.IndexOf(series!.LocalID) is var idx && idx > 0 ? $"P{idx + 1} ❯ " : null).ToHashSet();
 
                     foreach (var vfsPath in vfsPaths)
                     {
@@ -499,10 +502,10 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                 int seriesIdx = overrideOrder.IndexOf(series.LocalID);
                                 return entriesByAniDb[series.AnidbAnimeID]
                                     // Determine if a theme mapping's overlap level is allowed based on the configured overlap restriction
-                                    .Where(e =>
+                                    .Where(entry =>
                                         Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.All
-                                        || e.Overlap.Equals("None", StringComparison.Ordinal)
-                                        || (Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.TransitionOnly && e.Overlap.Equals("Transition", StringComparison.Ordinal))
+                                        || entry.Overlap.Equals("None", StringComparison.Ordinal)
+                                        || (Settings.Advanced.AnimeThemesOverlapLevel == OverlapLevel.TransitionOnly && entry.Overlap.Equals("Transition", StringComparison.Ordinal))
                                     )
                                     .Select(entry =>
                                     {
@@ -525,17 +528,18 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                         };
                                     });
                             })
-                            .Where(x => x != null)
-                            .GroupBy(x => x!.Signature);
+                            .Where(candidate => candidate != null)
+                            .GroupBy(candidate => candidate!.Signature);
 
                         foreach (var sigGroup in potentialLinks)
                         {
                             // If any BD source exists, discard non-BD sources. Otherwise, keep all (TV/WEB/etc).
-                            bool hasBD = sigGroup.Any(x => x!.Entry.Source == "BD");
-                            var sourceSurvivors = hasBD ? [.. sigGroup.Where(x => x!.Entry.Source == "BD")] : sigGroup.ToList();
+                            bool hasBD = sigGroup.Any(candidate => candidate!.Entry.Source == "BD");
+                            var sourceSurvivors = hasBD ? [.. sigGroup.Where(candidate => candidate!.Entry.Source == "BD")] : sigGroup.ToList();
 
                             // NC Filtering: If enabled, prefer versions without credits over those with credits
-                            var finalSurvivors = (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(x => x!.Entry.Nc)) ? [.. sourceSurvivors.Where(x => x!.Entry.Nc)] : sourceSurvivors;
+                            var finalSurvivors =
+                                (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(candidate => candidate!.Entry.Nc)) ? [.. sourceSurvivors.Where(candidate => candidate!.Entry.Nc)] : sourceSurvivors;
 
                             int counter = 1;
                             foreach (var item in finalSurvivors)
@@ -544,7 +548,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                 string destPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, finalName));
                                 plannedFilenames.Add(finalName);
 
-                                if (!isFilteredRun || folderGroup.Any(s => s!.LocalID == item.OriginalId))
+                                if (!isFilteredRun || folderGroup.Any(series => series!.LocalID == item.OriginalId))
                                 {
                                     if (!Settings.Advanced.DisableVfsGeneration)
                                         Directory.CreateDirectory(shortsDir);
@@ -682,7 +686,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                         }
                     }
 
-                    newCacheLines.AddRange(state.CacheEntries.Select(ce => $"{ce.VfsPath.Replace('\\', '/')}|{ce.VideoId}|{ce.Bitmask}"));
+                    newCacheLines.AddRange(state.CacheEntries.Select(entry => $"{entry.VfsPath.Replace('\\', '/')}|{entry.VideoId}|{entry.Bitmask}"));
                     await VfsShared.WriteLinesAtomicAsync(cachePath, newCacheLines, cancellationToken).ConfigureAwait(false);
                 }
             }
@@ -696,7 +700,8 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
         }
         finally
         {
-            TaskHelper.FinishTask(ShokoRelayConstants.TaskAtVfsBuild);
+            if (startedTask)
+                TaskHelper.FinishTask(ShokoRelayConstants.TaskAtVfsBuild);
         }
     }
 
@@ -719,20 +724,24 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             return (null, false);
 
         string[] seasonOrder = ["Winter", "Spring", "Summer", "Fall"];
-        var allAnime = videoEntry.Animethemeentries?.Nodes?.Select(e => e.Animetheme?.Anime).Where(a => a != null).ToList() ?? [];
+        var allAnime = videoEntry.Animethemeentries?.Nodes?.Select(entry => entry.Animetheme?.Anime).Where(anime => anime != null).ToList() ?? [];
 
         var best = allAnime
-            .Select(e => new
+            .Select(entry => new
             {
-                Entry = e,
-                Year = e!.Year ?? 9999,
-                SVal = e.Season != null ? Array.IndexOf(seasonOrder, e.Season) : 9999,
-                ids = e.Resources?.Nodes?.Where(r => string.Equals(r.Site, "aniDB", StringComparison.OrdinalIgnoreCase) && r.ExternalId.HasValue).Select(r => r.ExternalId!.Value).OrderBy(i => i).ToList(),
+                Entry = entry,
+                Year = entry!.Year ?? 9999,
+                SVal = entry.Season != null ? Array.IndexOf(seasonOrder, entry.Season) : 9999,
+                ids = entry
+                    .Resources?.Nodes?.Where(res => string.Equals(res.Site, "aniDB", StringComparison.OrdinalIgnoreCase) && res.ExternalId.HasValue)
+                    .Select(res => res.ExternalId!.Value)
+                    .OrderBy(id => id)
+                    .ToList(),
             })
-            .Where(x => x.ids?.Count > 0)
-            .OrderBy(x => x.Year)
-            .ThenBy(x => x.SVal)
-            .ThenBy(x => x.ids?.FirstOrDefault() ?? 9999)
+            .Where(candidate => candidate.ids?.Count > 0)
+            .OrderBy(candidate => candidate.Year)
+            .ThenBy(candidate => candidate.SVal)
+            .ThenBy(candidate => candidate.ids?.FirstOrDefault() ?? 9999)
             .FirstOrDefault();
 
         int anidbId = overrideAnidbId ?? best?.ids?[0] ?? 0;
@@ -747,7 +756,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                 videoEntry.Nc,
                 theme.Slug ?? "",
                 first.Version,
-                string.Join(" / ", theme.Song?.Performances?.Select(p => p.Artist?.Name?.Main).Where(name => !string.IsNullOrEmpty(name)) ?? []),
+                string.Join(" / ", theme.Song?.Performances?.Select(performance => performance.Artist?.Name?.Main).Where(name => !string.IsNullOrEmpty(name)) ?? []),
                 theme.Song?.Title?.Romaji ?? "",
                 videoEntry.Lyrics,
                 videoEntry.Subbed,

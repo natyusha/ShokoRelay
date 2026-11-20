@@ -126,7 +126,7 @@ public class ShokoRelay : BackgroundService
     /// <summary>Access the plugin cache directory.</summary>
     public static string CacheDirectory => s_configProvider?.CacheDirectory ?? string.Empty;
 
-    /// <summary>Access the plugin logs directory.</summary>
+    /// <summary>Access the plugin reports directory.</summary>
     public static string LogsDirectory => s_configProvider?.LogsDirectory ?? string.Empty;
 
     /// <summary>Access the Shoko image manager service.</summary>

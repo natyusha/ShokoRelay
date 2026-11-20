@@ -16,7 +16,6 @@ public class LanguageSettingAttribute : Attribute { }
 
 #endregion
 
-
 #region Enum Definitions
 
 /// <summary>Levels of sanitization to apply when transferring the series summary to Plex.</summary>

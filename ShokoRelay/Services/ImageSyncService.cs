@@ -7,7 +7,7 @@ using Shoko.Abstractions.Metadata.Image.Options;
 
 namespace ShokoRelay.Services;
 
-#region Models
+#region Data Models
 
 /// <summary>Represents the final result of an image synchronization task.</summary>
 /// <param name="Processed">Total number of images evaluated.</param>
@@ -95,7 +95,43 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
             sw.Stop();
             logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", uploaded, sw.ElapsedMilliseconds);
-            return new ImageSyncResult(processed, uploaded, skipped, errors, [.. uploadedBag.OrderBy(x => x)], [.. errsBag.OrderBy(x => x)], sw.Elapsed);
+            return new ImageSyncResult(processed, uploaded, skipped, errors, [.. uploadedBag.OrderBy(item => item)], [.. errsBag.OrderBy(item => item)], sw.Elapsed);
+        }
+        finally
+        {
+            _syncLock.Release();
+        }
+    }
+
+    /// <summary>Removes and purges all custom images and thumbnails owned by Shoko Relay across both Relay sources.</summary>
+    /// <returns>The total number of images purged.</returns>
+    public async Task<int> PurgeAllRelayImagesAsync()
+    {
+        await _syncLock.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            await _imageWriteLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                var xrefs = imageManager
+                    .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { XrefSource = ServiceRegistration.RelaySource })
+                    .Concat(imageManager.GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { XrefSource = ServiceRegistration.RelayPlexSource }))
+                    .ToList();
+                int purgedCount = 0;
+
+                foreach (var xref in xrefs)
+                {
+                    imageManager.RemoveImageCrossReference(xref);
+                    if (imageManager.GetImageByID(xref.ImageID) is { } oldImg && oldImg.GetCrossReferences().Count == 0 && await imageManager.PurgeImage(oldImg).ConfigureAwait(false))
+                        purgedCount++;
+                }
+
+                return purgedCount;
+            }
+            finally
+            {
+                _imageWriteLock.Release();
+            }
         }
         finally
         {
@@ -157,7 +193,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         return;
 
                     var fileData = fileDataCache.GetOrAdd(primarySeriesId, id => metadataService.GetShokoSeriesByID(id) is { } ps ? MapHelper.GetConsolidatedSeriesFileData(ps, metadataService) : null);
-                    var matchingMappings = fileData?.Mappings.Where(m => m.Episodes.Any(e => e.ID == episode.ID)).ToList() ?? [];
+                    var matchingMappings = fileData?.Mappings.Where(mapping => mapping.Episodes.Any(ep => ep.ID == episode.ID)).ToList() ?? [];
                     var mappedCoords = matchingMappings.FirstOrDefault()?.Coords;
 
                     PlexMapping.PlexCoords coords;
@@ -175,16 +211,16 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsStr)}";
 
                     // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
-                    var hasPhysicalFiles = (episode.Videos ?? []).Any(v => v.Files?.Any(f => !string.IsNullOrWhiteSpace(f.Path) && File.Exists(f.Path)) == true);
+                    var hasPhysicalFiles = (episode.Videos ?? []).Any(vid => vid.Files?.Any(file => !string.IsNullOrWhiteSpace(file.Path) && File.Exists(file.Path)) == true);
                     if (!hasPhysicalFiles)
                     {
                         if (
                             episode
                                 .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
-                                .Any(x => x.Source == ServiceRegistration.RelayPlexSource || x.Source == ServiceRegistration.RelaySource)
+                                .Any(item => item.Source == ServiceRegistration.RelayPlexSource || item.Source == ServiceRegistration.RelaySource)
                         )
                         {
-                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == ServiceRegistration.RelayPlexSource || x.Source == ServiceRegistration.RelaySource)
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, item => item.Source == ServiceRegistration.RelayPlexSource || item.Source == ServiceRegistration.RelaySource)
                                 .ConfigureAwait(false);
                             addStats(false, false, false, false);
                         }
@@ -194,10 +230,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     // Coordinate Alignment Guard: Detect when Plex's metadata is in a transient or mismatched state
                     if (!isMovie && item.ParentIndex.HasValue && item.Index.HasValue)
                     {
-                        bool MatchesCoords(PlexMapping.PlexCoords c) =>
-                            item.ParentIndex.Value == c.Season && (item.Index.Value == c.Episode || (c.EndEpisode.HasValue && item.Index.Value >= c.Episode && item.Index.Value <= c.EndEpisode.Value));
+                        bool MatchesCoords(PlexMapping.PlexCoords coords) =>
+                            item.ParentIndex.Value == coords.Season
+                            && (item.Index.Value == coords.Episode || (coords.EndEpisode.HasValue && item.Index.Value >= coords.Episode && item.Index.Value <= coords.EndEpisode.Value));
 
-                        bool isMismatch = matchingMappings.Count > 0 ? !matchingMappings.Any(m => MatchesCoords(m.Coords)) : !MatchesCoords(coords);
+                        bool isMismatch = matchingMappings.Count > 0 ? !matchingMappings.Any(mapping => MatchesCoords(mapping.Coords)) : !MatchesCoords(coords);
 
                         // Compensate for virtual TMDB episode group splits where individual TMDB episodes sit in different seasons or indices
                         if (
@@ -220,15 +257,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                     // Find a local episode thumbnail alongside the physical video files
                     var localThumb = (episode.Videos ?? [])
-                        .SelectMany(v => v.Files ?? [])
-                        .Select(f => f.Path)
+                        .SelectMany(vid => vid.Files ?? [])
+                        .Select(file => file.Path)
                         .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(Path.GetDirectoryName(path)))
                         .Select(path => (Dir: Path.GetDirectoryName(path)!, Base: Path.GetFileNameWithoutExtension(path)))
-                        .SelectMany(x =>
+                        .SelectMany(item =>
                             Directory
-                                .EnumerateFiles(x.Dir, $"{x.Base}.*")
+                                .EnumerateFiles(item.Dir, $"{item.Base}.*")
                                 .Where(file =>
-                                    string.Equals(Path.GetFileNameWithoutExtension(file), x.Base, StringComparison.OrdinalIgnoreCase)
+                                    string.Equals(Path.GetFileNameWithoutExtension(file), item.Base, StringComparison.OrdinalIgnoreCase)
                                     && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file))
                                 )
                         )
@@ -250,14 +287,16 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     bool purgePlexThumb = fileExists || Settings.TmdbThumbnails;
                     if (purgePlexThumb)
                     {
-                        if (
-                            episode
-                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
-                                .Any(xref => xref.Source == ServiceRegistration.RelayPlexSource)
-                        )
+                        var plexBackdrops = new ImageCrossReferenceFilteringOptions
+                        {
+                            ImageType = ImageEntityType.Backdrop,
+                            XrefSource = ServiceRegistration.RelayPlexSource,
+                            LinkedEntityImages = false,
+                        };
+                        if (episode.GetImageCrossReferences(plexBackdrops).Count > 0)
                         {
                             logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", epLogName);
-                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, xref => xref.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                         }
                     }
                     else
@@ -266,12 +305,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         {
                             addStats(true, false, false, true);
                             errsBag.Add($"[Missing Plex Thumbnail] {epLogName} (No thumbnail generated or available in Plex)");
-                            if (
-                                episode
-                                    .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
-                                    .Any(xref => xref.Source == ServiceRegistration.RelayPlexSource)
-                            )
-                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, xref => xref.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                            var plexBackdrops = new ImageCrossReferenceFilteringOptions
+                            {
+                                ImageType = ImageEntityType.Backdrop,
+                                XrefSource = ServiceRegistration.RelayPlexSource,
+                                LinkedEntityImages = false,
+                            };
+                            if (episode.GetImageCrossReferences(plexBackdrops).Count > 0)
+                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                         }
                         else
                         {
@@ -326,11 +367,17 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         if (allowedSet == null && !sectionScanFailed)
         {
             var allEpisodeXrefs = imageManager
-                .GetAllImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop })
-                .Where(x => x.Source == ServiceRegistration.RelayPlexSource && x.EntityID.EntityType == MetadataEntityType.Episode)
+                .GetAllImageCrossReferences(
+                    new ImageCrossReferenceFilteringOptions
+                    {
+                        ImageType = ImageEntityType.Backdrop,
+                        XrefSource = ServiceRegistration.RelayPlexSource,
+                        EntityType = MetadataEntityType.Episode,
+                    }
+                )
                 .ToList();
 
-            var orphanedEpIds = allEpisodeXrefs.Select(x => int.TryParse(x.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.ContainsKey(id)).Distinct().ToList();
+            var orphanedEpIds = allEpisodeXrefs.Select(xref => int.TryParse(xref.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.ContainsKey(id)).Distinct().ToList();
 
             foreach (var epId in orphanedEpIds)
             {
@@ -339,12 +386,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     continue;
 
                 string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
                 string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsStr}";
 
                 logger.LogDebug("ImageSyncService: Episode thumbnail for -> {LogName} is no longer present in Plex ... Purging from Shoko", epLogName);
-                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, x => x.Source == ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                 addStats(false, false, false, false);
             }
         }
@@ -416,10 +463,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             if (
                                 series
                                     .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = config.Type, LinkedEntityImages = false })
-                                    .Any(x => x.Source == ServiceRegistration.RelaySource)
+                                    .Any(item => item.Source == ServiceRegistration.RelaySource)
                             )
                             {
-                                await PurgeEntityImagesAsync(series, config.Type, x => x.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
+                                await PurgeEntityImagesAsync(series, config.Type, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
                                 addStats(false, false, false, false);
                             }
                             continue;
@@ -431,9 +478,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             .Where(Directory.Exists)
                             .SelectMany(Directory.EnumerateFiles)
                             .Where(file => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file)))
-                            .Select(file => new { File = file, Index = Array.FindIndex(config.Names, n => string.Equals(Path.GetFileNameWithoutExtension(file), n, StringComparison.OrdinalIgnoreCase)) })
-                            .Where(x => x.Index >= 0)
-                            .OrderBy(x => x.Index)
+                            .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
+                            .Where(item => item.Index >= 0)
+                            .OrderBy(item => item.Index)
                             .FirstOrDefault()
                             ?.File;
 
@@ -496,8 +543,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         }
 
         var existingXrefs = entity
-            .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = imageType, LinkedEntityImages = false })
-            .Where(xref => xref.Source == ServiceRegistration.RelaySource)
+            .GetImageCrossReferences(
+                new ImageCrossReferenceFilteringOptions
+                {
+                    ImageType = imageType,
+                    XrefSource = ServiceRegistration.RelaySource,
+                    LinkedEntityImages = false,
+                }
+            )
             .ToList();
 
         if (!exists)
@@ -505,7 +558,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             if (existingXrefs.Count > 0)
             {
                 logger.LogDebug("ImageSyncService: Local {Label} for -> {Entity} no longer present on disk ... Purging from Shoko", label, entityName);
-                await PurgeEntityImagesAsync(entity, imageType, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
+                await PurgeEntityImagesAsync(entity, imageType, ServiceRegistration.RelaySource).ConfigureAwait(false);
             }
             return (false, false, false, false);
         }
@@ -585,8 +638,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     )
     {
         var existingXrefs = episode
-            .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
-            .Where(x => x.Source == ServiceRegistration.RelayPlexSource)
+            .GetImageCrossReferences(
+                new ImageCrossReferenceFilteringOptions
+                {
+                    ImageType = ImageEntityType.Backdrop,
+                    XrefSource = ServiceRegistration.RelayPlexSource,
+                    LinkedEntityImages = false,
+                }
+            )
             .ToList();
 
         if (existingXrefs.Count > 0)
@@ -654,17 +713,25 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
     #region Internal Helpers
 
-    /// <summary>Purges stale or demoted cross-referenced images for an entity based on source filters.</summary>
+    /// <summary>Purges stale or demoted cross-referenced images for an entity for a specific metadata source.</summary>
+    /// <param name="entity">The Shoko metadata entity.</param>
+    /// <param name="imageType">The target image entity type.</param>
+    /// <param name="xrefSource">The cross-reference metadata source to purge.</param>
+    /// <returns>A task representing the asynchronous purge operation.</returns>
+    private Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, MetadataSource xrefSource) => PurgeEntityImagesAsync(entity, imageType, xref => xref.Source == xrefSource, xrefSource);
+
+    /// <summary>Purges stale or demoted cross-referenced images for an entity based on a matching predicate.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
     /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
+    /// <param name="xrefSource">Optional cross-reference metadata source to filter on at the database level.</param>
     /// <returns>A task representing the asynchronous purge operation.</returns>
-    private async Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate)
+    private async Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate, MetadataSource? xrefSource = null)
     {
         await _imageWriteLock.WaitAsync().ConfigureAwait(false);
         try
         {
-            await PurgeEntityImagesUnlockedAsync(entity, imageType, predicate).ConfigureAwait(false);
+            await PurgeEntityImagesUnlockedAsync(entity, imageType, predicate, xrefSource).ConfigureAwait(false);
         }
         finally
         {
@@ -676,18 +743,24 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
     /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
+    /// <param name="xrefSource">Optional cross-reference metadata source to filter on at the database level.</param>
     /// <returns>A task representing the asynchronous purge operation.</returns>
-    private async Task PurgeEntityImagesUnlockedAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate)
+    private async Task PurgeEntityImagesUnlockedAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate, MetadataSource? xrefSource = null)
     {
         try
         {
-            var filterOpts = new ImageCrossReferenceFilteringOptions { ImageType = imageType, LinkedEntityImages = false };
+            var filterOpts = new ImageCrossReferenceFilteringOptions
+            {
+                ImageType = imageType,
+                XrefSource = xrefSource,
+                LinkedEntityImages = false,
+            };
             foreach (var xref in entity.GetImageCrossReferences(filterOpts).Where(predicate))
             {
                 imageManager.RemoveImageCrossReference(xref);
                 // Only purge the underlying image if no other entities are actively referencing it
-                if (imageManager.GetImageByID(xref.ImageID) is { } oldImg && oldImg.GetCrossReferences().Count == 0)
-                    await imageManager.PurgeImage(oldImg).ConfigureAwait(false);
+                if (imageManager.GetImageByID(xref.ImageID) is { } oldImage && oldImage.GetCrossReferences().Count == 0)
+                    await imageManager.PurgeImage(oldImage).ConfigureAwait(false);
             }
         }
         catch (Exception ex)

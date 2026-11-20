@@ -26,7 +26,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
     public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
     {
         var managedFolders = videoService.GetAllManagedFolders() ?? [];
-        var roots = managedFolders.Select(mf => mf.Path).Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path)).Distinct(VfsShared.PathComparer).ToList();
+        var roots = managedFolders.Select(folder => folder.Path).Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path)).Distinct(VfsShared.PathComparer).ToList();
         int count = 0;
         var details = new List<string>();
 

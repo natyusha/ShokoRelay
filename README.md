@@ -51,7 +51,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
 - **Mandatory:**
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
     - First time generation may take several minutes to complete with a large library
-  - A report of the run will be written to `logs/shoko-vfs-build-report.log` inside the plugin's configuration directory
+  - A report of the run will be written to `reports/shoko-vfs-build.report` inside the plugin's cache directory
     - You can download the report via the dashboard's "Task Logs" section or a toast that will appear on task completion
   - The VFS will automatically update when it detects files have been added, renamed, moved or deleted
 - **Recommended:**
@@ -280,7 +280,7 @@ There is also support for generating `Theme.mp3` files as local metadata. This w
 - Input the path (relative to Shoko or a mapping) to a folder containing an anime series and then click `Generate`
 - The `Audit Theme.mp3 Files` button will check for the availability of an opening for any theme file that isn't tagged as "Opening 1"
   - This is for cases where the ED was downloaded before the OP existed on AnimeThemes
-- The `Current Season Filter Toggle` will limit batch operations to anime airing in the current season (with a one-month buffer)
+- The `Current Season Filter Toggle` will limit batch operations to anime that started airing in the current season (with a one-month early buffer)
 - The `Force Overwrite Toggle` will overwrite any `Theme.mp3` files found in the configured path (or during a batch)
 - The `Recursive Batch Toggle` (on by default) will enable batch operations on every subfolder of the configured path
 - By default this will grab the first available OP with a fallback to the first ED
@@ -369,7 +369,7 @@ Crossover episodes are files which are linked to multiple episodes spanning sepa
 
 #### VFS Audit
 
-The VFS includes built-in audit functionality that scans existing VFS directories to find and prune orphaned folders, empty subdirectories, and broken symlinks whose source files were deleted or moved. It also updates the VFS Browser blueprint and generates a report at `logs/shoko-vfs-audit-report.log` in the plugin's configuration directory. It can be accessed via the `VFS Audit` button (database checkmark) in the "Shoko: VFS" section of the dashboard.
+The VFS includes built-in audit functionality that scans existing VFS directories to find and prune orphaned folders, empty subdirectories, and broken symlinks whose source files were deleted or moved. It also updates the VFS Browser blueprint and generates a report at `reports/shoko-vfs-audit.report` in the plugin's cache directory. It can be accessed via the `VFS Audit` button (database checkmark) in the "Shoko: VFS" section of the dashboard.
 
 #### VFS Browser
 
@@ -530,31 +530,31 @@ If `Assumed Content Ratings` are enabled in the Provider Settings the [target au
 | ★★⯪ Violence               | TV-MA-V |
 | 18 Restricted (override)   | X       |
 
-### Task Reports & Logs
+### Task Reports
 
 Most manual actions performed via the dashboard (as well as some direct API requests) generate a detailed report. These reports help you verify which items were processed and troubleshoot any skipped files or errors. A list of the actions which generate a log is provided below:
 
-| Dashboard Action                      | Log Filename                        |
-| :------------------------------------ | :---------------------------------- |
-| **AnimeThemes:** Generate VFS         | `at-vfs-build-report.log`           |
-| **AnimeThemes:** Build Mapping        | `at-map-build-report.log`           |
-| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-build-report.log`           |
-| **AnimeThemes:** Audit MP3s           | `at-mp3-audit-report.log`           |
-| **AnimeThemes:** Download WebMs       | `at-webm-download-report.log`       |
-| **Plex:** Auth Refresh                | `plex-auth-refresh-report.log`      |
-| **Plex:** Generate Collections        | `plex-collections-build-report.log` |
-| **Plex:** Apply Critic Ratings        | `plex-ratings-apply-report.log`     |
-| **Plex:** Sync Plex Images            | `plex-images-sync-report.log`       |
-| **Plex:** Run Full Automation         | `plex-automation-run-report.log`    |
-| **Shoko:** Generate VFS               | `shoko-vfs-build-report.log`        |
-| **Shoko:** Audit VFS                  | `shoko-vfs-audit-report.log`        |
-| **Shoko:** Purge Missing              | `shoko-purge-missing-report.log`    |
-| **Shoko:** Sync Watched States        | `shoko-sync-watched-report.log`     |
-| **Shoko:** Map Source Symlinks        | `shoko-map-symlinks-report.log`     |
+| Dashboard Action                      | Report Filename                 |
+| :------------------------------------ | :------------------------------ |
+| **AnimeThemes:** Generate VFS         | `at-vfs-build.report`           |
+| **AnimeThemes:** Build Mapping        | `at-map-build.report`           |
+| **AnimeThemes:** Generate MP3 (Batch) | `at-mp3-build.report`           |
+| **AnimeThemes:** Audit MP3s           | `at-mp3-audit.report`           |
+| **AnimeThemes:** Download WebMs       | `at-webm-download.report`       |
+| **Plex:** Auth Refresh                | `plex-auth-refresh.report`      |
+| **Plex:** Generate Collections        | `plex-collections-build.report` |
+| **Plex:** Apply Critic Ratings        | `plex-ratings-apply.report`     |
+| **Plex:** Sync Plex Images            | `plex-images-sync.report`       |
+| **Plex:** Run Full Automation         | `plex-automation-run.report`    |
+| **Shoko:** Generate VFS               | `shoko-vfs-build.report`        |
+| **Shoko:** Audit VFS                  | `shoko-vfs-audit.report`        |
+| **Shoko:** Purge Missing              | `shoko-purge-missing.report`    |
+| **Shoko:** Sync Watched States        | `shoko-sync-watched.report`     |
+| **Shoko:** Map Source Symlinks        | `shoko-map-symlinks.report`     |
 
-#### How Logs Work
+#### How Reports Work
 
-- Logs are stored in the `logs/` subfolder within the plugin's configuration directory.
+- Reports are stored in the `reports/` subfolder within the plugin's cache directory.
 - When a task completes, a toast notification appears on the dashboard with a `[view log]` link.
 - These files are overwritten each time the corresponding task is run.
 - To save a specific report, you must download or copy the text before running that task again.

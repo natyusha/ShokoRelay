@@ -43,7 +43,7 @@ public static partial class TagHelper
     private static readonly FrozenDictionary<string, string> s_forceSpecial = new[] {
         "-Christian", "-Japanese", "AnimeFesta", "ComicFesta", "d'Etat", "JDrama", "noitaminA",                                          // AniDB
         "VTuber", "YouTuber"                                                                                                             // TMDB
-    }.ToFrozenDictionary(s => s, s => s, StringComparer.OrdinalIgnoreCase);
+    }.ToFrozenDictionary(str => str, str => str, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Default blacklisted tag keys loaded from the embedded CSV resource.</summary>
     private static readonly FrozenSet<string> s_defaultTagBlacklist;
@@ -91,7 +91,7 @@ public static partial class TagHelper
         {
             var asm = typeof(TagHelper).Assembly;
             if (
-                asm.GetManifestResourceNames().FirstOrDefault(n => n.EndsWith(ShokoRelayConstants.FileDefaultTagOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
+                asm.GetManifestResourceNames().FirstOrDefault(name => name.EndsWith(ShokoRelayConstants.FileDefaultTagOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
                 && asm.GetManifestResourceStream(resName) is { } stream
             )
             {
@@ -252,7 +252,7 @@ public static partial class TagHelper
         return
         [
             .. ExtractNormalizedTags(CollectRawTags(series, tmdbSeries, key.Sources, key.MinWeight), state)
-                .Select(t => state.DisplayNames.GetOrAdd(t.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(t.CleanName), t.Priority, shouldRecord))
+                .Select(tag => state.DisplayNames.GetOrAdd(tag.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(tag.CleanName), tag.Priority, shouldRecord))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(displayName => (object)new { tag = displayName }),
         ];
@@ -273,15 +273,16 @@ public static partial class TagHelper
         IEnumerable<(string Name, int Priority)> result = [];
 
         if (sources.HasFlag(TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-            result = result.Concat(anidbTags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && ((int)minWeight <= 0 || t.Weight >= (int)minWeight)).Select(t => (t.Name, Priority: 1)));
+            result = result.Concat(anidbTags.Where(tag => !string.IsNullOrWhiteSpace(tag.Name) && ((int)minWeight <= 0 || tag.Weight >= (int)minWeight)).Select(tag => (tag.Name, Priority: 1)));
 
         if (sources.HasFlag(TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? (series.ID.Source == MetadataSource.TMDB ? series : null)) is { } tmdb)
             result = result.Concat(
-                tmdb.Tags.Where(t => !string.IsNullOrWhiteSpace(t.Name) && (t.Kind is TagKind.Genre || (t.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(t.Name)))).Select(t => (t.Name, Priority: 2))
+                tmdb.Tags.Where(tag => !string.IsNullOrWhiteSpace(tag.Name) && (tag.Kind is TagKind.Genre || (tag.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(tag.Name))))
+                    .Select(tag => (tag.Name, Priority: 2))
             );
 
         if (sources.HasFlag(TagSources.User) && shokoSeries?.Tags is { } shokoTags)
-            result = result.Concat(shokoTags.Where(t => t != null && t.ID.Source == MetadataSource.User && !string.IsNullOrWhiteSpace(t.Name)).Select(t => (t.Name, Priority: 3)));
+            result = result.Concat(shokoTags.Where(tag => tag != null && tag.ID.Source == MetadataSource.User && !string.IsNullOrWhiteSpace(tag.Name)).Select(tag => (tag.Name, Priority: 3)));
 
         return result;
     }
@@ -321,23 +322,23 @@ public static partial class TagHelper
     /// <returns>An enumerable of cleaned, merged, and deduplicated tag entries.</returns>
     private static IEnumerable<(string CleanName, string NormKey, int Priority)> ExtractNormalizedTags(IEnumerable<(string Name, int Priority)> tags, TagCacheState state) =>
         tags
-        // 1. Strip moderator notes / AniDB comments first
-        .Select(t => (CleanName: TagCleanupRegex().Replace(t.Name, "").Trim(), t.Priority))
-            .Where(t => !string.IsNullOrWhiteSpace(t.CleanName))
-            // 2. Resolve merge rules using normalized keys
-            .Select(t =>
+        // Strip moderator notes / AniDB comments first
+        .Select(tag => (CleanName: TagCleanupRegex().Replace(tag.Name, "").Trim(), tag.Priority))
+            .Where(tag => !string.IsNullOrWhiteSpace(tag.CleanName))
+            // Resolve merge rules using normalized keys
+            .Select(tag =>
             {
-                var normKey = NormalizeTagKey(t.CleanName);
+                var normKey = NormalizeTagKey(tag.CleanName);
                 var isMerged = state.Merges.TryGetValue(normKey, out var target);
-                var effectiveName = isMerged ? target! : t.CleanName;
+                var effectiveName = isMerged ? target! : tag.CleanName;
                 var effectiveKey = isMerged ? NormalizeTagKey(effectiveName) : normKey;
-                return (CleanName: effectiveName, SourceKey: normKey, NormKey: effectiveKey, t.Priority);
+                return (CleanName: effectiveName, SourceKey: normKey, NormKey: effectiveKey, tag.Priority);
             })
-            // 3. Blacklist filtering (checks both source and merged keys)
-            .Where(t => t.NormKey.Length > 0 && !state.Blacklist.Contains(t.NormKey) && !state.Blacklist.Contains(t.SourceKey))
-            // 4. Deduplicate within this series (AniDB tags will beat TMDB because anidbNames precedes tmdbNames)
-            .DistinctBy(t => t.NormKey)
-            .Select(t => (t.CleanName, t.NormKey, t.Priority));
+            // Blacklist filtering (checks both source and merged keys)
+            .Where(tag => tag.NormKey.Length > 0 && !state.Blacklist.Contains(tag.NormKey) && !state.Blacklist.Contains(tag.SourceKey))
+            // Deduplicate within this series (AniDB tags will beat TMDB because anidbNames precedes tmdbNames)
+            .DistinctBy(tag => tag.NormKey)
+            .Select(tag => (tag.CleanName, tag.NormKey, tag.Priority));
 
     /// <summary>Builds a diagnostic CSV report of all tags across Shoko series after applying default tag overrides.</summary>
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>

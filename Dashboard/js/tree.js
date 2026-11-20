@@ -3,11 +3,12 @@
  * @description Shared utilities for tree-based UI components including search interactions, debouncing, and lazy loading.
  */
 (() => {
+  // #region Helpers
   /**
    * Prevents rapid execution of expensive functions like tree rendering.
    * @param {Function} fn - The function to debounce.
    * @param {number} ms - Delay in milliseconds.
-   * @returns {Function}
+   * @returns {Function} A debounced wrapper around the supplied function.
    */
   window._sr.debounce = (fn, ms) => {
     let timeout;
@@ -16,7 +17,9 @@
       timeout = setTimeout(() => fn(...args), ms);
     };
   };
+  // #endregion
 
+  // #region Search & Tree
   /**
    * Initializes common search bar interactions including global hotkeys and performance-optimized rendering.
    * @param {HTMLInputElement} input - The filter input element.
@@ -71,38 +74,39 @@
   /**
    * Constructs a standard folder details node with deferred child rendering, wrapping the title in a flex-safe span.
    * @param {string} name - The plain display text for the folder summary.
-   * @param {HTMLUListElement} ul - The container element to append items to.
+   * @param {HTMLUListElement} listEl - The container element to append items to.
    * @param {Function} renderFn - The callback function that generates and appends children.
    * @param {boolean} isOpen - If true, forces children to render immediately.
    * @param {string} [extraHtml=""] - Optional HTML appended after the escaped title span.
    * @returns {HTMLDetailsElement} The completed folder details node.
    */
-  window._sr.createLazyDetails = (name, ul, renderFn, isOpen, extraHtml = "") => {
-    const det = document.createElement("details");
-    const sum = document.createElement("summary");
-    det.open = isOpen;
-    sum.title = name || "";
-    sum.dataset.tooltipOverflowOnly = "true";
+  window._sr.createLazyDetails = (name, listEl, renderFn, isOpen, extraHtml = "") => {
+    const details = document.createElement("details");
+    const summary = document.createElement("summary");
+    details.open = isOpen;
+    summary.title = name || "";
+    summary.dataset.tooltipOverflowOnly = "true";
     const titleSpan = name ? `<span class="vfs-title" data-tooltip-overflow-only="true">${window._sr.esc(name)}</span>` : "";
-    sum.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}${extraHtml}`;
-    sum.addEventListener("click", (ev) => {
+    summary.innerHTML = `<span class="tree-icon expand"></span><span class="tree-icon collapse"></span>${titleSpan}${extraHtml}`;
+    summary.addEventListener("click", (ev) => {
       if (ev.target.closest(".vfs-link")) ev.stopPropagation();
     });
-    det.appendChild(sum);
+    details.appendChild(summary);
 
     if (isOpen) {
-      det.dataset.rendered = "true";
-      renderFn(ul);
-      det.appendChild(ul);
+      details.dataset.rendered = "true";
+      renderFn(listEl);
+      details.appendChild(listEl);
     } else {
-      det.ontoggle = () => {
-        if (det.open && !det.dataset.rendered) {
-          det.dataset.rendered = "true";
-          renderFn(ul);
-          det.appendChild(ul);
+      details.ontoggle = () => {
+        if (details.open && !details.dataset.rendered) {
+          details.dataset.rendered = "true";
+          renderFn(listEl);
+          details.appendChild(listEl);
         }
       };
     }
-    return det;
+    return details;
   };
+  // #endregion
 })();

@@ -3,7 +3,7 @@ namespace ShokoRelay.Plex;
 /// <summary>Maps Shoko episode/season data to Plex-style coordinates.</summary>
 public static class PlexMapping
 {
-    #region Data Types
+    #region Data Models
 
     /// <summary>Simple struct representing season/episode coordinates.</summary>
     public struct PlexCoords
@@ -44,16 +44,22 @@ public static class PlexMapping
     /// <param name="episode">The episode metadata.</param>
     /// <param name="seriesPreferredOrderingId">Optional TMDB ordering ID.</param>
     /// <param name="tmdbOrderingLookup">Optional pre-indexed lookup mapping TMDB episode IDs to coordinates.</param>
+    /// <param name="metadataService">Optional metadata service used to verify manual override primary series presence.</param>
     /// <returns>Resolved coordinates.</returns>
-    public static PlexCoords GetPlexCoordinates(IEpisode episode, string? seriesPreferredOrderingId = null, Dictionary<MetadataGuid, (int Season, int Episode)>? tmdbOrderingLookup = null)
+    public static PlexCoords GetPlexCoordinates(
+        IEpisode episode,
+        string? seriesPreferredOrderingId = null,
+        Dictionary<MetadataGuid, (int Season, int Episode)>? tmdbOrderingLookup = null,
+        IMetadataService? metadataService = null
+    )
     {
         if (episode == null)
             return new PlexCoords { Season = PlexConstants.SeasonStandard, Episode = 1 };
 
         // Fast path: Check for explicit manual VFS coordinate overrides (e.g. placing movies as specials)
-        if (episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss })
+        if (episode is IShokoEpisode { Series: { AnidbAnimeID: > 0 } shokoSeries })
         {
-            var custom = OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, episode.Type, episode.EpisodeNumber);
+            var custom = OverrideHelper.GetCustomCoords(shokoSeries.AnidbAnimeID, episode.Type, episode.EpisodeNumber, metadataService);
             if (custom.HasValue)
                 return new PlexCoords { Season = custom.Value.Season, Episode = custom.Value.Episode };
         }
@@ -116,8 +122,9 @@ public static class PlexMapping
 
     /// <summary>Determine Plex coordinates for episodes sharing a file.</summary>
     /// <param name="episodes">The collection of episodes.</param>
+    /// <param name="metadataService">Optional metadata service used to verify manual override primary series presence.</param>
     /// <returns>Resolved coordinates.</returns>
-    public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes)
+    public static PlexCoords GetPlexCoordinatesForFile(IEnumerable<IEpisode> episodes, IMetadataService? metadataService = null)
     {
         var eps = (episodes ?? []).ToList();
         if (eps.Count == 0)
@@ -128,8 +135,10 @@ public static class PlexMapping
                 EndEpisode = null,
             };
 
-        string? showPrefId = eps.OfType<IShokoEpisode>().Select(se => se.Series).FirstOrDefault() is { } series ? MapHelper.GetPreferredTmdbOrderingId(series) : null;
-        bool hasCustomOverride = eps.Any(e => e is IShokoEpisode { Series: { AnidbAnimeID: > 0 } ss } && OverrideHelper.GetCustomCoords(ss.AnidbAnimeID, e.Type, e.EpisodeNumber).HasValue);
+        string? showPrefId = eps.OfType<IShokoEpisode>().Select(shokoEp => shokoEp.Series).FirstOrDefault() is { } series ? MapHelper.GetPreferredTmdbOrderingId(series) : null;
+        bool hasCustomOverride = eps.Any(ep =>
+            ep is IShokoEpisode { Series: { AnidbAnimeID: > 0 } shokoSeries } && OverrideHelper.GetCustomCoords(shokoSeries.AnidbAnimeID, ep.Type, ep.EpisodeNumber, metadataService).HasValue
+        );
 
         if (!hasCustomOverride && EnforceTmdbNumbering && eps.Select(episode => episode.Type).Distinct().Count() == 1)
         {
@@ -155,9 +164,9 @@ public static class PlexMapping
             }
         }
         if (eps.Count == 1)
-            return GetPlexCoordinates(eps[0], showPrefId);
-        var start = GetPlexCoordinates(eps[0], showPrefId);
-        var end = GetPlexCoordinates(eps[^1], showPrefId);
+            return GetPlexCoordinates(eps[0], showPrefId, metadataService: metadataService);
+        var start = GetPlexCoordinates(eps[0], showPrefId, metadataService: metadataService);
+        var end = GetPlexCoordinates(eps[^1], showPrefId, metadataService: metadataService);
         int? endEpisodeFinal = start.Season == end.Season ? end.Episode : null;
         return new PlexCoords
         {

@@ -3,7 +3,7 @@ using System.Globalization;
 
 namespace ShokoRelay.Services;
 
-#region Models
+#region Interface & Models
 
 /// <summary>Represents a specific rating update for the report log.</summary>
 /// <param name="Title">Display title of the item.</param>
@@ -50,10 +50,9 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
-        TaskHelper.StartTask(TaskName);
+        bool startedTask = TaskHelper.StartTask(TaskName);
         logger.LogInformation("CriticRatingService: Starting task...");
         var sw = Stopwatch.StartNew();
-
         try
         {
             var (processedShows, updatedShows, processedEpisodes, updatedEpisodes, errors) = (0, 0, 0, 0, 0);
@@ -143,7 +142,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
                     prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
@@ -195,7 +194,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                 if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
                     prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
                 var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
@@ -275,7 +274,8 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
         }
         finally
         {
-            TaskHelper.FinishTask(TaskName);
+            if (startedTask)
+                TaskHelper.FinishTask(TaskName);
         }
     }
 

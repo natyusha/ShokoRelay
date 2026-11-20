@@ -47,8 +47,8 @@ public static partial class TextHelper
     [GeneratedRegex(@"(?:\r?\n[^\S\r\n]*){2,}")]
     private static partial Regex CondenseLinesRegex();
 
-    /// <summary>Regex for condensing multiple spaces into a single space.</summary>
-    [GeneratedRegex(@"\s{2,}")]
+    /// <summary>Regex for condensing multiple horizontal spaces into a single space while preserving line breaks.</summary>
+    [GeneratedRegex(@"[^\S\r\n]{2,}")]
     private static partial Regex CondenseSpacesRegex();
 
     /// <summary>Regex for decoding Unicode escape sequences.</summary>
@@ -177,11 +177,14 @@ public static partial class TextHelper
             if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
                 return item.PreferredTitle?.Value ?? "";
 
-            titles ??= [.. item.Titles.Where(t => t.Type != TitleType.Short)];
+            titles ??= [.. item.Titles.Where(title => title.Type != TitleType.Short)];
 
             if (TextManager != null && lang.TryGetTitleLanguage(out var targetLang))
             {
-                if (targetLang != TitleLanguage.Main && titles.FirstOrDefault(t => t.Preference == TextPreference.Language && t.Language == targetLang && !string.IsNullOrEmpty(t.Value)) is { } langPref)
+                if (
+                    targetLang != TitleLanguage.Main
+                    && titles.FirstOrDefault(title => title.Preference == TextPreference.Language && title.Language == targetLang && !string.IsNullOrEmpty(title.Value)) is { } langPref
+                )
                     return langPref.Value;
 
                 baseSelection ??= TextManager.GetTitleSelection(
@@ -265,7 +268,7 @@ public static partial class TextHelper
 
             if (TextManager != null && lang.TryGetTitleLanguage(out var targetLang))
             {
-                if (overviews.FirstOrDefault(o => o.Preference == TextPreference.Language && o.Language == targetLang && !string.IsNullOrEmpty(o.Value)) is { } langPref)
+                if (overviews.FirstOrDefault(overview => overview.Preference == TextPreference.Language && overview.Language == targetLang && !string.IsNullOrEmpty(overview.Value)) is { } langPref)
                     return langPref.Value;
 
                 baseSelection ??= TextManager.GetOverviewSelection();
@@ -377,25 +380,25 @@ public static partial class TextHelper
     /// <returns>The resolved movie title string.</returns>
     public static string ResolveMovieTitle(IEpisode episode, ISeries series, IMovie? tmdbMovie, bool isStandaloneMovie = false, string? seriesTitle = null, bool? isMultiEpFile = null)
     {
-        string sTitle = !string.IsNullOrWhiteSpace(seriesTitle) ? seriesTitle : ResolveFullSeriesTitles(series).DisplayTitle;
-        if (string.IsNullOrWhiteSpace(sTitle) && tmdbMovie is IWithTitles mt)
-            sTitle = GetTitleByLanguage(mt, Settings.SeriesTitleLanguage);
-        if (string.IsNullOrWhiteSpace(sTitle))
-            sTitle = "Unknown";
+        string resolvedSeriesTitle = !string.IsNullOrWhiteSpace(seriesTitle) ? seriesTitle : ResolveFullSeriesTitles(series).DisplayTitle;
+        if (string.IsNullOrWhiteSpace(resolvedSeriesTitle) && tmdbMovie != null)
+            resolvedSeriesTitle = GetTitleByLanguage(tmdbMovie, Settings.SeriesTitleLanguage);
+        if (string.IsNullOrWhiteSpace(resolvedSeriesTitle))
+            resolvedSeriesTitle = "Unknown";
 
         // Fast-path: Check if there is more than 1 main episode by skipping the first match. This avoids iterating over the entire episode list.
-        bool hasMultipleMainEpisodes = series.Episodes.Where(e => e.Type == EpisodeType.Episode).Skip(1).Any();
+        bool hasMultipleMainEpisodes = series.Episodes.Where(ep => ep.Type == EpisodeType.Episode).Skip(1).Any();
         if (!hasMultipleMainEpisodes)
-            return sTitle;
+            return resolvedSeriesTitle;
 
         // In standalone movie libraries, omit the episode subtitle when a single video file spans multiple main episodes
         if (isStandaloneMovie && (isMultiEpFile ?? IsMultiEpisodeMovieFile(episode)))
-            return sTitle;
+            return resolvedSeriesTitle;
 
         string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
 
         // Append non-ambiguous episode title to series/movie title if not already present
-        return !string.IsNullOrWhiteSpace(raw) && !s_ambiguousTitles.Contains(raw) && sTitle != raw && !sTitle.Contains(raw) ? $"{sTitle} — {raw}" : sTitle;
+        return !string.IsNullOrWhiteSpace(raw) && !s_ambiguousTitles.Contains(raw) && resolvedSeriesTitle != raw && !resolvedSeriesTitle.Contains(raw) ? $"{resolvedSeriesTitle} — {raw}" : resolvedSeriesTitle;
     }
 
     /// <summary>Sanitize AniDB summary and, if the result is empty, fall back to TMDB.</summary>

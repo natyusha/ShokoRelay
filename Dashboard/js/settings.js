@@ -94,10 +94,10 @@
     if (typeof val !== "string" || !val.trim()) return 0;
     const trimmed = val.trim();
     if (/^\d+$/.test(trimmed)) return Number(trimmed);
-    if (trimmed.toLowerCase() === "all") return enumValues.reduce((acc, ev) => acc | ev.value, 0);
+    if (trimmed.toLowerCase() === "all") return enumValues.reduce((acc, enumVal) => acc | enumVal.value, 0);
     if (trimmed.toLowerCase() === "none") return 0;
     return trimmed.split(",").reduce((acc, part) => {
-      const match = enumValues.find((ev) => ev.name.toLowerCase() === part.trim().toLowerCase());
+      const match = enumValues.find((enumVal) => enumVal.name.toLowerCase() === part.trim().toLowerCase());
       return match ? acc | match.value : acc;
     }, 0);
   }
@@ -302,9 +302,9 @@
         input = document.createElement(prop.Type === "enum" ? "select" : prop.Type === "json" || prop.Path.endsWith("TagOverrides") || prop.Path.endsWith("Exclusions") ? "textarea" : "input");
         if (prop.Path === "TagOverrides") input.id = "resizable";
         if (prop.Type === "enum") {
-          (prop.EnumValues || []).forEach((ev) => {
-            const opt = new Option(ev.name, ev.value);
-            opt.selected = String(ev.value) === String(value);
+          (prop.EnumValues || []).forEach((enumVal) => {
+            const opt = new Option(enumVal.name, enumVal.value);
+            opt.selected = String(enumVal.value) === String(value);
             input.add(opt);
           });
         } else if (prop.Type === "number") {

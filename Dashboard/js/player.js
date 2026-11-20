@@ -67,7 +67,7 @@
   /** @type {number|null} Reference to the timeout that triggers the idle state. */
   let idleTimer;
 
-  // #region Utilities
+  // #region Helpers
   /**
    * Resets the idle timer and reveals the UI, suspending it if hovering over controls.
    * @param {MouseEvent} ev - The mouse movement event.
@@ -343,7 +343,7 @@
 
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
-    const ft = !!uiFilter?.value.trim();
+    const hasFilter = !!uiFilter?.value.trim();
 
     /**
      * Helper to construct a standard file node in the tree.
@@ -396,10 +396,10 @@
     const createFolderNode = (name, renderFn, isOpen, isMissing = false, extraHtml = "") => {
       const li = document.createElement("li");
       const ul = document.createElement("ul");
-      const det = window._sr.createLazyDetails(name, ul, renderFn, isOpen, extraHtml);
-      const sum = det.querySelector("summary");
-      if (isMissing) sum.querySelector(".vfs-title")?.classList.add("tree-missing");
-      li.appendChild(det);
+      const details = window._sr.createLazyDetails(name, ul, renderFn, isOpen, extraHtml);
+      const summary = details.querySelector("summary");
+      if (isMissing) summary.querySelector(".vfs-title")?.classList.add("tree-missing");
+      li.appendChild(details);
       return li;
     };
 
@@ -450,7 +450,7 @@
         sortedFolders.forEach((folderName) => {
           const childNode = node.folders.get(folderName);
           const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
-          container.appendChild(createFolderNode(folderName, (container) => renderFolderTree(childNode, false, container), ft, childNode.isMissing, extraHtml));
+          container.appendChild(createFolderNode(folderName, (childContainer) => renderFolderTree(childNode, false, childContainer), hasFilter, childNode.isMissing, extraHtml));
         });
 
         const sortedFiles = node.files.sort((left, right) => left.file.localeCompare(right.file, undefined, { numeric: true }));
@@ -463,41 +463,41 @@
       const groups = new Map();
       items.forEach((item) => {
         if (!groups.has(item.group)) groups.set(item.group, new Map());
-        const sMap = groups.get(item.group);
-        if (!sMap.has(item.series)) sMap.set(item.series, []);
-        sMap.get(item.series).push(item);
+        const seriesMap = groups.get(item.group);
+        if (!seriesMap.has(item.series)) seriesMap.set(item.series, []);
+        seriesMap.get(item.series).push(item);
       });
 
-      const sortedGroupNames = [...groups.keys()].sort((lGrp, rGrp) => {
-        if (lGrp === MISSING_LABEL && rGrp !== MISSING_LABEL) return -1;
-        if (rGrp === MISSING_LABEL && lGrp !== MISSING_LABEL) return 1;
-        return lGrp.localeCompare(rGrp);
+      const sortedGroupNames = [...groups.keys()].sort((leftGroup, rightGroup) => {
+        if (leftGroup === MISSING_LABEL && rightGroup !== MISSING_LABEL) return -1;
+        if (rightGroup === MISSING_LABEL && leftGroup !== MISSING_LABEL) return 1;
+        return leftGroup.localeCompare(rightGroup);
       });
 
-      sortedGroupNames.forEach((gName) => {
-        const sMap = groups.get(gName);
-        const isMissing = gName === MISSING_LABEL;
-        const sKeys = [...sMap.keys()].sort((lName, rName) => lName.localeCompare(rName));
+      sortedGroupNames.forEach((groupName) => {
+        const seriesMap = groups.get(groupName);
+        const isMissing = groupName === MISSING_LABEL;
+        const seriesKeys = [...seriesMap.keys()].sort((leftName, rightName) => leftName.localeCompare(rightName));
 
         const renderSeriesFolders = (container) => {
-          sKeys.forEach((sName) => {
-            const seriesFiles = sMap.get(sName);
+          seriesKeys.forEach((seriesName) => {
+            const seriesFiles = seriesMap.get(seriesName);
             const firstFile = seriesFiles[0];
             const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-            const renderFiles = (fContainer) => seriesFiles.forEach((file) => fContainer.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
-            container.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
+            const renderFiles = (fileContainer) => seriesFiles.forEach((file) => fileContainer.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
+            container.appendChild(createFolderNode(seriesName, renderFiles, hasFilter, isMissing, extraHtml));
           });
         };
 
-        if (sKeys.length === 1 && !isMissing) {
-          const sName = sKeys[0];
-          const seriesFiles = sMap.get(sName);
+        if (seriesKeys.length === 1 && !isMissing) {
+          const seriesName = seriesKeys[0];
+          const seriesFiles = seriesMap.get(seriesName);
           const firstFile = seriesFiles[0];
           const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
           const renderFiles = (container) => seriesFiles.forEach((file) => container.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
-          rootUl.appendChild(createFolderNode(sName, renderFiles, ft, isMissing, extraHtml));
+          rootUl.appendChild(createFolderNode(seriesName, renderFiles, hasFilter, isMissing, extraHtml));
         } else {
-          rootUl.appendChild(createFolderNode(gName, renderSeriesFolders, ft, isMissing));
+          rootUl.appendChild(createFolderNode(groupName, renderSeriesFolders, hasFilter, isMissing));
         }
       });
     }
@@ -516,7 +516,7 @@
     if (!item) return;
 
     // Collapse all open folders to reset the tree state before locating
-    playerTree.querySelectorAll("details[open]").forEach((det) => (det.open = false));
+    playerTree.querySelectorAll("details[open]").forEach((details) => (details.open = false));
 
     const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
     const pathSegments = [];
@@ -532,17 +532,17 @@
 
     let currentScope = playerTree;
     pathSegments.forEach((seg) => {
-      const det = [...currentScope.querySelectorAll("details")].find((detailsEl) => getSummaryTitle(detailsEl.querySelector("summary")) === seg);
-      if (det) {
-        det.open = true;
-        if (!det.dataset.rendered) det.dispatchEvent(new Event("toggle"));
-        currentScope = det;
+      const details = [...currentScope.querySelectorAll("details")].find((detailsEl) => getSummaryTitle(detailsEl.querySelector("summary")) === seg);
+      if (details) {
+        details.open = true;
+        if (!details.dataset.rendered) details.dispatchEvent(new Event("toggle"));
+        currentScope = details;
       }
     });
 
     const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
     if (leaf) {
-      playerTree.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === currentWebmPath));
+      playerTree.querySelectorAll(".leaf").forEach((leafEl) => leafEl.classList.toggle("active", leafEl.dataset.path === currentWebmPath));
       leaf.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
@@ -610,7 +610,7 @@
       playerAnidb.rel = "noopener noreferrer";
       playerAnidb.style.pointerEvents = item && item.anidbId ? "auto" : "none";
     }
-    playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.toggle("active", el.dataset.path === path));
+    playerTree?.querySelectorAll(".leaf").forEach((leafEl) => leafEl.classList.toggle("active", leafEl.dataset.path === path));
   }
 
   /**
@@ -886,7 +886,7 @@
           playerNowPlayingFav.classList.remove("favourited");
         }
         if (playerLocateBtn) playerLocateBtn.style.pointerEvents = "none";
-        playerTree?.querySelectorAll(".leaf").forEach((el) => el.classList.remove("active"));
+        playerTree?.querySelectorAll(".leaf").forEach((leafEl) => leafEl.classList.remove("active"));
         if (playerFill) playerFill.style.width = "0%";
         if (playerTime) playerTime.textContent = "0:00 / 0:00";
       };

@@ -160,7 +160,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         }
 
         var linkedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (source, name, priority) in pendingLinks.OrderBy(l => l.Priority).ThenBy(l => l.Source, StringComparer.Ordinal))
+        foreach (var (source, name, priority) in pendingLinks.OrderBy(link => link.Priority).ThenBy(link => link.Source, StringComparer.Ordinal))
         {
             // Unchanged originals precede conversions; converted collisions follow mapping order.
             if (priority >= 0 && linkedNames.Contains(name))
@@ -263,6 +263,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     /// <param name="vfsSeriesPaths">The target VFS series root paths to link the discovered files into.</param>
     /// <param name="videoBaseNames">A set of base names for indexed video files to prevent naming collisions.</param>
     /// <param name="epPad">The episode number padding used for naming consistency.</param>
+    /// <param name="session">Active build session context containing cached recognized video paths.</param>
     /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     public void LinkLocalExtras(
@@ -270,6 +271,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         HashSet<string> vfsSeriesPaths,
         HashSet<string> videoBaseNames,
         int epPad,
+        VfsBuildSession session,
         Action<string, string, string, string?>? onLink = null,
         bool skipExistenceCheck = false
     )
@@ -299,7 +301,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
 
                 foreach (var file in Directory.EnumerateFiles(subDir).Where(videoService.IsAllowedVideoExtension))
                 {
-                    if (videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
+                    if (session.KnownRecognizedVideoPaths.Contains(file))
                         continue;
 
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
@@ -317,7 +319,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
             foreach (var file in Directory.EnumerateFiles(srcDir!).Where(videoService.IsAllowedVideoExtension))
             {
                 string name = Path.GetFileNameWithoutExtension(file);
-                if (videoBaseNames.Contains(name) || videoService.GetVideoFileByAbsolutePath(file)?.Video?.CrossReferences?.Any(cr => cr.ShokoEpisode != null) == true)
+                if (videoBaseNames.Contains(name) || session.KnownRecognizedVideoPaths.Contains(file))
                     continue;
 
                 if (!VfsHelper.IsLocalExtraFile(name, out int suffixIndex) || suffixIndex <= 0)
@@ -327,7 +329,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 if (!videoBaseNames.Contains(parentBase))
                     continue;
 
-                foreach (var mapping in fileData.Mappings.Where(m => Path.GetFileNameWithoutExtension(m.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
+                foreach (var mapping in fileData.Mappings.Where(map => Path.GetFileNameWithoutExtension(map.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
                 {
                     string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season));
                     string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(mapping, epPad, "", mapping.Video.LocalID)) + name[parentBase.Length..] + Path.GetExtension(file);

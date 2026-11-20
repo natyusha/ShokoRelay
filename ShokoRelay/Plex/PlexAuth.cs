@@ -243,9 +243,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                     || (!string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false));
 
                 // Fallback: If preferred URI failed, try other endpoints
-                if (!ok && devices.FirstOrDefault(d => string.Equals(d.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
+                if (!ok && devices.FirstOrDefault(device => string.Equals(device.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
                 {
-                    var conns = srv.HttpsRequired ? dev.Connections.Where(c => c.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : dev.Connections;
+                    var conns = srv.HttpsRequired ? dev.Connections.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : dev.Connections;
                     foreach (var conn in conns)
                     {
                         if (string.IsNullOrEmpty(conn.Uri) || string.Equals(conn.Uri, srv.PreferredUri, StringComparison.OrdinalIgnoreCase))
@@ -314,7 +314,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 using var json = JsonDocument.Parse(content);
                 var items =
                     json.RootElement.ValueKind == JsonValueKind.Array ? json.RootElement.EnumerateArray()
-                    : json.RootElement.TryGetProperty("MediaContainer", out var mc) && mc.TryGetProperty("SharedServer", out var ss) ? ss.EnumerateArray()
+                    : json.RootElement.TryGetProperty("MediaContainer", out var container) && container.TryGetProperty("SharedServer", out var sharedServers) ? sharedServers.EnumerateArray()
                     : default;
                 foreach (var element in items)
                     users.Add(
@@ -611,7 +611,7 @@ public sealed class StringOrNumberConverter : JsonConverter<string?>
         reader.TokenType switch
         {
             JsonTokenType.String => reader.GetString(),
-            JsonTokenType.Number => reader.TryGetInt64(out long l) ? l.ToString() : reader.GetDouble().ToString(),
+            JsonTokenType.Number => reader.TryGetInt64(out long longVal) ? longVal.ToString() : reader.GetDouble().ToString(),
             _ => null,
         };
 

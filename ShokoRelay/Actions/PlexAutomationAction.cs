@@ -8,6 +8,8 @@ namespace ShokoRelay.Actions;
 /// <summary>Scheduled action to automate Plex Collections, Critic Ratings, Image Sync, and Trash emptying.</summary>
 public class PlexAutomationAction(PlexAutomationService plexAutomationService, ConfigProvider configProvider, ILogger<PlexAutomationAction> logger) : IScheduledAction
 {
+    #region Action Metadata
+
     /// <inheritdoc/>
     public string Name => $"{ShokoRelayConstants.Name}: Plex Automation";
 
@@ -20,22 +22,29 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
     /// <inheritdoc/>
     public TimeSpan? MinimumInterval => TimeSpan.FromMinutes(30);
 
+    #endregion
+
+    #region Execution
+
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
         progress.Report(0);
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
-        TaskHelper.StartTask(ShokoRelayConstants.TaskPlexAutomationRun);
+        bool startedTask = TaskHelper.StartTask(ShokoRelayConstants.TaskPlexAutomationRun);
         try
         {
             var result = await plexAutomationService.RunAutomationAsync(progress, token).ConfigureAwait(false);
             string apiBase = $"{configProvider.ServerBaseUrl}{ShokoRelayConstants.BasePath}";
-            LogHelper.WriteReport($"{ShokoRelayConstants.TaskPlexAutomationRun}-report.log", result, (sb, res) => LogHelper.BuildPlexAutomationReport(sb, res, apiBase), logger);
+            ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexAutomationRun}.report", result, (builder, report) => ReportHelper.BuildPlexAutomationReport(builder, report, apiBase), logger);
         }
         finally
         {
-            TaskHelper.FinishTask(ShokoRelayConstants.TaskPlexAutomationRun);
+            if (startedTask)
+                TaskHelper.FinishTask(ShokoRelayConstants.TaskPlexAutomationRun);
             SyncHelper.SyncLock.Release();
         }
     }
+
+    #endregion
 }

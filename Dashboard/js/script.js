@@ -238,7 +238,7 @@
   }
   // #endregion
 
-  // #region UI Helpers
+  // #region Helpers
   /**
    * Build a human-readable summary string and error count from common API response fields.
    * @param {Object} res - The normalized fetch response object.
