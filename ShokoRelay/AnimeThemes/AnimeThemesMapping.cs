@@ -298,6 +298,13 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
         CancellationToken cancellationToken = default
     )
     {
+        if (
+            string.IsNullOrWhiteSpace(webmFileName)
+            || webmFileName.IndexOfAny(['\r', '\n', ',']) >= 0
+            || webmFileName.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries).Contains("..", StringComparer.Ordinal)
+        )
+            return (null, "Invalid filename or path.", webmFileName, false, []);
+
         string fileName = Path.GetFileName(webmFileName);
         var (lookup, idMissing) = await FetchMetadataAsync(fileName, overrideAnidbId, cancellationToken).ConfigureAwait(false);
         if (lookup == null)
@@ -337,7 +344,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                     .Select(root => Path.Combine(root, themeFolder))
                     .Where(Directory.Exists)
                     .Select(dir => (Root: dir, File: Directory.EnumerateFiles(dir, fileName, SearchOption.AllDirectories).FirstOrDefault()))
-                    .FirstOrDefault(match => match.File != null);
+                    .FirstOrDefault(candidate => candidate.File != null);
 
                 if (matchedFile.File != null)
                     relPath = "/" + Path.GetRelativePath(matchedFile.Root, matchedFile.File).Replace('\\', '/');

@@ -58,9 +58,9 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <summary>Attempts to match a Plex media lookup request to a Shoko series, season, episode, or movie.</summary>
     /// <param name="body">Match parameters including filename, title, media type, and indices.</param>
     /// <returns>A match result MediaContainer.</returns>
-    [Route("matches")]
     [HttpGet]
     [HttpPost]
+    [Route("matches")]
     public IActionResult Match([FromBody] PlexMatchBody? body = null) =>
         SafeRequest(() =>
         {
@@ -79,13 +79,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (!id.HasValue)
                 return EmptyMatch();
 
-            string? typeStr = body?.Type?.ToString() ?? Request.Query["type"];
-            int typeInt = typeStr?.ToLowerInvariant() switch
+            string? typeText = body?.Type?.ToString() ?? Request.Query["type"];
+            int typeInt = typeText?.ToLowerInvariant() switch
             {
                 "1" or "movie" => PlexConstants.TypeMovie,
                 "3" or "season" => PlexConstants.TypeSeason,
                 "4" or "episode" => PlexConstants.TypeEpisode,
-                var typeText when int.TryParse(typeText, out int parsed) => parsed,
+                var typeValue when int.TryParse(typeValue, out int parsed) => parsed,
                 _ => PlexConstants.TypeShow,
             };
 
@@ -110,46 +110,53 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
             if (typeInt is PlexConstants.TypeShow or PlexConstants.TypeSeason or PlexConstants.TypeEpisode)
             {
-                if (mapper.GetSeriesContext(series.ID.ID) is not { } ctx)
+                if (mapper.GetSeriesContext(series.ID.ID) is not { } context)
                     return EmptyMatch();
 
                 bool includeChildren = (body?.IncludeChildren ?? (int.TryParse(Request.Query["includeChildren"], out var includeChildrenFlag) ? includeChildrenFlag : 0)) == 1;
-                Dictionary<string, object?> meta;
+                Dictionary<string, object?> metadata;
 
                 if (typeInt == PlexConstants.TypeSeason)
                 {
-                    int seasonNum = body?.Index ?? 1;
-                    meta = mapper.MapSeason(ctx, seasonNum);
+                    int seasonNumber = body?.Index ?? 1;
+                    metadata = mapper.MapSeason(context, seasonNumber);
                     if (includeChildren)
                     {
-                        var episodes = mapper.BuildEpisodeList(ctx, seasonNum);
-                        meta["Children"] = new { size = episodes.Count, Metadata = episodes };
+                        var episodes = mapper.BuildEpisodeList(context, seasonNumber);
+                        metadata["Children"] = new { size = episodes.Count, Metadata = episodes };
                     }
                 }
                 else if (typeInt == PlexConstants.TypeEpisode)
                 {
-                    var mapping = ctx.FileData.GetForSeason(body?.ParentIndex ?? 1).FirstOrDefault(mapping => mapping.Coords.Episode == (body?.Index ?? 1));
-                    if (mapping == null)
+                    int targetSeason = body?.ParentIndex ?? 1;
+                    int targetEpisode = body?.Index ?? 1;
+                    if (
+                        mapper
+                            .BuildEpisodeList(context, targetSeason)
+                            .OfType<Dictionary<string, object?>>()
+                            .FirstOrDefault(item => item.TryGetValue("index", out var indexValue) && indexValue is int episodeNumber && episodeNumber == targetEpisode)
+                        is not { } matchedMetadata
+                    )
                         return EmptyMatch();
 
-                    meta = mapper.MapEpisode(mapping.PrimaryEpisode, mapping.Coords, ctx, mapping.PartIndex, mapping.TmdbEpisode);
+                    metadata = matchedMetadata;
                 }
                 else
                 {
-                    meta = mapper.MapSeries(ctx);
+                    metadata = mapper.MapSeries(context);
                     // Force remote URLs for Fix Match UI to bypass browser Mixed Content blocks
-                    meta["thumb"] = ctx.Series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true)
-                        ?? ctx.TmdbMovie?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
+                    metadata["thumb"] = context.Series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true)
+                        ?? context.TmdbMovie?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
 
                     if (includeChildren)
                     {
-                        var seasons = ctx.FileData.Seasons.Select(season => mapper.MapSeason(ctx, season)).ToList();
-                        meta["Children"] = new { size = seasons.Count, Metadata = seasons };
+                        var seasons = context.FileData.Seasons.Select(season => mapper.MapSeason(context, season)).ToList();
+                        metadata["Children"] = new { size = seasons.Count, Metadata = seasons };
                     }
                 }
 
-                meta["score"] = 100;
-                return WrapInContainer(meta);
+                metadata["score"] = 100;
+                return WrapInContainer(metadata);
             }
 
             // Fallback to Movie (type 1)
@@ -157,8 +164,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (episode == null)
                 return EmptyMatch();
 
-            var movieCtx = mapper.GetSeriesContext(series.ID.ID);
-            var tmdbMovie = episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieCtx?.TmdbMovie;
+            var movieContext = mapper.GetSeriesContext(series.ID.ID);
+            var tmdbMovie = episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieContext?.TmdbMovie;
 
             return Ok(
                 new
@@ -173,7 +180,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                             {
                                 guid = episode.GetPlexMovieGuid(),
                                 type = "movie",
-                                title = TextHelper.ResolveMovieTitle(episode, series, tmdbMovie, isStandaloneMovie: true, seriesTitle: movieCtx?.Titles.DisplayTitle),
+                                title = TextHelper.ResolveMovieTitle(episode, series, tmdbMovie, isStandaloneMovie: true, seriesTitle: movieContext?.Titles.DisplayTitle),
                                 year = episode.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
                                 score = 100,
                                 thumb = (episode.EpisodeNumber > 1 && tmdbMovie != null ? tmdbMovie.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true) : null)
@@ -230,57 +237,57 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 PlexHelper.IsMovieKey(ratingKey)
                 || (
                     isMovieEndpoint
-                    && int.TryParse(ratingKey, out int movieEpId)
-                    && MetadataService.GetShokoEpisodeByID(movieEpId) is { ShokoSeriesID: var movieSeriesId }
+                    && int.TryParse(ratingKey, out int movieEpisodeId)
+                    && MetadataService.GetShokoEpisodeByID(movieEpisodeId) is { ShokoSeriesID: var movieSeriesId }
                     && mapper.GetSeriesContext(movieSeriesId.ToString()) is not null
                 )
             )
             {
-                var (episode, movieCtx, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                return episode == null || movieCtx == null
-                    ? int.TryParse(ratingKey, out int numId)
-                    && MetadataService.GetShokoEpisodeByID(numId) is { } fallbackEpisode
-                    && mapper.GetSeriesContext(fallbackEpisode.ShokoSeriesID.ToString()) is { } fallbackCtx
-                        ? WrapInContainer(mapper.MapMovie(fallbackEpisode, fallbackCtx, fallbackEpisode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()), ShokoRelayConstants.MovieAgentScheme)
+                var (episode, movieContext, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                return episode == null || movieContext == null
+                    ? int.TryParse(ratingKey, out int numericId)
+                    && MetadataService.GetShokoEpisodeByID(numericId) is { } fallbackEpisode
+                    && mapper.GetSeriesContext(fallbackEpisode.ShokoSeriesID.ToString()) is { } fallbackContext
+                        ? WrapInContainer(mapper.MapMovie(fallbackEpisode, fallbackContext, fallbackEpisode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()), ShokoRelayConstants.MovieAgentScheme)
                         : NotFound()
-                    : WrapInContainer(mapper.MapMovie(episode, movieCtx, tmdbMovie), ShokoRelayConstants.MovieAgentScheme);
+                    : WrapInContainer(mapper.MapMovie(episode, movieContext, tmdbMovie), ShokoRelayConstants.MovieAgentScheme);
             }
 
-            var ctx = mapper.GetSeriesContext(ratingKey);
-            if (ctx == null)
+            var context = mapper.GetSeriesContext(ratingKey);
+            if (context == null)
                 // Fallback for numeric rating keys passed for a standalone movie episode
                 return
-                    int.TryParse(ratingKey, out int numId)
-                    && MetadataService.GetShokoEpisodeByID(numId) is { } fallbackEpisode
-                    && mapper.GetSeriesContext(fallbackEpisode.ShokoSeriesID.ToString()) is { } fallbackCtx
-                    ? WrapInContainer(mapper.MapMovie(fallbackEpisode, fallbackCtx, fallbackEpisode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()), ShokoRelayConstants.MovieAgentScheme)
+                    int.TryParse(ratingKey, out int numericId)
+                    && MetadataService.GetShokoEpisodeByID(numericId) is { } fallbackEpisode
+                    && mapper.GetSeriesContext(fallbackEpisode.ShokoSeriesID.ToString()) is { } fallbackContext
+                    ? WrapInContainer(mapper.MapMovie(fallbackEpisode, fallbackContext, fallbackEpisode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()), ShokoRelayConstants.MovieAgentScheme)
                     : NotFound();
 
             if (PlexHelper.IsEpisodeKey(ratingKey))
             {
-                var (episode, partIdx, mapping) = TryResolveEpisodeContext(ctx, ratingKey);
-                return episode == null || mapping == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, mapping.Coords, ctx, partIdx, mapping.TmdbEpisode));
+                var (episode, partIndex, mapping) = TryResolveEpisodeContext(context, ratingKey);
+                return episode == null || mapping == null ? NotFound() : WrapInContainer(mapper.MapEpisode(episode, mapping.Coords, context, partIndex, mapping.TmdbEpisode));
             }
-            int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-            if (seasonIdx >= 0)
+            int seasonIndex = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+            if (seasonIndex >= 0)
             {
-                if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int seasonNum))
+                if (!int.TryParse(ratingKey[(seasonIndex + PlexConstants.SeasonPrefix.Length)..], out int seasonNumber))
                     return NotFound();
-                var seasonMeta = mapper.MapSeason(ctx, seasonNum);
+                var seasonMetadata = mapper.MapSeason(context, seasonNumber);
                 if (includeChildren == 1)
                 {
-                    var episodes = mapper.BuildEpisodeList(ctx, seasonNum);
-                    seasonMeta["Children"] = new { size = episodes.Count, Metadata = episodes };
+                    var episodes = mapper.BuildEpisodeList(context, seasonNumber);
+                    seasonMetadata["Children"] = new { size = episodes.Count, Metadata = episodes };
                 }
-                return WrapInContainer(seasonMeta);
+                return WrapInContainer(seasonMetadata);
             }
-            var showMeta = mapper.MapSeries(ctx);
+            var showMetadata = mapper.MapSeries(context);
             if (includeChildren == 1)
             {
-                var seasons = ctx.FileData.Seasons.Select(season => mapper.MapSeason(ctx, season)).ToList();
-                showMeta["Children"] = new { size = seasons.Count, Metadata = seasons };
+                var seasons = context.FileData.Seasons.Select(season => mapper.MapSeason(context, season)).ToList();
+                showMetadata["Children"] = new { size = seasons.Count, Metadata = seasons };
             }
-            return WrapInContainer(showMeta);
+            return WrapInContainer(showMetadata);
         });
 
     /// <summary>Lists the immediate children for the provided ratingKey.</summary>
@@ -291,10 +298,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     public IActionResult GetChildren(string ratingKey) =>
         SafeRequest(() =>
             PlexHelper.IsMovieKey(ratingKey) || PlexHelper.IsEpisodeKey(ratingKey) ? EmptyMatch()
-            : mapper.GetSeriesContext(ratingKey) is not { } ctx ? NotFound()
-            : ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase) is var seasonIdx && seasonIdx >= 0
-                ? (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int seasonNum) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(ctx, seasonNum)))
-            : WrapInPagedContainer(ctx.FileData.Seasons.Select(season => mapper.MapSeason(ctx, season)))
+            : mapper.GetSeriesContext(ratingKey) is not { } context ? NotFound()
+            : ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase) is var seasonIndex && seasonIndex >= 0
+                ? (!int.TryParse(ratingKey[(seasonIndex + PlexConstants.SeasonPrefix.Length)..], out int seasonNumber) ? NotFound() : WrapInPagedContainer(mapper.BuildEpisodeList(context, seasonNumber)))
+            : WrapInPagedContainer(context.FileData.Seasons.Select(season => mapper.MapSeason(context, season)))
         );
 
     /// <summary>Lists the second-level children (episodes) for a show-level ratingKey.</summary>
@@ -308,13 +315,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             if (PlexHelper.IsMovieKey(ratingKey))
                 return EmptyMatch();
 
-            var ctx = mapper.GetSeriesContext(ratingKey);
-            if (ctx == null)
+            var context = mapper.GetSeriesContext(ratingKey);
+            if (context == null)
                 return NotFound();
 
             var (start, size) = GetPaging();
-            var allEps = ctx.FileData.Seasons.SelectMany(season => mapper.BuildEpisodeList(ctx, season)).ToList();
-            var pagedData = allEps.Skip(start).Take(size).ToArray();
+            var allEpisodes = context.FileData.Seasons.SelectMany(season => mapper.BuildEpisodeList(context, season)).ToList();
+            var pagedData = allEpisodes.Skip(start).Take(size).ToArray();
 
             return Ok(
                 new
@@ -322,7 +329,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                     MediaContainer = new
                     {
                         offset = start,
-                        totalSize = allEps.Count,
+                        totalSize = allEpisodes.Count,
                         identifier = ShokoRelayConstants.AgentScheme,
                         size = pagedData.Length,
                         Metadata = pagedData,
@@ -342,11 +349,11 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             object[] images;
             if (PlexHelper.IsMovieKey(ratingKey))
             {
-                var (episode, movieCtx, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                if (episode == null || movieCtx == null)
+                var (episode, movieContext, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                if (episode == null || movieContext == null)
                     return NotFound();
 
-                images = ExtractImages(mapper.MapMovie(episode, movieCtx, tmdbMovie));
+                images = ExtractImages(mapper.MapMovie(episode, movieContext, tmdbMovie));
                 return Ok(
                     new
                     {
@@ -362,25 +369,25 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 );
             }
 
-            var ctx = mapper.GetSeriesContext(ratingKey);
-            if (ctx == null)
+            var context = mapper.GetSeriesContext(ratingKey);
+            if (context == null)
                 return NotFound();
             if (PlexHelper.IsEpisodeKey(ratingKey))
             {
-                var (episode, partIdx, mapping) = TryResolveEpisodeContext(ctx, ratingKey);
-                images = (episode != null && mapping != null) ? ExtractImages(mapper.MapEpisode(episode, mapping.Coords, ctx, partIdx, mapping.TmdbEpisode)) : [];
+                var (episode, partIndex, mapping) = TryResolveEpisodeContext(context, ratingKey);
+                images = (episode != null && mapping != null) ? ExtractImages(mapper.MapEpisode(episode, mapping.Coords, context, partIndex, mapping.TmdbEpisode)) : [];
             }
             else
             {
-                int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-                if (seasonIdx >= 0)
+                int seasonIndex = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+                if (seasonIndex >= 0)
                 {
-                    if (!int.TryParse(ratingKey[(seasonIdx + PlexConstants.SeasonPrefix.Length)..], out int seasonNum))
+                    if (!int.TryParse(ratingKey[(seasonIndex + PlexConstants.SeasonPrefix.Length)..], out int seasonNumber))
                         return NotFound();
-                    images = ExtractImages(mapper.MapSeason(ctx, seasonNum));
+                    images = ExtractImages(mapper.MapSeason(context, seasonNumber));
                 }
                 else
-                    images = ExtractImages(mapper.MapSeries(ctx));
+                    images = ExtractImages(mapper.MapSeries(context));
             }
             return Ok(
                 new
@@ -487,12 +494,12 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     #region Internal Helpers
 
     /// <summary>Parses the ratingKey and resolves the corresponding episode, part index, and file mapping from the VFS collection.</summary>
-    /// <param name="ctx">The series context containing the mapping collection.</param>
+    /// <param name="context">The series context containing the mapping collection.</param>
     /// <param name="ratingKey">The custom Plex rating key for the episode.</param>
     /// <returns>A tuple containing the resolved IShokoEpisode, the 1-based PartIndex, and the FileMapping.</returns>
-    private (IShokoEpisode? Episode, int? PartIndex, MapHelper.FileMapping? Mapping) TryResolveEpisodeContext(PlexMetadata.SeriesContext ctx, string ratingKey)
+    private (IShokoEpisode? Episode, int? PartIndex, MapHelper.FileMapping? Mapping) TryResolveEpisodeContext(PlexMetadata.SeriesContext context, string ratingKey)
     {
-        int? partIdx = null;
+        int? partIndex = null;
         if (!PlexHelper.IsEpisodeKey(ratingKey))
             return (null, null, null);
 
@@ -500,40 +507,47 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var idPart = ratingKey[(isAniDbEpisode ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length)..];
 
         int partSplit = idPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
-        string idStr = partSplit >= 0 ? idPart[..partSplit] : idPart;
+        string idText = partSplit >= 0 ? idPart[..partSplit] : idPart;
 
-        if (!int.TryParse(idStr, out int id))
+        if (!int.TryParse(idText, out int id))
             return (null, null, null);
         if (partSplit >= 0 && int.TryParse(idPart[(partSplit + PlexConstants.PartPrefix.Length)..], out int parsedPart))
-            partIdx = parsedPart;
+            partIndex = parsedPart;
 
         var episode = isAniDbEpisode ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
         if (episode == null)
-            return (null, partIdx, null);
-        var mapping = ctx.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID) && fileMapping.PartIndex == partIdx)
-            ?? ctx.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID));
+            return (null, partIndex, null);
+        var mapping = context.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID) && fileMapping.PartIndex == partIndex)
+            ?? context.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID));
         if (mapping == null)
-            return (episode, partIdx, null);
+            return (episode, partIndex, null);
 
         // Handle Episode Groups (One Shoko ID mapped to multiple TMDB IDs, bypassed when custom VFS overrides dictate coordinates)
-        if (EnforceTmdbNumbering && !OverrideHelper.HasCustomCoords(episode, MetadataService) && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEps)
+        if (EnforceTmdbNumbering && mapping.Episodes.Count == 1 && !OverrideHelper.HasCustomCoords(episode, MetadataService) && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEpisodesList)
         {
-            string? prefId = MapHelper.GetPreferredTmdbOrderingId(ctx.Series);
-            var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEps, prefId);
-            var matchedTmdbEpisode = int.TryParse(Request.Query["index"], out int reqIndex)
-                ? tmdbEpisodes.FirstOrDefault(tmdbEpisode => GetOrderingCoords(tmdbEpisode, prefId).Episode == reqIndex)
-                : (partIdx.HasValue && partIdx.Value > 0 && partIdx.Value <= tmdbEpisodes.Count ? tmdbEpisodes[partIdx.Value - 1] : null);
+            string? preferredOrderingId = MapHelper.GetPreferredTmdbOrderingId(context.Series);
+            var tmdbEpisodes = SelectPreferredTmdbOrdering(tmdbEpisodesList, preferredOrderingId);
+            var matchedTmdbEpisode = int.TryParse(Request.Query["index"], out int requestedIndex)
+                ? tmdbEpisodes.FirstOrDefault(tmdbEpisode => GetOrderingCoords(tmdbEpisode, preferredOrderingId).Episode == requestedIndex)
+                : (partIndex.HasValue && partIndex.Value > 0 && partIndex.Value <= tmdbEpisodes.Count ? tmdbEpisodes[partIndex.Value - 1] : null);
             if (matchedTmdbEpisode != null)
             {
-                var (seasonNum, episodeNum) = GetOrderingCoords(matchedTmdbEpisode, prefId);
+                var (seasonNumber, episodeNumber) = GetOrderingCoords(matchedTmdbEpisode, preferredOrderingId);
                 mapping = mapping with
                 {
                     TmdbEpisode = matchedTmdbEpisode,
-                    Coords = new PlexCoords { Season = seasonNum ?? mapping.Coords.Season, Episode = episodeNum },
+                    Coords = new PlexCoords { Season = seasonNumber ?? mapping.Coords.Season, Episode = episodeNumber },
                 };
             }
         }
-        return (episode, partIdx, mapping);
+        // Resolve individual coordinates for joined multi-episode files so secondary episodes keep their own index
+        else if (mapping.Episodes.Count > 1 && mapping.Episodes.Select(mappedEpisode => mappedEpisode.Type).Distinct().Count() == 1)
+        {
+            var episodeCoords = GetPlexCoordinates(episode, context.PreferredOrderingId, metadataService: MetadataService);
+            episodeCoords.Season = mapping.Coords.Season;
+            mapping = mapping with { Coords = episodeCoords };
+        }
+        return (episode, partIndex, mapping);
     }
 
     /// <summary>Parses the ratingKey and resolves the corresponding episode, series context, and TMDB movie metadata for a standalone movie.</summary>
@@ -546,16 +560,16 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
         var idPart = ratingKey[PlexConstants.MoviePrefix.Length..];
         int partSplit = idPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
-        string idStr = partSplit >= 0 ? idPart[..partSplit] : idPart;
+        string idText = partSplit >= 0 ? idPart[..partSplit] : idPart;
 
-        if (!int.TryParse(idStr, out int id))
+        if (!int.TryParse(idText, out int id))
             return (null, null, null);
 
         var episode = MetadataService.GetShokoEpisodeByID(id);
-        var ctx = episode != null ? mapper.GetSeriesContext(episode.ShokoSeriesID.ToString()) : null;
+        var context = episode != null ? mapper.GetSeriesContext(episode.ShokoSeriesID.ToString()) : null;
         var tmdbMovie = episode?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
 
-        return (episode, ctx, tmdbMovie);
+        return (episode, context, tmdbMovie);
     }
 
     /// <summary>Extracts the numeric Series or Episode ID from a file path string.</summary>
@@ -567,8 +581,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             return null;
 
         var segments = PlexHelper.NormalizePathForPlex(text).Split('/', StringSplitOptions.RemoveEmptyEntries);
-        for (int segIdx = segments.Length - 1; segIdx >= 0; segIdx--)
-            if (int.TryParse(segments[segIdx], out int id))
+        for (int segmentIndex = segments.Length - 1; segmentIndex >= 0; segmentIndex--)
+            if (int.TryParse(segments[segmentIndex], out int id))
                 return id;
 
         return null;
@@ -577,7 +591,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <summary>Extracts the Image array from a mapped metadata object.</summary>
     /// <param name="metadata">The mapped metadata dictionary.</param>
     /// <returns>An array of image metadata objects.</returns>
-    private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var img) && img is object[] arrayValue ? arrayValue : [];
+    private static object[] ExtractImages(object metadata) => metadata is IDictionary<string, object?> dict && dict.TryGetValue("Image", out var image) && image is object[] arrayValue ? arrayValue : [];
 
     #endregion
 }

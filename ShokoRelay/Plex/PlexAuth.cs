@@ -128,12 +128,12 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
     /// <summary>Query the Plex.tv v2 resources API for all accessible servers.</summary>
     /// <param name="token">Plex authentication token.</param>
-    /// <param name="cid">Client identifier.</param>
+    /// <param name="clientIdentifier">Client identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Tuple of token validity and lists of servers/devices.</returns>
-    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string cid, CancellationToken cancellationToken = default)
+    public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string clientIdentifier, CancellationToken cancellationToken = default)
     {
-        using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, cid);
+        using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, clientIdentifier);
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
             return (response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden, [], []);
@@ -164,13 +164,13 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
     /// <summary>Fetch the list of library sections for a specific Plex server.</summary>
     /// <param name="token">Auth token.</param>
-    /// <param name="cid">Client ID.</param>
+    /// <param name="clientIdentifier">Client ID.</param>
     /// <param name="url">Base server URL.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A list of library info objects.</returns>
-    public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string cid, string url, CancellationToken cancellationToken = default)
+    public async Task<List<PlexLibraryInfo>> GetPlexLibrariesAsync(string token, string clientIdentifier, string url, CancellationToken cancellationToken = default)
     {
-        using var request = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, cid);
+        using var request = CreateRequest(HttpMethod.Get, new Uri($"{url.TrimEnd('/')}/library/sections"), token, clientIdentifier);
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var wrapper = await ReadJsonAsync<LibrarySectionsResponse>(response, cancellationToken).ConfigureAwait(false);
         return wrapper
@@ -189,20 +189,20 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
     /// <summary>Discover Shoko-enabled libraries across all accessible Plex servers.</summary>
     /// <param name="token">Admin token.</param>
-    /// <param name="cid">Client ID.</param>
+    /// <param name="clientIdentifier">Client ID.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>Discovery results containing server and library pairs.</returns>
     public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries)> DiscoverShokoLibrariesAsync(
         string token,
-        string cid,
+        string clientIdentifier,
         CancellationToken cancellationToken = default
     )
     {
-        var (tokenValid, servers, devices) = await GetPlexServerListAsync(token, cid, cancellationToken).ConfigureAwait(false);
+        var (tokenValid, servers, devices) = await GetPlexServerListAsync(token, clientIdentifier, cancellationToken).ConfigureAwait(false);
         var list = new List<(PlexLibraryInfo, PlexServerInfo)>();
         if (tokenValid)
         {
-            async Task<bool> TryConnectAsync(string uri, PlexServerInfo srv, bool isFallback)
+            async Task<bool> TryConnectAsync(string uri, PlexServerInfo server, bool isFallback)
             {
                 try
                 {
@@ -210,17 +210,23 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                     using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-                    var libs = await GetPlexLibrariesAsync(token, cid, uri, cts.Token).ConfigureAwait(false);
+                    var libs = await GetPlexLibrariesAsync(token, clientIdentifier, uri, cts.Token).ConfigureAwait(false);
                     var matched = libs.Where(library =>
                             string.Equals(library.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
                             || string.Equals(library.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
                         )
                         .ToList();
                     foreach (var library in matched)
-                        list.Add((library, srv with { PreferredUri = uri }));
+                        list.Add((library, server with { PreferredUri = uri }));
 
                     if (matched.Count > 0)
-                        logger.LogInformation("Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})", srv.Name, uri, isFallback ? "Fallback" : "Preferred", matched.Count);
+                        logger.LogInformation(
+                            "Plex Discovery: Connected to server -> {Name} ... {Uri} (Type: {Type}, Libraries: {Count})",
+                            server.Name,
+                            uri,
+                            isFallback ? "Fallback" : "Preferred",
+                            matched.Count
+                        );
                     return true;
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -229,32 +235,32 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 }
                 catch (Exception exception)
                 {
-                    logger.LogDebug("Plex Discovery: Connection to {Uri} failed for server -> {Name} ... {Error}", uri, srv.Name, exception.GetBaseException().Message);
+                    logger.LogDebug("Plex Discovery: Connection to {Uri} failed for server -> {Name} ... {Error}", uri, server.Name, exception.GetBaseException().Message);
                     return false;
                 }
             }
 
-            for (int srvIdx = 0; srvIdx < servers.Count; srvIdx++)
+            for (int serverIndex = 0; serverIndex < servers.Count; serverIndex++)
             {
-                var srv = servers[srvIdx];
+                var server = servers[serverIndex];
                 string? customUrl = !string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl) ? Settings.Advanced.PlexServerUrl.Trim().TrimEnd('/') : null;
                 var isOk =
-                    (!string.IsNullOrEmpty(customUrl) && await TryConnectAsync(customUrl, srv with { PreferredUri = customUrl }, false).ConfigureAwait(false))
-                    || (!string.IsNullOrEmpty(srv.PreferredUri) && await TryConnectAsync(srv.PreferredUri, srv, false).ConfigureAwait(false));
+                    (!string.IsNullOrEmpty(customUrl) && await TryConnectAsync(customUrl, server with { PreferredUri = customUrl }, false).ConfigureAwait(false))
+                    || (!string.IsNullOrEmpty(server.PreferredUri) && await TryConnectAsync(server.PreferredUri, server, false).ConfigureAwait(false));
 
                 // Fallback: If preferred URI failed, try other endpoints
-                if (!isOk && devices.FirstOrDefault(device => string.Equals(device.ClientIdentifier, srv.Id, StringComparison.OrdinalIgnoreCase)) is { } dev && dev.Connections != null)
+                if (!isOk && devices.FirstOrDefault(device => string.Equals(device.ClientIdentifier, server.Id, StringComparison.OrdinalIgnoreCase)) is { } matchedDevice && matchedDevice.Connections != null)
                 {
-                    var conns = srv.HttpsRequired ? dev.Connections.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : dev.Connections;
-                    foreach (var conn in conns)
+                    var connections = server.HttpsRequired ? matchedDevice.Connections.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : matchedDevice.Connections;
+                    foreach (var connection in connections)
                     {
-                        if (string.IsNullOrEmpty(conn.Uri) || string.Equals(conn.Uri, srv.PreferredUri, StringComparison.OrdinalIgnoreCase))
+                        if (string.IsNullOrEmpty(connection.Uri) || string.Equals(connection.Uri, server.PreferredUri, StringComparison.OrdinalIgnoreCase))
                             continue;
 
-                        var workingSrv = srv with { PreferredUri = conn.Uri };
-                        if (await TryConnectAsync(conn.Uri, workingSrv, true).ConfigureAwait(false))
+                        var workingServer = server with { PreferredUri = connection.Uri };
+                        if (await TryConnectAsync(connection.Uri, workingServer, true).ConfigureAwait(false))
                         {
-                            servers[srvIdx] = workingSrv;
+                            servers[serverIndex] = workingServer;
                             isOk = true;
                             break;
                         }
@@ -262,7 +268,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 }
 
                 if (!isOk)
-                    logger.LogWarning("Plex Discovery: Failed to establish any connection to server -> {Name} ... check for DNS rebinding protection, firewall rules, or docker network isolation", srv.Name);
+                    logger.LogWarning("Plex Discovery: Failed to establish any connection to server -> {Name} ... check for DNS rebinding protection, firewall rules, or docker network isolation", server.Name);
             }
         }
         return (tokenValid, servers, list);
@@ -467,13 +473,13 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
 
     /// <summary>Revokes an authentication token at Plex.tv via the v2 API.</summary>
     /// <param name="token">The token to revoke.</param>
-    /// <param name="cid">The client identifier.</param>
+    /// <param name="clientIdentifier">The client identifier.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    public async Task RevokePlexTokenAsync(string token, string cid, CancellationToken cancellationToken = default)
+    public async Task RevokePlexTokenAsync(string token, string clientIdentifier, CancellationToken cancellationToken = default)
     {
         try
         {
-            using var request = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, cid);
+            using var request = CreateRequest(HttpMethod.Delete, new Uri($"{BaseUrl}/api/v2/user/authentication"), token, clientIdentifier);
             await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch
@@ -490,13 +496,13 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <param name="method">The HTTP method to use for the request.</param>
     /// <param name="url">The fully qualified destination URI.</param>
     /// <param name="token">An optional Plex authentication token to embed in headers.</param>
-    /// <param name="cid">An optional Plex client identifier override.</param>
+    /// <param name="clientIdentifier">An optional Plex client identifier override.</param>
     /// <param name="acceptJson">Whether to request <c>application/json</c>; false requests <c>application/xml</c>.</param>
     /// <returns>A pre-configured HttpRequestMessage instance.</returns>
-    private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? cid = null, bool acceptJson = true)
+    private HttpRequestMessage CreateRequest(HttpMethod method, Uri url, string? token = null, string? clientIdentifier = null, bool acceptJson = true)
     {
         var request = new HttpRequestMessage(method, url);
-        request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", cid ?? configProvider.GetPlexClientIdentifier());
+        request.Headers.TryAddWithoutValidation("X-Plex-Client-Identifier", clientIdentifier ?? configProvider.GetPlexClientIdentifier());
         request.Headers.TryAddWithoutValidation("X-Plex-Device-Name", "Shoko Server");
         request.Headers.TryAddWithoutValidation("X-Plex-Version", ShokoRelayConstants.Version);
         request.Headers.TryAddWithoutValidation("X-Plex-Product", ShokoRelayConstants.Name);

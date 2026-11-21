@@ -359,16 +359,16 @@ public static class ReportHelper
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskShokoSyncWatched"/>.</summary>
     /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Sync result data.</param>
-    /// <param name="dir">Sync direction string.</param>
-    /// <param name="dry">Dry run flag.</param>
-    /// <param name="ratings">Whether ratings were synced.</param>
-    public static void BuildSyncWatchedReport(StringBuilder builder, PlexWatchedSyncResult result, string dir, bool dry, bool ratings)
+    /// <param name="direction">Sync direction string.</param>
+    /// <param name="dryRun">Dry run flag.</param>
+    /// <param name="includeRatings">Whether ratings were synced.</param>
+    public static void BuildSyncWatchedReport(StringBuilder builder, PlexWatchedSyncResult result, string direction, bool dryRun, bool includeRatings)
     {
         var stats = new Dictionary<string, object>
         {
-            ["Direction"] = dir,
-            ["Mode"] = dry ? "Dry Run" : "Live",
-            ["Include Ratings"] = ratings,
+            ["Direction"] = direction,
+            ["Mode"] = dryRun ? "Dry Run" : "Live",
+            ["Include Ratings"] = includeRatings,
             ["Processed"] = result.Processed,
             ["Marked"] = result.MarkedWatched,
             ["Progress Updated"] = result.ProgressUpdated,
@@ -376,7 +376,7 @@ public static class ReportHelper
         };
 
         var items = new List<string>();
-        foreach (var userGroup in result.PerUserChanges.OrderBy(kv => kv.Key))
+        foreach (var userGroup in result.PerUserChanges.OrderBy(userEntry => userEntry.Key))
         {
             string? shokoUser = userGroup.Value.FirstOrDefault(change => !string.IsNullOrWhiteSpace(change.ShokoUser))?.ShokoUser;
             items.Add(string.IsNullOrWhiteSpace(shokoUser) ? $"User: {userGroup.Key}" : $"User: {userGroup.Key} -> Shoko: {shokoUser}");
@@ -493,14 +493,14 @@ public static class ReportHelper
         if (result.OverriddenOps.Count > 0)
         {
             items.Add("Overridden Openings:");
-            items.AddRange(result.OverriddenOps.OrderBy(ovr => ovr).Select(ovr => $"  {ovr}"));
+            items.AddRange(result.OverriddenOps.OrderBy(overrideEntry => overrideEntry).Select(overrideEntry => $"  {overrideEntry}"));
             items.Add("");
         }
 
         if (result.OverriddenEds.Count > 0)
         {
             items.Add("Overridden Endings:");
-            items.AddRange(result.OverriddenEds.OrderBy(ovr => ovr).Select(ovr => $"  {ovr}"));
+            items.AddRange(result.OverriddenEds.OrderBy(overrideEntry => overrideEntry).Select(overrideEntry => $"  {overrideEntry}"));
             items.Add("");
         }
 

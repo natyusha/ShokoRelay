@@ -48,18 +48,18 @@
    * @returns {void}
    */
   function setAuthLocked(locked) {
-    const dash = element("dashboard");
-    if (!dash) return;
-    dash.classList.toggle("auth-locked", locked);
-    dash.querySelectorAll("button, input, select, textarea").forEach((ctrl) => {
+    const dashboard = element("dashboard");
+    if (!dashboard) return;
+    dashboard.classList.toggle("auth-locked", locked);
+    dashboard.querySelectorAll("button, input, select, textarea").forEach((control) => {
       if (locked) {
-        if (!ctrl.disabled) {
-          ctrl.dataset.authLockedDisabled = "true";
-          ctrl.disabled = true;
+        if (!control.disabled) {
+          control.dataset.authLockedDisabled = "true";
+          control.disabled = true;
         }
-      } else if (ctrl.dataset.authLockedDisabled === "true") {
-        ctrl.disabled = false;
-        delete ctrl.dataset.authLockedDisabled;
+      } else if (control.dataset.authLockedDisabled === "true") {
+        control.disabled = false;
+        delete control.dataset.authLockedDisabled;
       }
     });
   }
@@ -369,16 +369,16 @@
 
   /**
    * Updates element title from data-mode or data-state for tooltips.
-   * @param {HTMLElement} targetEl - The target element.
+   * @param {HTMLElement} targetElement - The target element.
    * @returns {void}
    */
-  function updatePlaybackTooltip(targetEl) {
-    if (!targetEl) return;
-    const key = targetEl.getAttribute("data-mode") || targetEl.getAttribute("data-state");
+  function updatePlaybackTooltip(targetElement) {
+    if (!targetElement) return;
+    const key = targetElement.getAttribute("data-mode") || targetElement.getAttribute("data-state");
     const label = PLAYBACK_LABELS[key];
     if (label) {
-      if (targetEl.dataset.tooltipText !== undefined) targetEl.dataset.tooltipText = label;
-      else targetEl.title = label;
+      if (targetElement.dataset.tooltipText !== undefined) targetElement.dataset.tooltipText = label;
+      else targetElement.title = label;
     }
   }
 
@@ -486,14 +486,14 @@
      * @returns {void}
      */
     bindConfig: (target, path, config, persistFn, type = "text") => {
-      const elem = typeof target === "string" ? element(target) : target;
-      if (!elem) return;
+      const targetElement = typeof target === "string" ? element(target) : target;
+      if (!targetElement) return;
       const value = window._sr.getValueByPath(config, path);
-      if (type === "check") elem.checked = !!value;
-      else elem.value = value ?? "";
-      elem.onchange = async () => {
-        let newVal = type === "check" ? elem.checked : type === "number" ? Number(elem.value) || 0 : elem.value;
-        window._sr.setValueByPath(config, path, newVal);
+      if (type === "check") targetElement.checked = !!value;
+      else targetElement.value = value ?? "";
+      targetElement.onchange = async () => {
+        let newValue = type === "check" ? targetElement.checked : type === "number" ? Number(targetElement.value) || 0 : targetElement.value;
+        window._sr.setValueByPath(config, path, newValue);
         await persistFn(config);
       };
     },
@@ -517,14 +517,14 @@
    */
   function initTooltips() {
     if (element("shoko-tooltip")) return;
-    const tooltipEl = document.createElement("div");
-    tooltipEl.id = "shoko-tooltip";
-    tooltipEl.className = "tooltip-core tooltip-box tooltip-dark tooltip-place-top";
-    tooltipEl.setAttribute("role", "status");
-    tooltipEl.setAttribute("aria-hidden", "true");
-    tooltipEl.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
-    document.body.appendChild(tooltipEl);
-    const content = tooltipEl.querySelector(".rt-content");
+    const tooltipElement = document.createElement("div");
+    tooltipElement.id = "shoko-tooltip";
+    tooltipElement.className = "tooltip-core tooltip-box tooltip-dark tooltip-place-top";
+    tooltipElement.setAttribute("role", "status");
+    tooltipElement.setAttribute("aria-hidden", "true");
+    tooltipElement.innerHTML = '<div class="tooltip-arrow"></div><div class="rt-content"></div>';
+    document.body.appendChild(tooltipElement);
+    const content = tooltipElement.querySelector(".rt-content");
     let showTimer;
 
     /**
@@ -537,31 +537,31 @@
       if (target.disabled || !text) return;
       if (target.dataset.tooltipOverflowOnly === "true" && target.scrollWidth <= target.clientWidth) return;
       content.textContent = text;
-      tooltipEl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
-      tooltipEl.setAttribute("aria-hidden", "false");
+      tooltipElement.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
+      tooltipElement.setAttribute("aria-hidden", "false");
       const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
       const bounds = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = document.documentElement.clientHeight;
       const margin = 10;
       let place = "top";
-      let top = bounds.top - tooltipEl.offsetHeight - margin;
-      let left = bounds.left + bounds.width / 2 - tooltipEl.offsetWidth / 2;
+      let top = bounds.top - tooltipElement.offsetHeight - margin;
+      let left = bounds.left + bounds.width / 2 - tooltipElement.offsetWidth / 2;
       if (top < margin) {
         const spaceBelow = viewportHeight - bounds.bottom;
-        if (spaceBelow > tooltipEl.offsetHeight + margin) {
+        if (spaceBelow > tooltipElement.offsetHeight + margin) {
           top = bounds.bottom + margin;
           place = "bottom";
         }
       }
       const minLeft = margin;
-      const maxLeft = viewportWidth - tooltipEl.offsetWidth - margin;
+      const maxLeft = viewportWidth - tooltipElement.offsetWidth - margin;
       const clampedLeft = Math.max(minLeft, Math.min(left, maxLeft));
-      const arrow = tooltipEl.querySelector(".tooltip-arrow");
+      const arrow = tooltipElement.querySelector(".tooltip-arrow");
       if (arrow) arrow.style.marginLeft = `${left - clampedLeft}px`;
-      tooltipEl.classList.add(`tooltip-place-${place}`);
-      tooltipEl.style.left = `${Math.round(clampedLeft + window.scrollX)}px`;
-      tooltipEl.style.top = `${Math.round(top + window.scrollY)}px`;
+      tooltipElement.classList.add(`tooltip-place-${place}`);
+      tooltipElement.style.left = `${Math.round(clampedLeft + window.scrollX)}px`;
+      tooltipElement.style.top = `${Math.round(top + window.scrollY)}px`;
       target.setAttribute("aria-describedby", "shoko-tooltip");
     };
 
@@ -571,10 +571,10 @@
      */
     const hide = () => {
       clearTimeout(showTimer);
-      tooltipEl.classList.remove("tooltip-show");
-      tooltipEl.classList.add("tooltip-closing");
-      tooltipEl.setAttribute("aria-hidden", "true");
-      setTimeout(() => tooltipEl.classList.remove("tooltip-closing"), 150);
+      tooltipElement.classList.remove("tooltip-show");
+      tooltipElement.classList.add("tooltip-closing");
+      tooltipElement.setAttribute("aria-hidden", "true");
+      setTimeout(() => tooltipElement.classList.remove("tooltip-closing"), 150);
     };
 
     window.addEventListener("blur", hide);

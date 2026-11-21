@@ -230,7 +230,7 @@ public class AnimeThemesMp3Generator(
         {
             if (_themeMp3Cache == null)
                 return;
-            VfsShared.WriteLinesAtomic(ThemeCacheFilePath, _themeMp3Cache.Select(kvp => string.IsNullOrEmpty(kvp.Value) ? kvp.Key : $"{kvp.Key}|{kvp.Value}"));
+            VfsShared.WriteLinesAtomic(ThemeCacheFilePath, _themeMp3Cache.Select(entry => string.IsNullOrEmpty(entry.Value) ? entry.Key : $"{entry.Key}|{entry.Value}"));
         }
         catch { }
     }
@@ -263,10 +263,20 @@ public class AnimeThemesMp3Generator(
         var (results, processed, skipped, errors) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
         // Scan recursively for directories that hold videos directly (or via immediate Season/Specials subfolders), pruning ignored/VFS paths before descending
+        string? managedRoot = (videoService.GetAllManagedFolders() ?? [])
+            .Select(folder => folder.Path)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            .OrderByDescending(path => path.Length)
+            .FirstOrDefault(path =>
+                string.Equals(root, path, VfsShared.PathComparison) || root.StartsWith(path.EndsWith(Path.DirectorySeparatorChar) ? path : path + Path.DirectorySeparatorChar, VfsShared.PathComparison)
+            );
+        string ignoreBaseRoot = managedRoot ?? root;
+
         var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
         var candidateDirs = new List<string>();
         var pendingDirs = new Stack<string>();
-        if (!VfsShared.IsPathIgnored(root, videoService, Settings, ignoredNames, relativeTo: root, isDirectory: true))
+        if (!VfsShared.IsPathIgnored(root, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true))
             pendingDirs.Push(root);
 
         while (pendingDirs.Count > 0)
@@ -277,7 +287,7 @@ public class AnimeThemesMp3Generator(
             try
             {
                 foreach (var subDir in Directory.EnumerateDirectories(currentDir))
-                    if (!VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: root, isDirectory: true))
+                    if (!VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true))
                         pendingDirs.Push(subDir);
             }
             catch { }
@@ -402,9 +412,9 @@ public class AnimeThemesMp3Generator(
             };
             if (!series.AirDate.HasValue || series.AirDate.Value < start || series.AirDate.Value > end)
             {
-                string skipMsg = "Series does not match the current season filter.";
-                logger.LogDebug("AnimeThemes MP3: Skipped series -> {Title} [{LocalId}] ({Message})", series.GetDisplayTitle(), series.LocalID, skipMsg);
-                return new(folder, "skipped", skipMsg);
+                string skipMessage = "Series does not match the current season filter.";
+                logger.LogDebug("AnimeThemes MP3: Skipped series -> {Title} [{LocalId}] ({Message})", series.GetDisplayTitle(), series.LocalID, skipMessage);
+                return new(folder, "skipped", skipMessage);
             }
         }
 
@@ -496,11 +506,11 @@ public class AnimeThemesMp3Generator(
 
             if (string.IsNullOrEmpty(audioUrl))
             {
-                string skipMsg = string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.";
+                string skipMessage = string.IsNullOrWhiteSpace(query.Slug) ? "Entry not found." : $"No entry for slug '{query.Slug}'.";
                 if (!query.Batch)
-                    logger.LogInformation("AnimeThemes MP3: Skipped series -> {Title} [{LocalId}] ({Message})", series.GetDisplayTitle(), series.LocalID, skipMsg);
+                    logger.LogInformation("AnimeThemes MP3: Skipped series -> {Title} [{LocalId}] ({Message})", series.GetDisplayTitle(), series.LocalID, skipMessage);
 
-                return new(folder, "skipped", skipMsg);
+                return new(folder, "skipped", skipMessage);
             }
 
             // Download an audio file to a temporary location on disk
@@ -508,7 +518,8 @@ public class AnimeThemesMp3Generator(
             using (var response = await httpClient.GetAsync(audioUrl, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false))
             {
                 response.EnsureSuccessStatusCode();
-                temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{Path.GetExtension(audioUrl)}");
+                string audioExtension = Uri.TryCreate(audioUrl, UriKind.Absolute, out var audioUri) ? Path.GetExtension(audioUri.AbsolutePath) : Path.GetExtension(audioUrl);
+                temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{audioExtension}");
                 await using var streamIn = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                 await using var streamOut = File.Create(temp);
                 await streamIn.CopyToAsync(streamOut, cancellationToken).ConfigureAwait(false);
@@ -615,10 +626,10 @@ public class AnimeThemesMp3Generator(
 
         logger.LogInformation("AnimeThemes MP3: Starting audit of {Count} cached themes...", cache.Count);
 
-        await Parallel.ForEachAsync(cache, DefaultParallelOptions(cancellationToken), async (kvp, token) =>
+        await Parallel.ForEachAsync(cache, DefaultParallelOptions(cancellationToken), async (entry, token) =>
         {
-            string folder = kvp.Key;
-            var parts = (kvp.Value ?? "").Split('|', 2);
+            string folder = entry.Key;
+            var parts = (entry.Value ?? "").Split('|', 2);
             string slug = parts[0];
             string upgrade = parts.Length > 1 ? parts[1] : "";
 

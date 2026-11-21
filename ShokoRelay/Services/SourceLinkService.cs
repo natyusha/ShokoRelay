@@ -107,7 +107,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                     if (!string.IsNullOrEmpty(destDir))
                         Directory.CreateDirectory(destDir);
 
-                    var candidates = Directory.EnumerateFileSystemEntries(srcDir, srcBase + "*").ToList();
+                    var candidates = Directory.EnumerateFileSystemEntries(srcDir, "*").ToList();
                     bool mainLinked = false;
                     var cmp = VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 

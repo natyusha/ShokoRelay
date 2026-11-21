@@ -53,7 +53,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
     - First time generation may take several minutes to complete with a large library
   - A report of the run will be written to `reports/shoko-vfs-build.report` inside the plugin's cache directory
     - You can download the report via the dashboard's "Task Logs" section or a toast that will appear on task completion
-  - The VFS will automatically update when it detects files have been added, renamed, moved or deleted
+  - Automatic VFS updates run in the background and everything that triggers them is documented under [VFS Updates](#vfs-updates)
 - **Recommended:**
   - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex Authentication" section
     - Once clicked it will change to a `Login` link which will redirect you to `app.plex.tv/auth`
@@ -249,7 +249,7 @@ Applying a hyphenated suffix to the image that matches Plex's naming conventions
   - If `Empty Plex Trash Threshold` is configured under `Provider Settings > Advanced`, this will safely empty the trash for your Plex libraries
   - Unlike the "Remove Missing Files" action in Shoko's WebUI this will remove all traces of the files from the Shoko DB
   - This will also remove files that are in folders which the plugin has told Shoko to ignore
-  - Entries will _always_ be removed from the AniDB MyList as well
+  - Entries will also trigger Shoko's configured `AniDB > MyList Options > Delete Action` when removed
 
 ## AnimeThemes Integration
 
@@ -374,6 +374,18 @@ The VFS includes built-in audit functionality that scans existing VFS directorie
 #### VFS Browser
 
 In order to help visualise the VFS and all of the files it contains there is a "VFS Browser" page included with the plugin. It can be navigated to by clicking the folder icon in the top right of the "Shoko: VFS" section of the dashboard, as an embed in Shoko's WebUI under `Settings > Plugins > Shoko Relay > VFS Browser`, or by a dedicated URL: `http(s)://{ShokoHost}:{ShokoPort}/api/plugin/ShokoRelay/browser`. Unlike opening the VFS in a normal file browser, this will list the series title and the AniDB/Shoko IDs which correspond to each folder. Each ID will link directly to its source and there is also an included link to the `/metadata/` endpoint for series and seasons. Changing the series title settings will not automatically update cached titles in the VFS Browser; use the refresh button next to the series count in the header to reload them without rebuilding the VFS. VFS regeneration can be called on any series by clicking the "Refresh VFS Folder" `⟳` icon next to its name in the tree view (this avoids having to look up AniDB/Shoko IDs to use the filter on the dashboard). Similar to the refresh button, there is a "Theme.mp3" `♬` button which tracks if a given VFS entry has a local AnimeThemes `.mp3` attached to it or not. Clicking the button will attempt to generate a theme for any series missing one.
+
+#### VFS Updates
+
+The VFS will automatically update in the background when Shoko Relay detects any of the following changes in Shoko:
+
+- **File & Release Events:** Video files are added/matched, unlinked, renamed, moved, or deleted
+- **Video & Episode Flags:** Videos are marked/unmarked as ignored/variation, or episodes are hidden/shown
+- **Series Deletion:** Series are removed from Shoko, pruning their orphaned VFS folders and stale blueprint entries
+- **TMDB Links & Ordering:** TMDB metadata cross-references are added, removed, or changed, or a linked TMDB series' preferred episode ordering changes
+  - This only triggers when `TMDB Episode Numbering` or `Auto Merge TMDB Series` is enabled
+
+Events are batched and debounced automatically, restoring AnimeThemes VFS links and invalidating cached metadata. Plex partial scans (if enabled) and metadata fixups will be triggered immediately unless `Defer VFS Creation` is enabled.
 
 ### Automatic Title Modification
 

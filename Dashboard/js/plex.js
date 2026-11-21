@@ -66,10 +66,10 @@
 
     stopPlexPolling();
     plexPollTimer = setInterval(async () => {
-      const sRes = await fetchJson(`${base}/plex/auth/status?pinId=${encodeURIComponent(plexPinId)}`);
-      const sData = getData(sRes);
+      const statusResponse = await fetchJson(`${base}/plex/auth/status?pinId=${encodeURIComponent(plexPinId)}`);
+      const statusData = getData(statusResponse);
 
-      if (sRes.isOk && sData?.tokenSaved) {
+      if (statusResponse.isOk && statusData?.tokenSaved) {
         stopPlexPolling();
         refreshPlexState();
       }

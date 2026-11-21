@@ -333,23 +333,23 @@ public class PlexController(
         if (string.IsNullOrWhiteSpace(payloadJson))
             return BadRequest(new { status = "error", message = "invalid payload" });
 
-        PlexWebhookPayload? evt = null;
+        PlexWebhookPayload? webhookEvent = null;
         try
         {
             // Case sensitive to prevent a type conflict between "guid" (string) and "Guid" (array)
-            evt = JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, s_webhookJsonOptions);
+            webhookEvent = JsonSerializer.Deserialize<PlexWebhookPayload>(payloadJson, s_webhookJsonOptions);
         }
         catch (Exception exception)
         {
             Logger.LogWarning(exception, "Plex: Failed to deserialize webhook payload. Raw JSON: {Json}", payloadJson);
         }
 
-        if (evt?.Metadata == null)
+        if (webhookEvent?.Metadata == null)
             return BadRequest(new { status = "error", message = "invalid payload" });
 
-        bool isScrobble = string.Equals(evt.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
-        bool isRate = string.Equals(evt.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
-        bool isProgress = string.Equals(evt.Event, "media.stop", StringComparison.OrdinalIgnoreCase) || string.Equals(evt.Event, "media.pause", StringComparison.OrdinalIgnoreCase);
+        bool isScrobble = string.Equals(webhookEvent.Event, "media.scrobble", StringComparison.OrdinalIgnoreCase);
+        bool isRate = string.Equals(webhookEvent.Event, "media.rate", StringComparison.OrdinalIgnoreCase);
+        bool isProgress = string.Equals(webhookEvent.Event, "media.stop", StringComparison.OrdinalIgnoreCase) || string.Equals(webhookEvent.Event, "media.pause", StringComparison.OrdinalIgnoreCase);
 
         if (!(isScrobble || (isProgress && Settings.Automation.ShokoSyncWatchedIncludeProgress) || (isRate && Settings.Automation.ShokoSyncWatchedIncludeRatings)))
             return Ok(new { status = "ignored", reason = "unsupported_event_type" });
@@ -359,36 +359,36 @@ public class PlexController(
         string reason = "";
         string? mappedShokoUser = null;
 
-        if (!ConfigProvider.IsManagedServer(evt.Server?.Uuid))
+        if (!ConfigProvider.IsManagedServer(webhookEvent.Server?.Uuid))
             reason = "unrecognized_server_uuid";
         else
         {
-            var plexUser = evt.Account?.Title?.Trim();
+            var plexUser = webhookEvent.Account?.Title?.Trim();
             if (string.IsNullOrWhiteSpace(plexUser))
                 reason = "empty_account_title";
             else
             {
                 var userType = Settings.Automation.ShokoSyncWatchedUserType;
                 string? adminName = ConfigProvider.GetAdminUsername();
-                if (string.IsNullOrEmpty(adminName) && (evt.Owner == true || ConfigProvider.GetAdvancedUserMappingEntries().Count > 0))
+                if (string.IsNullOrEmpty(adminName) && (webhookEvent.Owner == true || ConfigProvider.GetAdvancedUserMappingEntries().Count > 0))
                 {
                     await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
                     adminName = ConfigProvider.GetAdminUsername();
                 }
 
-                string? accountIdStr = evt.Account?.Id is > 0 ? evt.Account.Id.Value.ToString() : null;
-                mappedShokoUser = ConfigProvider.ResolveMappedShokoUsername(plexUser, adminName, evt.Owner == true)
-                    ?? (accountIdStr != null ? ConfigProvider.ResolveMappedShokoUsername(accountIdStr, adminName, evt.Owner == true) : null);
+                string? accountIdText = webhookEvent.Account?.Id is > 0 ? webhookEvent.Account.Id.Value.ToString() : null;
+                mappedShokoUser = ConfigProvider.ResolveMappedShokoUsername(plexUser, adminName, webhookEvent.Owner == true)
+                    ?? (accountIdText != null ? ConfigProvider.ResolveMappedShokoUsername(accountIdText, adminName, webhookEvent.Owner == true) : null);
                 bool isExtra = ConfigProvider
                     .GetExtraPlexUserEntries()
                     .Any(entry =>
-                        string.Equals(entry.Name, plexUser, StringComparison.OrdinalIgnoreCase) || (accountIdStr != null && string.Equals(entry.Name, accountIdStr, StringComparison.OrdinalIgnoreCase))
+                        string.Equals(entry.Name, plexUser, StringComparison.OrdinalIgnoreCase) || (accountIdText != null && string.Equals(entry.Name, accountIdText, StringComparison.OrdinalIgnoreCase))
                     );
                 bool isAdvanced = mappedShokoUser != null;
 
                 if (userType == SyncUserType.None)
                     reason = "sync_users_set_to_none";
-                else if (evt.Owner == true && (string.IsNullOrEmpty(adminName) || string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase)))
+                else if (webhookEvent.Owner == true && (string.IsNullOrEmpty(adminName) || string.Equals(plexUser, adminName, StringComparison.OrdinalIgnoreCase)))
                 {
                     bool adminAllowed = userType is SyncUserType.All or SyncUserType.Admin || (userType == SyncUserType.Advanced && isAdvanced);
                     allowed = adminAllowed;
@@ -403,11 +403,11 @@ public class PlexController(
 
         if (!allowed)
         {
-            Logger.LogInformation("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, evt.Account?.Title, evt.Event);
+            Logger.LogInformation("Plex: Webhook ignored -> {Reason} | User: {User} | Event: {Event}", reason, webhookEvent.Account?.Title, webhookEvent.Event);
             return Ok(new { status = "ignored", reason });
         }
 
-        int? shokoEpisodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(evt.Metadata.Guid);
+        int? shokoEpisodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(webhookEvent.Metadata.Guid);
         if (!shokoEpisodeId.HasValue)
             return Ok(new { status = "ignored", reason = "no_shoko_guid" });
 
@@ -415,57 +415,57 @@ public class PlexController(
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
-        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault();
+        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(shokoUser => shokoUser.LocalID).FirstOrDefault();
         if (user == null)
         {
             if (!string.IsNullOrWhiteSpace(mappedShokoUser))
             {
-                Logger.LogWarning("Plex: Webhook ignored -> mapped Shoko user '{ShokoUser}' not found for Plex user '{PlexUser}'", mappedShokoUser, evt.Account?.Title);
+                Logger.LogWarning("Plex: Webhook ignored -> mapped Shoko user '{ShokoUser}' not found for Plex user '{PlexUser}'", mappedShokoUser, webhookEvent.Account?.Title);
                 return Ok(new { status = "ignored", reason = "mapped_shoko_user_not_found" });
             }
             return Ok(new { status = "ignored", reason = "no_shoko_user" });
         }
 
-        bool isMovie = string.Equals(evt.Metadata.Type, "movie", StringComparison.OrdinalIgnoreCase);
+        bool isMovie = string.Equals(webhookEvent.Metadata.Type, "movie", StringComparison.OrdinalIgnoreCase);
         string typeLabel = isMovie ? "movie" : "episode";
-        string itemTitle = isMovie ? (evt.Metadata.Title ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown") : $"S{evt.Metadata.ParentIndex ?? 0:D2}E{evt.Metadata.Index ?? 0:D2}";
-        string seriesName = evt.Metadata.GrandparentTitle ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown Series";
+        string itemTitle = isMovie ? (webhookEvent.Metadata.Title ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown") : $"S{webhookEvent.Metadata.ParentIndex ?? 0:D2}E{webhookEvent.Metadata.Index ?? 0:D2}";
+        string seriesName = webhookEvent.Metadata.GrandparentTitle ?? shokoEpisode.Series?.GetDisplayTitle() ?? "Unknown Series";
 
         if (isRate)
         {
-            if (evt.Metadata.UserRating is > 0)
+            if (webhookEvent.Metadata.UserRating is > 0)
             {
-                double clampedRating = Math.Clamp(evt.Metadata.UserRating.Value, 1.0, 10.0);
+                double clampedRating = Math.Clamp(webhookEvent.Metadata.UserRating.Value, 1.0, 10.0);
                 await userDataService.RateEpisode(shokoEpisode, user, clampedRating).ConfigureAwait(false);
-                Logger.LogInformation("Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}", evt.Account?.Title, seriesName, typeLabel, itemTitle, clampedRating);
+                Logger.LogInformation("Plex: Rating applied -> user='{User}', series='{Series}', {Type}='{Item}', rating={Rating}", webhookEvent.Account?.Title, seriesName, typeLabel, itemTitle, clampedRating);
                 return Ok(new { status = "ok", rated = true });
             }
 
             await userDataService.UnrateEpisode(shokoEpisode, user).ConfigureAwait(false);
-            Logger.LogInformation("Plex: Rating removed -> user='{User}', series='{Series}', {Type}='{Item}'", evt.Account?.Title, seriesName, typeLabel, itemTitle);
+            Logger.LogInformation("Plex: Rating removed -> user='{User}', series='{Series}', {Type}='{Item}'", webhookEvent.Account?.Title, seriesName, typeLabel, itemTitle);
             return Ok(new { status = "ok", rated = false });
         }
 
-        DateTime? watchedAt = evt.Metadata.LastViewedAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(evt.Metadata.LastViewedAt.Value).UtcDateTime : null;
+        DateTime? watchedAt = webhookEvent.Metadata.LastViewedAt > 0 ? DateTimeOffset.FromUnixTimeSeconds(webhookEvent.Metadata.LastViewedAt.Value).UtcDateTime : null;
 
         if (isProgress)
         {
             if (userDataService.GetEpisodeUserData(shokoEpisode, user)?.IsWatched == true)
                 return Ok(new { status = "ignored", reason = "already_watched" });
 
-            if (evt.Metadata.ViewOffset.HasValue && evt.Metadata.ViewOffset.Value > 0)
+            if (webhookEvent.Metadata.ViewOffset.HasValue && webhookEvent.Metadata.ViewOffset.Value > 0)
             {
-                var update = new VideoUserDataUpdate { ProgressPosition = TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value), LastUpdatedAt = DateTime.UtcNow };
+                var update = new VideoUserDataUpdate { ProgressPosition = TimeSpan.FromMilliseconds(webhookEvent.Metadata.ViewOffset.Value), LastUpdatedAt = DateTime.UtcNow };
                 foreach (var video in shokoEpisode.Videos ?? [])
                     await userDataService.SaveVideoUserData(video, user, update, VideoUserDataSaveReason.PlaybackProgress).ConfigureAwait(false);
 
                 Logger.LogInformation(
                     "Plex: Progress updated -> user='{User}', series='{Series}', {Type}='{Item}', offset={Offset}",
-                    evt.Account?.Title,
+                    webhookEvent.Account?.Title,
                     seriesName,
                     typeLabel,
                     itemTitle,
-                    TimeSpan.FromMilliseconds(evt.Metadata.ViewOffset.Value)
+                    TimeSpan.FromMilliseconds(webhookEvent.Metadata.ViewOffset.Value)
                 );
                 return Ok(new { status = "ok", progress_updated = true });
             }
@@ -474,7 +474,7 @@ public class PlexController(
 
         var saved = await userDataService.SetEpisodeWatchedStatus(shokoEpisode, user, true, watchedAt, videoReason: VideoUserDataSaveReason.PlaybackEnd).ConfigureAwait(false);
         if (saved != null)
-            Logger.LogInformation("Plex: Scrobble applied -> user='{User}', series='{Series}', {Type}='{Item}'", evt.Account?.Title, seriesName, typeLabel, itemTitle);
+            Logger.LogInformation("Plex: Scrobble applied -> user='{User}', series='{Series}', {Type}='{Item}'", webhookEvent.Account?.Title, seriesName, typeLabel, itemTitle);
         return Ok(new { status = "ok", marked = saved != null });
     }
 

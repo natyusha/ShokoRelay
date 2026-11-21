@@ -262,7 +262,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     /// <param name="fileData">Mapping data for the current series.</param>
     /// <param name="vfsSeriesPaths">The target VFS series root paths to link the discovered files into.</param>
     /// <param name="videoBaseNames">A set of base names for indexed video files to prevent naming collisions.</param>
-    /// <param name="epPad">The episode number padding used for naming consistency.</param>
+    /// <param name="episodePad">The episode number padding used for naming consistency.</param>
     /// <param name="session">Active build session context containing cached recognized video paths.</param>
     /// <param name="onLink">Optional callback to record the created link for the VFS Browser blueprint.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
@@ -270,7 +270,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         MapHelper.SeriesFileData fileData,
         HashSet<string> vfsSeriesPaths,
         HashSet<string> videoBaseNames,
-        int epPad,
+        int episodePad,
         VfsBuildSession session,
         Action<string, string, string, string?>? onLink = null,
         bool skipExistenceCheck = false
@@ -332,7 +332,7 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                 foreach (var mapping in fileData.Mappings.Where(map => Path.GetFileNameWithoutExtension(map.FileName).Equals(parentBase, StringComparison.OrdinalIgnoreCase)))
                 {
                     string seasonFolder = VfsHelper.SanitizeName(PlexMapping.GetSeasonFolder(mapping.Coords.Season));
-                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(mapping, epPad, "", mapping.Video.LocalID)) + name[parentBase.Length..] + Path.GetExtension(file);
+                    string destName = Path.GetFileNameWithoutExtension(VfsHelper.BuildStandardFileName(mapping, episodePad, "", mapping.Video.LocalID)) + name[parentBase.Length..] + Path.GetExtension(file);
 
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
                     {
@@ -357,8 +357,8 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
     private static bool HasSubtitleLanguageCode(string suffix)
     {
         var parts = suffix.Split('.', StringSplitOptions.RemoveEmptyEntries);
-        for (int partIdx = 0; partIdx < parts.Length - 1; partIdx++)
-            if (!PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[partIdx]))
+        for (int partIndex = 0; partIndex < parts.Length - 1; partIndex++)
+            if (!PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[partIndex]))
                 return true;
         return false;
     }
@@ -373,23 +373,23 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         int priority = int.MaxValue;
         bool modified = false;
 
-        for (int partIdx = 1; partIdx < parts.Length - 1; partIdx++)
+        for (int partIndex = 1; partIndex < parts.Length - 1; partIndex++)
         {
-            if (PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[partIdx]))
+            if (PlexConstants.LocalMediaAssets.SubtitleModifiers.Contains(parts[partIndex]))
                 continue;
 
-            for (int mapIdx = 0; mapIdx < mappings.Count; mapIdx++)
+            for (int mapIndex = 0; mapIndex < mappings.Count; mapIndex++)
             {
-                var mapping = mappings.GetAt(mapIdx);
-                if (!parts[partIdx].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
+                var mapping = mappings.GetAt(mapIndex);
+                if (!parts[partIndex].Equals(mapping.Key.Trim(), StringComparison.OrdinalIgnoreCase))
                     continue;
 
                 string? replacement = mapping.Value?.Trim();
                 // Reuse the existing filename sanitizer to reject unsafe replacements, without changing other settings.
                 if (!string.IsNullOrEmpty(replacement) && !replacement.Contains('.') && VfsHelper.SanitizeName(replacement) == replacement)
                 {
-                    parts[partIdx] = replacement;
-                    priority = Math.Min(priority, mapIdx);
+                    parts[partIndex] = replacement;
+                    priority = Math.Min(priority, mapIndex);
                     modified = true;
                 }
                 break;

@@ -86,6 +86,7 @@ public class VfsWatcher(
         metadataService.SeriesRemoved += OnSeriesRemoved;
         linkingService.LinksChanged += OnLinksChanged;
         orderingService.EpisodeHiddenChanged += OnEpisodeHiddenChanged;
+        orderingService.PreferredOrderingChanged += OnPreferredOrderingChanged;
 
         logger.LogInformation("VFS: VfsWatcher -> Started (listening for relocation, matching, hidden, and deletion events)");
     }
@@ -106,6 +107,7 @@ public class VfsWatcher(
             metadataService.SeriesRemoved -= OnSeriesRemoved;
             linkingService.LinksChanged -= OnLinksChanged;
             orderingService.EpisodeHiddenChanged -= OnEpisodeHiddenChanged;
+            orderingService.PreferredOrderingChanged -= OnPreferredOrderingChanged;
 
             lock (_gate)
             {
@@ -245,31 +247,6 @@ public class VfsWatcher(
         KickProcessLoop();
     }
 
-    /// <summary>Handles Shoko episode hidden state changes, queueing affected series for VFS updates and cache invalidation.</summary>
-    /// <param name="sender">Event sender.</param>
-    /// <param name="event">Event parameters containing the episode identifier and new hidden state.</param>
-    private void OnEpisodeHiddenChanged(object? sender, EpisodeHiddenChangedEventArgs @event)
-    {
-        if (metadataService.GetEpisode(@event.EpisodeID) is not { } episode)
-            return;
-
-        IReadOnlyList<int> primaryIds = episode is IShokoEpisode shokoEpisode
-            ? [OverrideHelper.GetPrimary(shokoEpisode.ShokoSeriesID, metadataService)]
-            : [.. episode.ShokoEpisodes.Select(linkedEpisode => OverrideHelper.GetPrimary(linkedEpisode.ShokoSeriesID, metadataService)).Distinct()];
-
-        if (primaryIds.Count == 0)
-            return;
-
-        logger.LogDebug("VFS: Episode hidden state changed ({EpisodeId}, IsHidden={IsHidden}) -> Queueing VFS update", @event.EpisodeID, @event.IsHidden);
-        foreach (int primaryId in primaryIds)
-        {
-            plexMetadata.InvalidateCache(primaryId);
-            _pending[primaryId] = 1;
-        }
-
-        KickProcessLoop();
-    }
-
     /// <summary>Handles Shoko metadata link changes, queueing affected series for VFS updates and cache invalidation when TMDB links change.</summary>
     /// <param name="sender">Event sender.</param>
     /// <param name="event">Event parameters containing changed metadata links.</param>
@@ -303,6 +280,58 @@ public class VfsWatcher(
         {
             plexMetadata.InvalidateCache(targetId);
             _pending[targetId] = 1;
+        }
+
+        KickProcessLoop();
+    }
+
+    /// <summary>Handles Shoko episode hidden state changes, queueing affected series for VFS updates and cache invalidation.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing the episode identifier and new hidden state.</param>
+    private void OnEpisodeHiddenChanged(object? sender, EpisodeHiddenChangedEventArgs @event)
+    {
+        if (metadataService.GetEpisode(@event.EpisodeID) is not { } episode)
+            return;
+
+        IReadOnlyList<int> primaryIds = episode is IShokoEpisode shokoEpisode
+            ? [OverrideHelper.GetPrimary(shokoEpisode.ShokoSeriesID, metadataService)]
+            : [.. episode.ShokoEpisodes.Select(linkedEpisode => OverrideHelper.GetPrimary(linkedEpisode.ShokoSeriesID, metadataService)).Distinct()];
+
+        if (primaryIds.Count == 0)
+            return;
+
+        logger.LogDebug("VFS: Episode hidden state changed ({EpisodeId}, IsHidden={IsHidden}) -> Queueing VFS update", @event.EpisodeID, @event.IsHidden);
+        foreach (int primaryId in primaryIds)
+        {
+            plexMetadata.InvalidateCache(primaryId);
+            _pending[primaryId] = 1;
+        }
+
+        KickProcessLoop();
+    }
+
+    /// <summary>Handles Shoko preferred ordering changes, clearing cached series metadata contexts and queueing affected series for VFS updates.</summary>
+    /// <param name="sender">Event sender.</param>
+    /// <param name="event">Event parameters containing the series and ordering identifiers.</param>
+    private void OnPreferredOrderingChanged(object? sender, PreferredOrderingChangedEventArgs @event)
+    {
+        if (!EnforceTmdbNumbering || @event.SeriesID.Source != MetadataSource.TMDB || metadataService.GetSeries(@event.SeriesID) is not { } tmdbSeries)
+            return;
+
+        var affectedIds = tmdbSeries
+            .ShokoSeries.Concat(tmdbSeries.MetadataEpisodeCrossReferences.Select(xref => xref.ShokoSeries).OfType<IShokoSeries>())
+            .Select(series => series.GetPrimaryId(metadataService))
+            .Distinct()
+            .ToList();
+
+        if (affectedIds.Count == 0)
+            return;
+
+        logger.LogDebug("VFS: TMDB preferred ordering changed ({SeriesId} -> {OrderingId}) -> Queueing VFS update", @event.SeriesID, @event.OrderingID?.ID ?? "default");
+        foreach (int primaryId in affectedIds)
+        {
+            plexMetadata.InvalidateCache(primaryId);
+            _pending[primaryId] = 1;
         }
 
         KickProcessLoop();
@@ -389,7 +418,10 @@ public class VfsWatcher(
                     {
                         logger.LogInformation("VFS: Deferring VFS creation for {Count} series until fixup ({Delay}m delay)", activeIds.Count, Settings.Advanced.PlexFixupDelay);
                         foreach (var seriesId in activeIds)
+                        {
+                            plexMetadata.InvalidateCache(seriesId);
                             TriggerPlexUpdates(seriesId, deferScan: true);
+                        }
                     }
                 }
                 else

@@ -80,7 +80,7 @@ public class AnimeThemesController(
     {
         if (!string.IsNullOrWhiteSpace(path))
         {
-            var (entry, error, gen, wasSaved, changedFields) = await animeThemesMapping.ProcessSingleMappingAsync(path, save, anidbId, HttpContext.RequestAborted).ConfigureAwait(false);
+            var (entry, error, generatedFilename, wasSaved, changedFields) = await animeThemesMapping.ProcessSingleMappingAsync(path, save, anidbId, HttpContext.RequestAborted).ConfigureAwait(false);
             return error != null
                 ? Ok(new RelayResponse<object>(Status: "error", Message: error, Data: new { path }))
                 : Ok(
@@ -89,7 +89,7 @@ public class AnimeThemesController(
                         {
                             path,
                             saved = wasSaved,
-                            generatedFilename = gen,
+                            generatedFilename,
                             changedFields,
                             csvLine = entry != null ? AnimeThemesHelper.SerializeEntry(entry) : null,
                             entry,
@@ -127,17 +127,36 @@ public class AnimeThemesController(
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
 
-        string fullFolderPath;
+        string mappedPath = PlexLibrary.MapPlexPathToShokoPath(query.Path);
+        string? fullFolderPath = null;
         try
         {
-            fullFolderPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(query.Path));
+            if (Path.IsPathRooted(mappedPath))
+                fullFolderPath = Path.GetFullPath(mappedPath);
+            else
+            {
+                string relativeCandidate = VfsShared.NormalizeSeparators(mappedPath).TrimLeadingSlashes();
+                foreach (var folder in videoService.GetAllManagedFolders() ?? [])
+                {
+                    if (string.IsNullOrWhiteSpace(folder.Path))
+                        continue;
+
+                    string rootFull = Path.GetFullPath(folder.Path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    string candidate = Path.GetFullPath(Path.Combine(rootFull, relativeCandidate));
+                    if (candidate.StartsWith(rootFull, VfsShared.PathComparison) && Directory.Exists(candidate))
+                    {
+                        fullFolderPath = candidate;
+                        break;
+                    }
+                }
+            }
         }
         catch (ArgumentException)
         {
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Invalid path."));
         }
 
-        if (!IsInsideManagedFolders(fullFolderPath, allowRoot: true))
+        if (string.IsNullOrEmpty(fullFolderPath) || !IsInsideManagedFolders(fullFolderPath, allowRoot: true))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Path must be inside a configured Shoko managed folder."));
 
         query = query with { Path = fullFolderPath };
@@ -204,9 +223,9 @@ public class AnimeThemesController(
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
     /// <param name="path">The folder path containing the Theme.mp3.</param>
     /// <returns>A file stream result.</returns>
-    [Route("animethemes/mp3/stream")]
     [HttpGet]
     [HttpHead]
+    [Route("animethemes/mp3/stream")]
     public IActionResult AnimeThemesMp3Stream([FromQuery] string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -297,31 +316,31 @@ public class AnimeThemesController(
                     int? seriesId = null;
 
                     // Fast path: determine whether the ID preceding Shorts belongs to a Movie VFS (EpisodeID) or TV VFS (SeriesID)
-                    int shortsIdx = Array.FindIndex(segments, segment => string.Equals(segment, "Shorts", StringComparison.OrdinalIgnoreCase));
-                    if (shortsIdx > 0 && int.TryParse(segments[shortsIdx - 1], out int directId))
+                    int shortsIndex = Array.FindIndex(segments, segment => string.Equals(segment, "Shorts", StringComparison.OrdinalIgnoreCase));
+                    if (shortsIndex > 0 && int.TryParse(segments[shortsIndex - 1], out int directId))
                     {
-                        bool isMovieVfs = shortsIdx > 1 && string.Equals(segments[shortsIdx - 2], VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase);
+                        bool isMovieVfs = shortsIndex > 1 && string.Equals(segments[shortsIndex - 2], VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase);
                         if (isMovieVfs)
                         {
-                            if (MetadataService.GetShokoEpisodeByID(directId) is { ShokoSeriesID: var epSeriesId })
-                                seriesId = epSeriesId;
+                            if (MetadataService.GetShokoEpisodeByID(directId) is { ShokoSeriesID: var episodeSeriesId })
+                                seriesId = episodeSeriesId;
                         }
                         else if (MetadataService.GetShokoSeriesByID(directId) is { } series)
                             seriesId = series.LocalID;
                     }
-                    else if (shortsIdx < 0)
-                        for (int segIdx = segments.Length - 1; segIdx >= 0; segIdx--)
+                    else if (shortsIndex < 0)
+                        for (int segmentIndex = segments.Length - 1; segmentIndex >= 0; segmentIndex--)
                         {
-                            if (int.TryParse(segments[segIdx], out int candidateId))
+                            if (int.TryParse(segments[segmentIndex], out int candidateId))
                             {
                                 if (MetadataService.GetShokoSeriesByID(candidateId) is { } series)
                                 {
                                     seriesId = series.LocalID;
                                     break;
                                 }
-                                if (MetadataService.GetShokoEpisodeByID(candidateId) is { ShokoSeriesID: var epSeriesId })
+                                if (MetadataService.GetShokoEpisodeByID(candidateId) is { ShokoSeriesID: var episodeSeriesId })
                                 {
-                                    seriesId = epSeriesId;
+                                    seriesId = episodeSeriesId;
                                     break;
                                 }
                             }

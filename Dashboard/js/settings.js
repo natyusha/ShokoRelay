@@ -45,15 +45,15 @@
     const isPlexLinked = !!window._sr.isPlexLinked;
     const isSyncActive = element("sync-users")?.value !== "4";
 
-    document.querySelectorAll(".plex-auth, .sync-user").forEach((elem) => {
-      const reqPlex = elem.classList.contains("plex-auth");
-      const reqSync = elem.classList.contains("sync-user");
-      const isDisabled = (reqPlex && !isPlexLinked) || (reqSync && !isSyncActive);
+    document.querySelectorAll(".plex-auth, .sync-user").forEach((targetElement) => {
+      const requiresPlex = targetElement.classList.contains("plex-auth");
+      const requiresSync = targetElement.classList.contains("sync-user");
+      const isDisabled = (requiresPlex && !isPlexLinked) || (requiresSync && !isSyncActive);
 
-      if (["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(elem.tagName)) elem.disabled = isDisabled;
+      if (["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(targetElement.tagName)) targetElement.disabled = isDisabled;
 
-      const message = isDisabled ? (reqPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected") : "";
-      const parent = elem.closest("label, .w100, .dsbld-wrap") || elem.parentElement;
+      const message = isDisabled ? (requiresPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected") : "";
+      const parent = targetElement.closest("label, .w100, .dsbld-wrap") || targetElement.parentElement;
 
       if (parent) {
         if (message) parent.title = message;
@@ -66,9 +66,9 @@
     });
 
     const overridesBtn = element("vfs-overrides");
-    const cfg = config || window.relaySettings;
-    if (overridesBtn && cfg) {
-      const isDisabled = !(window._sr.getValueByPath(cfg, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(cfg, "Advanced.MergeTmdbSeries"));
+    const activeConfig = config || window.relaySettings;
+    if (overridesBtn && activeConfig) {
+      const isDisabled = !(window._sr.getValueByPath(activeConfig, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(activeConfig, "Advanced.MergeTmdbSeries"));
       overridesBtn.disabled = isDisabled;
 
       const parent = overridesBtn.closest(".w100, div") || overridesBtn.parentElement;
@@ -131,6 +131,10 @@
     const menu = document.createElement("div");
     menu.className = "multiselect-menu";
 
+    /**
+     * Updates the multiselect summary text from the active bitmask.
+     * @returns {void}
+     */
     const updateSummary = () => {
       const activeNames = enumValues.filter((enumVal) => (mask & enumVal.value) === enumVal.value).map((enumVal) => enumVal.name);
       textSpan.textContent = activeNames.length ? activeNames.join(", ") : "None";
@@ -274,9 +278,13 @@
         });
         wrap.appendChild(input);
 
-        // Custom save handler to force-reload the dynamic theme stylesheet instantly on dropdown change
-        const customSave = async (cfg) => {
-          await saveSettings(cfg);
+        /**
+         * Persists settings and reloads the dynamic theme stylesheet on change.
+         * @param {Object} activeConfig - The updated configuration object.
+         * @returns {Promise<void>}
+         */
+        const customSave = async (activeConfig) => {
+          await saveSettings(activeConfig);
           const link = document.querySelector('link[href*="theme.css"]');
           if (link) link.href = `../theme.css?t=${new Date().getTime()}`;
         };
@@ -391,10 +399,10 @@
     };
     for (const [id, path] of Object.entries(autoMap)) {
       bindField(id, "Automation." + path, "number");
-      const inputEl = element(id);
-      if (inputEl) {
-        inputEl.oninput = () => {
-          inputEl.value = inputEl.value.replace(id === "shoko-utc-offset" ? /[^-0-9]/g : /[^0-9]/g, "");
+      const inputElement = element(id);
+      if (inputElement) {
+        inputElement.oninput = () => {
+          inputElement.value = inputElement.value.replace(id === "shoko-utc-offset" ? /[^-0-9]/g : /[^0-9]/g, "");
         };
       }
     }

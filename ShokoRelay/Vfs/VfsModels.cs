@@ -137,7 +137,7 @@ public sealed class VfsBuildSession(IVideoService? videoService = null)
 /// <param name="fileData">Consolidated file mappings for the series.</param>
 /// <param name="videoBaseNames">Base filenames of all indexed video files.</param>
 /// <param name="coordCounts">Counts per coordinate/variation bucket.</param>
-/// <param name="epPad">Episode padding digit count.</param>
+/// <param name="episodePad">Episode padding digit count.</param>
 /// <param name="extraPad">Extra padding digit counts per season.</param>
 /// <param name="onLink">Optional callback for recording blueprint entries.</param>
 internal sealed class SeriesBuildState(
@@ -152,7 +152,7 @@ internal sealed class SeriesBuildState(
     MapHelper.SeriesFileData fileData,
     HashSet<string> videoBaseNames,
     Dictionary<(int Season, int Episode, bool IsVariation), int> coordCounts,
-    int epPad,
+    int episodePad,
     Dictionary<int, int> extraPad,
     Action<string, string, string, string?>? onLink
 )
@@ -191,7 +191,7 @@ internal sealed class SeriesBuildState(
     public Dictionary<(int Season, int Episode, bool IsVariation), int> CoordCounts { get; } = coordCounts;
 
     /// <summary>Episode padding digit count.</summary>
-    public int EpPad { get; } = epPad;
+    public int EpisodePad { get; } = episodePad;
 
     /// <summary>Extra padding digit counts per season.</summary>
     public Dictionary<int, int> ExtraPad { get; } = extraPad;

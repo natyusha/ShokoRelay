@@ -67,6 +67,10 @@ public static partial class TextHelper
     [GeneratedRegex(@"^[A-Za-z0-9][A-Za-z0-9_-]*$")]
     public static partial Regex ThemeIdRegex();
 
+    /// <summary>Regex matching CSS block comments, quoted strings, or top-level semicolons.</summary>
+    [GeneratedRegex(@"/\*[\s\S]*?\*/|""(?:\\[\s\S]|[^""\\])*""|'(?:\\[\s\S]|[^'\\])*'|(?<semi>;)")]
+    private static partial Regex CssTopLevelSemicolonRegex();
+
     #endregion
 
     #region General Text Helpers
@@ -153,6 +157,18 @@ public static partial class TextHelper
         }
 
         return (blacklist, merges, mergeMentioned);
+    }
+
+    /// <summary>Finds the last semicolon in a CSS prefix while ignoring block comments and quoted string literals.</summary>
+    /// <param name="cssPrefix">The CSS text preceding the first opening brace.</param>
+    /// <returns>The zero-based index of the last top-level semicolon, or <c>-1</c> if none exists.</returns>
+    public static int FindLastTopLevelSemicolon(string cssPrefix)
+    {
+        int lastSemicolon = -1;
+        foreach (Match match in CssTopLevelSemicolonRegex().Matches(cssPrefix))
+            if (match.Groups["semi"].Success)
+                lastSemicolon = match.Index;
+        return lastSemicolon;
     }
 
     #endregion
@@ -399,7 +415,7 @@ public static partial class TextHelper
             resolvedSeriesTitle = "Unknown";
 
         // Fast-path: Check if there is more than 1 main episode by skipping the first match. This avoids iterating over the entire episode list.
-        bool hasMultipleMainEpisodes = series.Episodes.Where(episode => episode.Type == EpisodeType.Episode).Skip(1).Any();
+        bool hasMultipleMainEpisodes = series.Episodes.Where(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode).Skip(1).Any();
         if (!hasMultipleMainEpisodes)
             return resolvedSeriesTitle;
 

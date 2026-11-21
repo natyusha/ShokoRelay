@@ -84,8 +84,12 @@ internal static class RelayAuthSession
                 return null;
 
             string text = Encoding.UTF8.GetString(payload);
-            int sep = text.IndexOf(':');
-            return sep <= 0 || !int.TryParse(text[..sep], out int userId) || !long.TryParse(text[(sep + 1)..], out long expUnix) || DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expUnix
+            int separatorIndex = text.IndexOf(':');
+            return
+                separatorIndex <= 0
+                || !int.TryParse(text[..separatorIndex], out int userId)
+                || !long.TryParse(text[(separatorIndex + 1)..], out long expiresUnix)
+                || DateTimeOffset.UtcNow.ToUnixTimeSeconds() > expiresUnix
                 ? null
                 : userService.GetUserByID(userId);
         }
@@ -254,12 +258,12 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             // Handle AniDB ID prefix (e.g. "a69" for One Piece)
             if (raw.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                if (int.TryParse(raw[PlexConstants.AniDbPrefix.Length..], out int aid) && aid > 0)
+                if (int.TryParse(raw[PlexConstants.AniDbPrefix.Length..], out int anidbId) && anidbId > 0)
                 {
-                    if (MetadataService.GetShokoSeriesByAnidbID(aid) is { } series)
+                    if (MetadataService.GetShokoSeriesByAnidbID(anidbId) is { } series)
                         ids.Add(series.LocalID);
                     else
-                        errors.Add($"No Shoko Series found for AniDB ID: {aid}");
+                        errors.Add($"No Shoko Series found for AniDB ID: {anidbId}");
                 }
                 else
                     errors.Add($"Invalid AniDB ID format: {raw}");
@@ -397,9 +401,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             return collected;
         var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var (library, srv) in pairs)
+        foreach (var (library, server) in pairs)
         {
-            var key = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : $"{srv.PreferredUri}::{library.Id}";
+            var key = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : $"{server.PreferredUri}::{library.Id}";
             if (!seenKeys.Add(key))
                 continue;
 
@@ -411,9 +415,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     Type = library.Type,
                     Agent = library.Agent,
                     Uuid = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : key,
-                    ServerId = srv.Id,
-                    ServerName = srv.Name,
-                    ServerUrl = srv.PreferredUri ?? string.Empty,
+                    ServerId = server.Id,
+                    ServerName = server.Name,
+                    ServerUrl = server.PreferredUri ?? string.Empty,
                     Locations = library.Locations,
                 }
             );

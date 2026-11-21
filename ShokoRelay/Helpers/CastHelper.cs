@@ -72,10 +72,10 @@ public static class CastHelper
     {
         try
         {
-            var asm = typeof(CastHelper).Assembly;
+            var assembly = typeof(CastHelper).Assembly;
             if (
-                asm.GetManifestResourceNames().FirstOrDefault(resName => resName.EndsWith(ShokoRelayConstants.FileDefaultCreditOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
-                && asm.GetManifestResourceStream(resName) is { } stream
+                assembly.GetManifestResourceNames().FirstOrDefault(resourceName => resourceName.EndsWith(ShokoRelayConstants.FileDefaultCreditOverrides, StringComparison.OrdinalIgnoreCase)) is { } resourceName
+                && assembly.GetManifestResourceStream(resourceName) is { } stream
             )
                 using (stream)
                 using (var reader = new StreamReader(stream, Encoding.UTF8))

@@ -154,27 +154,34 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
     /// <param name="collectionName">Collection name.</param>
     /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="skipCheck">When <c>true</c>, skips the pre-flight Plex GET check if the caller has already verified collection membership.</param>
     /// <returns>True on success.</returns>
-    public async Task<bool> AssignCollectionToItemByMetadataAsync(int ratingKey, string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    public async Task<bool> AssignCollectionToItemByMetadataAsync(int ratingKey, string collectionName, PlexLibraryTarget target, CancellationToken cancellationToken = default, bool skipCheck = false)
     {
         if (!IsEnabled || ratingKey <= 0 || string.IsNullOrWhiteSpace(collectionName) || target == null)
             return false;
 
-        using var checkReq = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
-        using var checkResp = await httpClient.SendAsync(checkReq, cancellationToken).ConfigureAwait(false);
-        return (
-                checkResp.IsSuccessStatusCode
-                && (await PlexApi.ReadContainerAsync(checkResp, cancellationToken).ConfigureAwait(false))
+        if (!skipCheck)
+        {
+            using var checkRequest = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Size=1", target.ServerUrl);
+            using var checkResponse = await httpClient.SendAsync(checkRequest, cancellationToken).ConfigureAwait(false);
+            if (
+                checkResponse.IsSuccessStatusCode
+                && (await PlexApi.ReadContainerAsync(checkResponse, cancellationToken).ConfigureAwait(false))
                     ?.Metadata?.FirstOrDefault()
                     ?.Collection?.Any(tagEntry => string.Equals(tagEntry.Tag, collectionName, StringComparison.OrdinalIgnoreCase)) == true
             )
-            || await ExecuteActionAsync(
+                return true;
+        }
+
+        return await ExecuteActionAsync(
                 HttpMethod.Put,
                 $"/library/metadata/{ratingKey}?collection%5B0%5D.tag.tag={Uri.EscapeDataString(collectionName)}",
                 target,
                 $"Assign '{collectionName}' to {ratingKey}",
                 cancellationToken
-            );
+            )
+            .ConfigureAwait(false);
     }
 
     /// <summary>Removes a collection tag from an item by updating metadata.</summary>

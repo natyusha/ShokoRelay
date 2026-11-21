@@ -217,7 +217,7 @@ public class CollectionService(
                     cacheModified = true;
                 }
 
-                var posted = new HashSet<(int Cid, string Prefix)>();
+                var posted = new HashSet<(int CollectionId, string Prefix)>();
 
                 foreach (var item in items)
                 {
@@ -269,7 +269,7 @@ public class CollectionService(
 
                         if (!string.IsNullOrEmpty(collectionName) && !alreadyHasCorrect)
                         {
-                            var assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken).ConfigureAwait(false);
+                            var assignmentOk = await plexCollections.AssignCollectionToItemByMetadataAsync(plexKey, collectionName, target, cancellationToken, skipCheck: true).ConfigureAwait(false);
                             if (assignmentOk)
                             {
                                 created++;

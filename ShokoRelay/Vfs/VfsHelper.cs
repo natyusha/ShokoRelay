@@ -138,85 +138,85 @@ public static partial class VfsHelper
 
     /// <summary>Builds a standard episode filename based on coordinates, versioning, and variation status.</summary>
     /// <param name="mapping">The mapping containing coordinates and video data.</param>
-    /// <param name="pad">The number of digits to pad the episode number with.</param>
-    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="padding">The number of digits to pad the episode number with.</param>
+    /// <param name="extension">The file extension (including the dot).</param>
     /// <param name="fileId">The unique Shoko video identifier.</param>
     /// <param name="omitFileId">Whether to exclude the Shoko video identifier from the filename.</param>
-    /// <param name="partIdx">The 1-based index for multi-part files.</param>
+    /// <param name="partIndex">The 1-based index for multi-part files.</param>
     /// <param name="partCount">The total number of parts for the file.</param>
-    /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
+    /// <param name="versionIndex">The 1-based version index for duplicate items in the same variation bucket.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
     /// <returns>A formatted filename string (e.g., "S01E01-dup1 [123][variation].mkv").</returns>
     public static string BuildStandardFileName(
         MapHelper.FileMapping mapping,
-        int pad,
-        string ext,
+        int padding,
+        string extension,
         int fileId,
         bool omitFileId = false,
-        int? partIdx = null,
+        int? partIndex = null,
         int? partCount = null,
-        int? vIdx = null,
+        int? versionIndex = null,
         bool isVariation = false
     ) =>
         FormatVfsFileName(
             mapping.Coords.EndEpisode.HasValue && mapping.Coords.EndEpisode != mapping.Coords.Episode
-                ? $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}-E{mapping.Coords.EndEpisode.Value.ToString($"D{pad}")}"
-                : $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{pad}")}",
+                ? $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{padding}")}-E{mapping.Coords.EndEpisode.Value.ToString($"D{padding}")}"
+                : $"S{mapping.Coords.Season:D2}E{mapping.Coords.Episode.ToString($"D{padding}")}",
             mapping,
-            ext,
+            extension,
             fileId,
             omitFileId,
-            partIdx,
+            partIndex,
             partCount,
-            vIdx,
+            versionIndex,
             isVariation
         );
 
     /// <summary>Builds a movie filename based on part indexing, versioning, and variation status.</summary>
     /// <param name="mapping">The mapping containing coordinates and video data.</param>
-    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="extension">The file extension (including the dot).</param>
     /// <param name="fileId">The unique Shoko video identifier.</param>
     /// <param name="omitFileId">Whether to exclude the Shoko video identifier from the filename.</param>
-    /// <param name="partIdx">The 1-based index for multi-part files.</param>
+    /// <param name="partIndex">The 1-based index for multi-part files.</param>
     /// <param name="partCount">The total number of parts for the file.</param>
-    /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
+    /// <param name="versionIndex">The 1-based version index for duplicate items in the same variation bucket.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
     /// <returns>A formatted movie filename string (e.g., "Movie [{ShokoFileID}].mkv").</returns>
     public static string BuildMovieFileName(
         MapHelper.FileMapping mapping,
-        string ext,
+        string extension,
         int fileId,
         bool omitFileId = false,
-        int? partIdx = null,
+        int? partIndex = null,
         int? partCount = null,
-        int? vIdx = null,
+        int? versionIndex = null,
         bool isVariation = false
-    ) => FormatVfsFileName("Movie", mapping, ext, fileId, omitFileId, partIdx, partCount, vIdx, isVariation);
+    ) => FormatVfsFileName("Movie", mapping, extension, fileId, omitFileId, partIndex, partCount, versionIndex, isVariation);
 
     /// <summary>Appends part indexing, versioning, file ID, and variation tags to a base VFS filename.</summary>
     /// <param name="baseName">The base prefix (e.g. "S01E01" or "Movie").</param>
     /// <param name="mapping">The mapping containing part and variation metadata.</param>
-    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="extension">The file extension (including the dot).</param>
     /// <param name="fileId">The unique Shoko video identifier.</param>
     /// <param name="omitFileId">Whether to exclude the Shoko video identifier from the filename.</param>
-    /// <param name="partIdx">The 1-based index for multi-part files.</param>
+    /// <param name="partIndex">The 1-based index for multi-part files.</param>
     /// <param name="partCount">The total number of parts for the file.</param>
-    /// <param name="vIdx">The 1-based version index for duplicate items in the same variation bucket.</param>
+    /// <param name="versionIndex">The 1-based version index for duplicate items in the same variation bucket.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
     /// <returns>A formatted VFS filename string.</returns>
-    private static string FormatVfsFileName(string baseName, MapHelper.FileMapping mapping, string ext, int fileId, bool omitFileId, int? partIdx, int? partCount, int? vIdx, bool isVariation)
+    private static string FormatVfsFileName(string baseName, MapHelper.FileMapping mapping, string extension, int fileId, bool omitFileId, int? partIndex, int? partCount, int? versionIndex, bool isVariation)
     {
         string name = baseName;
         int totalParts = partCount ?? mapping.PartCount;
         if (totalParts > 1)
-            name += $"-pt{partIdx ?? mapping.PartIndex}";
-        else if (vIdx.HasValue)
-            name += $"-dup{vIdx}";
+            name += $"-pt{partIndex ?? mapping.PartIndex}";
+        else if (versionIndex.HasValue)
+            name += $"-dup{versionIndex}";
 
         string result = omitFileId ? name : $"{name} [{fileId}]";
         if (isVariation && totalParts <= 1)
             result += "[variation]";
-        return result + ext;
+        return result + extension;
     }
 
     /// <summary>Builds a filename for extra content (trailers, credits, etc.) using special type prefixes and title metadata.</summary>

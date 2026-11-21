@@ -346,7 +346,14 @@
                 data-relay-method="POST"
                 data-relay-label="Purge Missing"
                 data-relay-persist="true"
-                data-relay-confirm="Are you sure you want to purge all records for missing files?<br><br><small>This will permanently remove them from Shoko's database and your AniDB MyList.<br><br>If <b>Empty Plex Trash Threshold</b> is configured, Plex's trash will also be emptied safely.</small>"
+                data-relay-confirm="
+                  Are you sure you want to purge all records for missing files?<br><br>
+                  <small>
+                    This will permanently remove them from Shoko's database.<br>
+                    The configured <b>AniDB > MyList Options > Delete Action</b> will also be triggered.<br><br>
+                    If <b>Empty Plex Trash Threshold</b> is configured, Plex's trash will also be emptied safely.
+                  </small>
+                "
                 data-relay-confirm-dry="true"
                 data-relay-confirm-button="Purge Files"
               >

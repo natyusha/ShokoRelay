@@ -280,11 +280,11 @@ public class DashboardController(
                 string wrappedCss = rawCss;
                 if (!string.IsNullOrEmpty(rawCss))
                 {
-                    int braceIdx = rawCss.IndexOf('{');
-                    if (braceIdx < 0)
+                    int braceIndex = rawCss.IndexOf('{');
+                    if (braceIndex < 0)
                         wrappedCss = $":root {{\n{rawCss}\n}}";
-                    else if (rawCss[..braceIdx].LastIndexOf(';') is int lastSemi && lastSemi >= 0 && !rawCss[..lastSemi].TrimStart().StartsWith('@'))
-                        wrappedCss = $":root {{\n{rawCss[..(lastSemi + 1)].Trim()}\n}}\n{rawCss[(lastSemi + 1)..].TrimStart()}";
+                    else if (TextHelper.FindLastTopLevelSemicolon(rawCss[..braceIndex]) is int lastSemicolon && lastSemicolon >= 0 && !rawCss[..lastSemicolon].TrimStart().StartsWith('@'))
+                        wrappedCss = $":root {{\n{rawCss[..(lastSemicolon + 1)].Trim()}\n}}\n{rawCss[(lastSemicolon + 1)..].TrimStart()}";
                 }
                 cssContent = $"{valuesCss}{wrappedCss}";
             }

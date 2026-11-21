@@ -111,9 +111,9 @@ public class SyncToPlex(
             ];
         }
 
-        var matchedGlobal = new HashSet<(int ShokoUserId, int EpisodeId)>();
-        var activeSourceEpisodes = new HashSet<(int ShokoUserId, int EpisodeId)>();
-        var prefIdCache = new Dictionary<int, string?>();
+        var matchedGlobal = new HashSet<(string PlexUser, int EpisodeId)>();
+        var activeSourceEpisodes = new HashSet<(string PlexUser, int EpisodeId)>();
+        var preferredOrderingIdCache = new Dictionary<int, string?>();
 
         foreach (var target in targets)
         {
@@ -156,7 +156,7 @@ public class SyncToPlex(
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
                 var userWatched = GetShokoWatchedForUser(targetShokoUser);
                 foreach (var (userData, _) in userWatched)
-                    activeSourceEpisodes.Add((targetShokoUser.LocalID, userData.EpisodeID));
+                    activeSourceEpisodes.Add((userName, userData.EpisodeID));
 
                 result.PerUser[userName] = result.PerUser[userName] with { Processed = Math.Max(result.PerUser[userName].Processed, userWatched.Count) };
 
@@ -180,7 +180,7 @@ public class SyncToPlex(
                     if (!plexMap.TryGetValue(episode.LocalID, out var plexItems))
                         continue;
 
-                    matchedGlobal.Add((targetShokoUser.LocalID, episode.LocalID));
+                    matchedGlobal.Add((userName, episode.LocalID));
 
                     foreach (var plexItem in plexItems.DistinctBy(item => item.RatingKey))
                     {
@@ -203,11 +203,11 @@ public class SyncToPlex(
                             scrobbled = true;
                         }
 
-                        string? prefId = null;
-                        if (episode!.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
-                            prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+                        string? preferredOrderingId = null;
+                        if (episode!.Series != null && !preferredOrderingIdCache.TryGetValue(episode.ShokoSeriesID, out preferredOrderingId))
+                            preferredOrderingIdCache[episode.ShokoSeriesID] = preferredOrderingId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                        var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
+                        var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
                         string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
 
                         if (scrobbled)

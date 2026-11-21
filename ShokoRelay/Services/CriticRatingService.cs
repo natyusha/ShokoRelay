@@ -185,7 +185,11 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     CriticRatingMode.TMDB => (episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? episode.Series?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault())
                         is { Rating: > 0 } tmdbMovie
                         ? tmdbMovie.Rating
-                        : (episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbEpisode ? tmdbEpisode.Rating : null),
+                        : (
+                            episode.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbEpisode
+                                ? tmdbEpisode.Rating
+                                : (episode.Series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } tmdbSeries ? tmdbSeries.Rating : null)
+                        ),
                     CriticRatingMode.AniDB => episode.Rating > 0 ? episode.Rating : (episode.Series?.Rating > 0 ? episode.Series.Rating : null),
                     _ => null,
                 };

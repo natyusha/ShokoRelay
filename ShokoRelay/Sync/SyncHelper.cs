@@ -216,24 +216,24 @@ public static class SyncHelper
     #region Stat Counters
 
     /// <summary>Updates global and per-user sync counters.</summary>
-    /// <param name="res">Current sync result.</param>
+    /// <param name="result">Current sync result.</param>
     /// <param name="perUser">Per-user counter dictionary.</param>
     /// <param name="user">Target Plex username.</param>
     /// <param name="global">Transform applied to the global sync result.</param>
-    /// <param name="usr">Transform applied to the user's result.</param>
+    /// <param name="userTransform">Transform applied to the user's result.</param>
     /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
     private static PlexWatchedSyncResult UpdateStat(
-        PlexWatchedSyncResult res,
+        PlexWatchedSyncResult result,
         Dictionary<string, PlexWatchedUserResult>? perUser,
         string? user,
         Func<PlexWatchedSyncResult, PlexWatchedSyncResult> global,
-        Func<PlexWatchedUserResult, PlexWatchedUserResult> usr
+        Func<PlexWatchedUserResult, PlexWatchedUserResult> userTransform
     )
     {
-        res = global(res);
+        result = global(result);
         if (perUser != null && !string.IsNullOrWhiteSpace(user) && perUser.TryGetValue(user, out var stats))
-            perUser[user] = usr(stats);
-        return res;
+            perUser[user] = userTransform(stats);
+        return result;
     }
 
     /// <summary>Increment processed count.</summary>
@@ -269,31 +269,31 @@ public static class SyncHelper
         UpdateStat(result, perUser, user, entry => entry with { Skipped = entry.Skipped + 1 }, entry => entry with { Skipped = entry.Skipped + 1 });
 
     /// <summary>Increment found votes.</summary>
-    /// <param name="res">Current sync result.</param>
+    /// <param name="result">Current sync result.</param>
     /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
-    public static PlexWatchedSyncResult IncVotesFound(PlexWatchedSyncResult res) => res with { VotesFound = res.VotesFound + 1 };
+    public static PlexWatchedSyncResult IncVotesFound(PlexWatchedSyncResult result) => result with { VotesFound = result.VotesFound + 1 };
 
     /// <summary>Increment updated votes.</summary>
-    /// <param name="res">Current sync result.</param>
+    /// <param name="result">Current sync result.</param>
     /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
-    public static PlexWatchedSyncResult IncVotesUpdated(PlexWatchedSyncResult res) => res with { VotesUpdated = res.VotesUpdated + 1 };
+    public static PlexWatchedSyncResult IncVotesUpdated(PlexWatchedSyncResult result) => result with { VotesUpdated = result.VotesUpdated + 1 };
 
     /// <summary>Increment skipped votes.</summary>
-    /// <param name="res">Current sync result.</param>
+    /// <param name="result">Current sync result.</param>
     /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
-    public static PlexWatchedSyncResult IncVotesSkipped(PlexWatchedSyncResult res) => res with { VotesSkipped = res.VotesSkipped + 1 };
+    public static PlexWatchedSyncResult IncVotesSkipped(PlexWatchedSyncResult result) => result with { VotesSkipped = result.VotesSkipped + 1 };
 
     /// <summary>Record a sync error.</summary>
-    /// <param name="res">Current sync result.</param>
+    /// <param name="result">Current sync result.</param>
     /// <param name="perUser">Per-user counter dictionary.</param>
     /// <param name="user">Target Plex username.</param>
     /// <param name="message">Optional error message to append.</param>
     /// <returns>The updated <see cref="PlexWatchedSyncResult"/>.</returns>
-    public static PlexWatchedSyncResult RecordError(PlexWatchedSyncResult res, Dictionary<string, PlexWatchedUserResult>? perUser = null, string? user = null, string? message = null)
+    public static PlexWatchedSyncResult RecordError(PlexWatchedSyncResult result, Dictionary<string, PlexWatchedUserResult>? perUser = null, string? user = null, string? message = null)
     {
         if (!string.IsNullOrWhiteSpace(message))
-            res.ErrorsList.Add(message);
-        return UpdateStat(res, perUser, user, stats => stats with { Errors = stats.Errors + 1 }, stats => stats with { Errors = stats.Errors + 1 });
+            result.ErrorsList.Add(message);
+        return UpdateStat(result, perUser, user, stats => stats with { Errors = stats.Errors + 1 }, stats => stats with { Errors = stats.Errors + 1 });
     }
 
     #endregion
@@ -404,7 +404,7 @@ public static class SyncHelper
                 string.Equals(user.Title?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(user.Username?.Trim(), userName, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(user.Uuid, userName, StringComparison.OrdinalIgnoreCase)
-                || (int.TryParse(userName, out var exId) && user.Id == exId)
+                || (int.TryParse(userName, out var expectedId) && user.Id == expectedId)
             );
 
             if (matchedHome != null)

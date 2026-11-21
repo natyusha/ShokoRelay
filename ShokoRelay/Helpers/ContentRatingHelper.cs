@@ -41,9 +41,9 @@ public static class ContentRatingHelper
 
     /// <summary>Determine a combined rating string and an adult flag for a series or movie based on metadata, tags, and TMDB fallback.</summary>
     /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="fallback">Optional entity containing TMDB content ratings (e.g. TMDB series, movie, or season).</param>
+    /// <param name="fallbackRatings">Optional entity containing TMDB content ratings (e.g. TMDB series, movie, or season).</param>
     /// <returns>A tuple of (Rating, IsAdult).</returns>
-    public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series, IWithContentRatings? fallback = null)
+    public static (string? Rating, bool IsAdult) GetContentRatingAndAdult(ISeries? series, IWithContentRatings? fallbackRatings = null)
     {
         s_ratingState ??= new RatingState();
         var tagSet = s_ratingState.TagSet;
@@ -52,26 +52,9 @@ public static class ContentRatingHelper
         tagSet.Clear();
         anidbWeights.Clear();
 
-        var tags = (series as IShokoSeries)?.Tags;
-        if (tags != null)
-        {
-            foreach (var tag in tags)
-            {
-                if (tag == null)
-                    continue;
-                var name = tag.Name?.Trim();
-                if (string.IsNullOrWhiteSpace(name))
-                    continue;
-                if (tag.ID.Source == MetadataSource.User)
-                    continue;
-                if (!s_ratingTags.Contains(name))
-                    continue;
-                tagSet.Add(name);
-            }
-        }
-
         // Build AniDB weight dictionary and populate tagSet for precision-based decisions (defaults to 0 when not present).
-        if (series is IShokoSeries shokoSeries && shokoSeries.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
+        var anidbTags = (series as IShokoSeries)?.AnidbAnime?.Tags ?? (series as IAnidbAnime)?.Tags;
+        if (anidbTags != null)
         {
             foreach (var animeTag in anidbTags)
             {
@@ -145,7 +128,7 @@ public static class ContentRatingHelper
         }
 
         // Fallback to TMDB content ratings when assumed ratings are disabled or undetermined
-        string? tmdbRating = GetTmdbContentRating(series, fallback);
+        string? tmdbRating = GetTmdbContentRating(series, fallbackRatings);
         return !string.IsNullOrWhiteSpace(tmdbRating) ? (tmdbRating, tmdbRating is "X" or "18+" or "R18+") : (null, false);
     }
 

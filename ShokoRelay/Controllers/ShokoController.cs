@@ -280,9 +280,9 @@ public class ShokoController(
     /// <param name="trashOnly">If true, skips Shoko database purging and only evaluates/empties Plex trash.</param>
     /// <param name="threshold">Optional percentage threshold override (1-100) for Plex trash empty.</param>
     /// <returns>A task representing the result of the purge/empty operation.</returns>
-    [Route("shoko/purge-missing")]
     [HttpGet]
     [HttpPost]
+    [Route("shoko/purge-missing")]
     public Task<IActionResult> PurgeMissingFiles([FromQuery] bool dryRun = true, [FromQuery] bool trashOnly = false, [FromQuery] int? threshold = null) =>
         ExecuteTrackedTaskAsync(
             ShokoRelayConstants.TaskShokoPurgeMissing,
@@ -356,9 +356,9 @@ public class ShokoController(
     /// <param name="users">Optional override for the sync users configuration (0: All, 1: Admin, 2: Extra, 3: Advanced, 4: None). Defaults to configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library by name.</param>
     /// <returns>A task representing the result of the synchronization.</returns>
-    [Route("sync-watched")]
     [HttpGet]
     [HttpPost]
+    [Route("sync-watched")]
     public Task<IActionResult> SyncPlexWatched(
         [FromQuery] bool dryRun = true,
         [FromQuery] int? sinceHours = null,
@@ -493,8 +493,8 @@ public class ShokoController(
             .GetAllImages(new ImageFilteringOptions { ImageSource = MetadataSource.Generated })
             .Concat(imageManager.GetAllImages(new ImageFilteringOptions { ImageSource = MetadataSource.User }))
             .ToList();
-        foreach (var img in localImages)
-            if (await imageManager.PurgeImage(img).ConfigureAwait(false))
+        foreach (var image in localImages)
+            if (await imageManager.PurgeImage(image).ConfigureAwait(false))
                 purgedCount++;
 
         Logger.LogInformation("Shoko: Legacy purging complete. Purged {Count} images.", purgedCount);

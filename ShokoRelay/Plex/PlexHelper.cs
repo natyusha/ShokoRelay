@@ -96,14 +96,14 @@ public static partial class PlexHelper
         }
 
         // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
-        int seasonIdx = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
-        var seriesPart = seasonIdx >= 0 ? ratingKey[..seasonIdx] : ratingKey;
+        int seasonIndex = ratingKey.IndexOf(PlexConstants.SeasonPrefix, StringComparison.OrdinalIgnoreCase);
+        var seriesPart = seasonIndex >= 0 ? ratingKey[..seasonIndex] : ratingKey;
         return seriesPart.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase)
             ? int.TryParse(seriesPart[PlexConstants.AniDbPrefix.Length..], out var anidb)
                 ? metadataService.GetShokoSeriesByAnidbID(anidb)?.LocalID ?? 0
                 : 0
-            : int.TryParse(seriesPart, out var sid)
-                ? sid
+            : int.TryParse(seriesPart, out var seriesId)
+                ? seriesId
                 : 0;
     }
 
@@ -306,7 +306,7 @@ public static partial class PlexHelper
     /// <param name="value">The raw collection title.</param>
     /// <returns>The normalized collection key, or null if empty.</returns>
     private static string? NormalizeCollectionKey(string? value) =>
-        !string.IsNullOrWhiteSpace(value) && TextHelper.CondenseSpaces(new string([.. value.Where(ch => !VfsHelper.InvalidFileNameChars.Contains(ch))]).Trim()) is var cleaned && cleaned.Length > 0
+        !string.IsNullOrWhiteSpace(value) && TextHelper.CondenseSpaces(new string([.. value.Where(character => !VfsHelper.InvalidFileNameChars.Contains(character))]).Trim()) is var cleaned && cleaned.Length > 0
             ? cleaned.ToLowerInvariant()
             : null;
 
@@ -323,8 +323,8 @@ public static partial class PlexHelper
         if (keywords.Length == 0)
             return false;
 
-        for (int kwIdx = 0; kwIdx < keywords.Length; kwIdx++)
-            if (collectionTitle.Contains(keywords[kwIdx], StringComparison.OrdinalIgnoreCase))
+        for (int keywordIndex = 0; keywordIndex < keywords.Length; keywordIndex++)
+            if (collectionTitle.Contains(keywords[keywordIndex], StringComparison.OrdinalIgnoreCase))
                 return true;
 
         return false;

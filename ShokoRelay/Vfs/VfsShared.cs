@@ -430,12 +430,10 @@ internal static class VfsShared
                 if (string.IsNullOrEmpty(dir))
                     dir = ".";
 
-                string searchPattern = string.Concat(nameWithoutExt[..suffixIndex], ".*");
-
                 try
                 {
                     var expectedBase = nameWithoutExt[..suffixIndex];
-                    foreach (var file in Directory.EnumerateFiles(dir, searchPattern))
+                    foreach (var file in Directory.EnumerateFiles(dir, "*"))
                         if (Path.GetFileNameWithoutExtension(file.AsSpan()).Equals(expectedBase, PathComparison) && videoService.IsAllowedVideoExtension(file))
                             return true;
                 }

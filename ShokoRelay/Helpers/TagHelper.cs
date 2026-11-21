@@ -105,10 +105,10 @@ public static partial class TagHelper
     {
         try
         {
-            var asm = typeof(TagHelper).Assembly;
+            var assembly = typeof(TagHelper).Assembly;
             if (
-                asm.GetManifestResourceNames().FirstOrDefault(name => name.EndsWith(ShokoRelayConstants.FileDefaultTagOverrides, StringComparison.OrdinalIgnoreCase)) is { } resName
-                && asm.GetManifestResourceStream(resName) is { } stream
+                assembly.GetManifestResourceNames().FirstOrDefault(resourceName => resourceName.EndsWith(ShokoRelayConstants.FileDefaultTagOverrides, StringComparison.OrdinalIgnoreCase)) is { } resourceName
+                && assembly.GetManifestResourceStream(resourceName) is { } stream
             )
                 using (stream)
                 using (var reader = new StreamReader(stream, Encoding.UTF8))

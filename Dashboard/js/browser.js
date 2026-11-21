@@ -291,6 +291,11 @@
     const regularSeasons = (series.seasons || []).filter((season) => !season.name.startsWith("Movie ❯ "));
     let movieCount = 0;
 
+    /**
+     * Renders a single season or movie branch into the series list.
+     * @param {Object} season - The season metadata object.
+     * @returns {void}
+     */
     const renderSeason = (season) => {
       const seasonListItem = document.createElement("li");
       const seasonList = document.createElement("ul");

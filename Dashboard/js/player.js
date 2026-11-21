@@ -95,13 +95,13 @@
 
   /**
    * Converts a numeric time in seconds to a human-readable M:SS format.
-   * @param {number} seconds - The time in seconds.
+   * @param {number} totalSeconds - The time in seconds.
    * @returns {string} The formatted duration string.
    */
-  const formatTime = (seconds) => {
-    if (isNaN(seconds)) return "0:00";
-    const minutes = Math.floor(seconds / 60);
-    const seconds = Math.floor(seconds % 60);
+  const formatTime = (totalSeconds) => {
+    if (isNaN(totalSeconds)) return "0:00";
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
     return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
@@ -184,7 +184,9 @@
         document.body.style.overflow = "";
       }
     } else {
-      activeModalClose = openModal(helpModal);
+      activeModalClose = openModal(helpModal, () => {
+        activeModalClose = null;
+      });
     }
   };
 
@@ -437,8 +439,21 @@
       });
 
       const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
+
+      /**
+       * Maps a seasonal folder name to a chronological sort weight.
+       * @param {string} name - The folder name.
+       * @returns {number} The sort weight for ordering seasons.
+       */
       const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
 
+      /**
+       * Recursively renders a folder hierarchy into the target list container.
+       * @param {Object} node - The current folder tree node.
+       * @param {boolean} isRoot - Whether this node is the root container.
+       * @param {HTMLUListElement} container - The target unordered list element.
+       * @returns {void}
+       */
       const renderFolderTree = (node, isRoot, container) => {
         const sortedFolders = [...node.folders.keys()].sort((left, right) => {
           const weightLeft = getSeasonWeight(left);
@@ -479,11 +494,22 @@
         const isMissing = groupName === MISSING_LABEL;
         const seriesKeys = [...seriesMap.keys()].sort((leftName, rightName) => leftName.localeCompare(rightName));
 
+        /**
+         * Renders all series subfolders within a group container.
+         * @param {HTMLUListElement} container - The parent group list element.
+         * @returns {void}
+         */
         const renderSeriesFolders = (container) => {
           seriesKeys.forEach((seriesName) => {
             const seriesFiles = seriesMap.get(seriesName);
             const firstFile = seriesFiles[0];
             const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
+
+            /**
+             * Renders all theme file leaves for a series.
+             * @param {HTMLUListElement} fileContainer - The parent series list element.
+             * @returns {void}
+             */
             const renderFiles = (fileContainer) => seriesFiles.forEach((file) => fileContainer.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
             container.appendChild(createFolderNode(seriesName, renderFiles, hasFilter, isMissing, extraHtml));
           });
@@ -494,6 +520,12 @@
           const seriesFiles = seriesMap.get(seriesName);
           const firstFile = seriesFiles[0];
           const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
+
+          /**
+           * Renders all theme file leaves for a single-series group directly at the root.
+           * @param {HTMLUListElement} container - The parent root list element.
+           * @returns {void}
+           */
           const renderFiles = (container) => seriesFiles.forEach((file) => container.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
           rootUl.appendChild(createFolderNode(seriesName, renderFiles, hasFilter, isMissing, extraHtml));
         } else {
@@ -518,6 +550,11 @@
     // Collapse all open folders to reset the tree state before locating
     playerTree.querySelectorAll("details[open]").forEach((details) => (details.open = false));
 
+    /**
+     * Extracts the display title from a folder summary element.
+     * @param {HTMLElement|null} summary - The summary DOM element.
+     * @returns {string} The resolved title string.
+     */
     const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
     const pathSegments = [];
 
@@ -667,9 +704,9 @@
       playFile(navigationStack[stackIndex]);
     } else {
       resetNavigationHistory();
-      const currentIdx = items.findIndex((item) => item.path === currentWebmPath);
-      const nextIdx = (currentIdx + direction + items.length) % items.length;
-      playFile(items[nextIdx].path);
+      const currentIndex = items.findIndex((item) => item.path === currentWebmPath);
+      const nextIndex = (currentIndex + direction + items.length) % items.length;
+      playFile(items[nextIndex].path);
     }
   }
 
@@ -959,14 +996,14 @@
       syncFavouriteControls();
       if (playerTree) playerTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading video tree...</div></div>';
       const canReadConfig = canModifyServerState();
-      const [treeRes, cfgRes, favRes] = await Promise.all([
+      const [treeResponse, configResponse, favouritesResponse] = await Promise.all([
         fetchJson(base + "/animethemes/webm/tree"),
         canReadConfig ? fetchJson(configUrl) : Promise.resolve({ isOk: false }),
         fetchJson(base + "/animethemes/webm/favourites"),
       ]);
-      if (favRes.isOk) favourites = new Set(getData(favRes) || []);
-      const treePayload = getData(treeRes);
-      if (treeRes.isOk) {
+      if (favouritesResponse.isOk) favourites = new Set(getData(favouritesResponse) || []);
+      const treePayload = getData(treeResponse);
+      if (treeResponse.isOk) {
         webmTreeData = (treePayload?.items || [])
           .map((item) => {
             item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)} ${item.relPath || ""}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
@@ -993,7 +1030,8 @@
         }
       }
       if (playerModeBtn) {
-        const mode = canReadConfig && cfgRes.isOk ? unwrapConfig(getData(cfgRes)).Playback.AnimeThemesWebmMode || "off" : localStorage.getItem("player-playback-mode") || treePayload?.playbackMode || "off";
+        const mode =
+          canReadConfig && configResponse.isOk ? unwrapConfig(getData(configResponse)).Playback.AnimeThemesWebmMode || "off" : localStorage.getItem("player-playback-mode") || treePayload?.playbackMode || "off";
         playerModeBtn.setAttribute("data-mode", mode);
         updatePlaybackTooltip(playerModeBtn);
       }

@@ -48,7 +48,7 @@ public partial class VfsBuilder
                     : VfsHelper.SanitizeName(
                         VfsHelper.BuildStandardFileName(
                             mapping,
-                            state.EpPad,
+                            state.EpisodePad,
                             Path.GetExtension(sourceInfo.Src),
                             mapping.Video!.LocalID,
                             mapping.PartCount > 1 && mapping.PartIndex.HasValue,
@@ -106,7 +106,7 @@ public partial class VfsBuilder
                 state.FileData,
                 state.ResolvedVfsSeriesPaths,
                 state.VideoBaseNames,
-                state.EpPad,
+                state.EpisodePad,
                 state.Session,
                 (importRoot, season, fileName, source) =>
                 {

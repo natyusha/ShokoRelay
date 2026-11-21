@@ -446,6 +446,7 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 - `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, `relPath` (source folder path for folder view support), and the configured `playbackMode`.
   - Employs single-pass in-memory dictionary caching of physical files to avoid redundant disk I/O on large mapping catalogs.
   - Differentiates deterministically between TV and Movie VFS structures.
+  - When `Advanced.RequireAuth` is set to `Allow Player Access`, this unauthenticated response includes full server filesystem paths (`path`) for streaming.
 - `AnimeThemesWebmStream` supports HTTP range requests for seekable browser playback.
   - Enforces `.webm` extension validation to prevent arbitrary file streaming.
 - `GetAnimeThemesFavourites` returns a list of `videoId` favourites from `favs_animethemes.csv` in the plugin's configuration directory.

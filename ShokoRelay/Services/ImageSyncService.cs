@@ -270,7 +270,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         .Select(path => (Dir: Path.GetDirectoryName(path)!, Base: Path.GetFileNameWithoutExtension(path)))
                         .SelectMany(entry =>
                             Directory
-                                .EnumerateFiles(entry.Dir, $"{entry.Base}.*")
+                                .EnumerateFiles(entry.Dir, "*")
                                 .Where(file =>
                                     string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase)
                                     && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file))
