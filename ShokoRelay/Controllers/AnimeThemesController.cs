@@ -15,10 +15,10 @@ namespace ShokoRelay.Controllers;
 /// <param name="webmDownloader">AnimeThemes WebM downloader.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="logger">Logger instance.</param>
-[RelayAdminAuthorize]
 [ApiController]
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
+[RelayAdminAuthorize]
 [Route(ShokoRelayConstants.BasePath)]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 public class AnimeThemesController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -243,9 +243,7 @@ public class AnimeThemesController(
     #region WebM & Player
 
     /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
-    /// <remarks>
-    ///   Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.
-    /// </remarks>
+    /// <remarks>Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.</remarks>
     /// <returns>A JSON object containing the hierarchical theme list.</returns>
     [AllowPlayerAccess]
     [HttpGet("animethemes/webm/tree")]
@@ -356,7 +354,7 @@ public class AnimeThemesController(
                             relPath = videoIdToRelPath.GetValueOrDefault(videoId),
                             path = pathRaw.Replace('\\', '/').Trim(),
                             videoId,
-                            normalizationCount = (flags & 1) != 0,
+                            nc = (flags & 1) != 0,
                             lyrics = (flags & 2) != 0,
                             subs = (flags & 4) != 0,
                             uncen = (flags & 8) != 0,
@@ -437,7 +435,7 @@ public class AnimeThemesController(
                                 relPath = entry.FilePath,
                                 path = absolutePath.Replace('\\', '/').Trim(),
                                 videoId = entry.VideoId,
-                                normalizationCount = entry.Nc,
+                                nc = entry.Nc,
                                 lyrics = entry.Lyrics,
                                 subs = entry.Subbed,
                                 uncen = entry.Uncen,
@@ -463,10 +461,10 @@ public class AnimeThemesController(
     /// <remarks>Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.</remarks>
     /// <param name="path">The relative VFS path to the WebM file.</param>
     /// <returns>A file stream result.</returns>
-    [AllowPlayerAccess]
-    [Route("animethemes/webm/stream")]
     [HttpGet]
     [HttpHead]
+    [AllowPlayerAccess]
+    [Route("animethemes/webm/stream")]
     public IActionResult AnimeThemesWebmStream([FromQuery] string? path)
     {
         if (string.IsNullOrWhiteSpace(path))

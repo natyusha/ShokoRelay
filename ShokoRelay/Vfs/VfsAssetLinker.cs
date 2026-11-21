@@ -108,27 +108,27 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         // Fast-path for unmapped sidecars: bypasses target checks, sorting, and tuple allocations
         if (mappings is not { Count: > 0 })
         {
-            foreach (var sub in candidates)
+            foreach (var sidecarFile in candidates)
             {
-                string name = Path.GetFileName(sub);
+                string name = Path.GetFileName(sidecarFile);
                 if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase) || (name.Length > originalBase.Length && char.IsLetterOrDigit(name[originalBase.Length])))
                     continue;
 
                 string suffix = name[originalBase.Length..];
-                if (requireLangCode && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(sub)) && !HasSubtitleLanguageCode(suffix))
+                if (requireLangCode && PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(Path.GetExtension(sidecarFile)) && !HasSubtitleLanguageCode(suffix))
                     continue;
 
                 string destName = destBase + suffix;
-                if (VfsShared.TryCreateLink(sub, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
+                if (VfsShared.TryCreateLink(sidecarFile, Path.Combine(destDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
                 {
                     planned++;
                     created++;
-                    onLink?.Invoke(destName, sub);
+                    onLink?.Invoke(destName, sidecarFile);
                 }
                 else
                 {
                     skipped++;
-                    errors.Add($"Metadata sidecar link failed: {sub}");
+                    errors.Add($"Metadata sidecar link failed: {sidecarFile}");
                 }
             }
             LinkAttachmentFolder(sourceDir, originalBase, destDir, destBase, dirCache, ref planned, ref skipped, errors, ref created, logger, onLink, skipExistenceCheck);
@@ -136,27 +136,27 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
         }
 
         var pendingLinks = new List<(string Source, string Name, int Priority)>();
-        foreach (var sub in candidates)
+        foreach (var sidecarFile in candidates)
         {
-            string name = Path.GetFileName(sub);
+            string name = Path.GetFileName(sidecarFile);
             if (!name.StartsWith(originalBase, StringComparison.OrdinalIgnoreCase) || (name.Length > originalBase.Length && char.IsLetterOrDigit(name[originalBase.Length])))
                 continue;
 
-            string ext = Path.GetExtension(sub);
+            string extension = Path.GetExtension(sidecarFile);
             string suffix = name[originalBase.Length..];
 
             // Exclude unavailable subtitle sources before they can win a destination collision
-            if (PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext))
+            if (PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(extension))
             {
-                if (!File.Exists(sub))
+                if (!File.Exists(sidecarFile))
                     continue;
                 if (requireLangCode && !HasSubtitleLanguageCode(suffix))
                     continue;
             }
 
-            var (mappedSuffix, priority) = PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(ext) ? RenameSubtitleSuffix(suffix, mappings) : (suffix, -1);
+            var (mappedSuffix, priority) = PlexConstants.LocalMediaAssets.SubtitleExtensions.Contains(extension) ? RenameSubtitleSuffix(suffix, mappings) : (suffix, -1);
 
-            pendingLinks.Add((sub, destBase + mappedSuffix, priority));
+            pendingLinks.Add((sidecarFile, destBase + mappedSuffix, priority));
         }
 
         var linkedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -337,6 +337,8 @@ public class VfsAssetLinker(IVideoService videoService, ILogger<VfsAssetLinker> 
                     foreach (var vfsSeriesPath in vfsSeriesPaths)
                     {
                         string vfsSeasonDir = Path.Combine(vfsSeriesPath, seasonFolder);
+                        if (!Settings.Advanced.DisableVfsGeneration)
+                            Directory.CreateDirectory(vfsSeasonDir);
                         if (VfsShared.TryCreateLink(file, Path.Combine(vfsSeasonDir, destName), logger, skipExistenceCheck: skipExistenceCheck))
                             onLink?.Invoke(Path.GetDirectoryName(Path.GetDirectoryName(vfsSeriesPath))!, seasonFolder, destName, file);
                     }

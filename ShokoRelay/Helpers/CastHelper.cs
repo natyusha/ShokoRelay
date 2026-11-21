@@ -89,8 +89,13 @@ public static class CastHelper
     /// <summary>Thread-local accumulation state used during parallel credit cache warming.</summary>
     private sealed class WarmThreadState
     {
+        /// <summary>Memoized normalization results per raw credit name.</summary>
         public readonly Dictionary<string, (string Trimmed, string NormKey, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+
+        /// <summary>Observed series counts per credit variant tuple.</summary>
         public readonly Dictionary<(bool IsPerson, bool IsAnidb, string NormKey, string Trimmed), int> Counts = [];
+
+        /// <summary>Deduplication set ensuring each normalized credit is counted once per series.</summary>
         public readonly HashSet<(bool IsPerson, bool IsAnidb, string NormKey)> SeenInSeries = [];
     }
 
@@ -475,9 +480,9 @@ public static class CastHelper
 
         var normalized = trimmed.Normalize(NormalizationForm.FormD);
         var stringBuilderNorm = new StringBuilder(normalized.Length);
-        foreach (char ch in normalized)
-            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(ch))
-                stringBuilderNorm.Append(char.ToLowerInvariant(ch));
+        foreach (char character in normalized)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character))
+                stringBuilderNorm.Append(char.ToLowerInvariant(character));
 
         return stringBuilderNorm.ToString();
     }

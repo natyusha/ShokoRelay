@@ -253,9 +253,9 @@ public class VfsWatcher(
         if (metadataService.GetEpisode(@event.EpisodeID) is not { } episode)
             return;
 
-        IReadOnlyList<int> primaryIds = episode is IShokoEpisode shokoEp
-            ? [OverrideHelper.GetPrimary(shokoEp.ShokoSeriesID, metadataService)]
-            : [.. episode.ShokoEpisodes.Select(shokoEpisode => OverrideHelper.GetPrimary(shokoEpisode.ShokoSeriesID, metadataService)).Distinct()];
+        IReadOnlyList<int> primaryIds = episode is IShokoEpisode shokoEpisode
+            ? [OverrideHelper.GetPrimary(shokoEpisode.ShokoSeriesID, metadataService)]
+            : [.. episode.ShokoEpisodes.Select(linkedEpisode => OverrideHelper.GetPrimary(linkedEpisode.ShokoSeriesID, metadataService)).Distinct()];
 
         if (primaryIds.Count == 0)
             return;
@@ -312,7 +312,7 @@ public class VfsWatcher(
     /// <param name="args">The video file event arguments.</param>
     private void HandleFileEvent(VideoFileEventArgs? args)
     {
-        var seriesList = args?.Series ?? args?.Video?.Series;
+        var seriesList = args?.Series is { Count: > 0 } ? args.Series : args?.Video?.Series;
         if (seriesList == null || !seriesList.Any())
             return;
 

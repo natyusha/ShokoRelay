@@ -121,12 +121,12 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
             {
                 if (string.IsNullOrWhiteSpace(item.Guid))
                     return;
-                var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                if (!epId.HasValue)
+                var episodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                if (!episodeId.HasValue)
                     return;
 
-                var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.ShokoSeriesID)))
+                var episode = metadataService.GetShokoEpisodeByID(episodeId.Value);
+                if (episode == null || (allowedSet != null && !allowedSet.Contains(OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService))))
                     return;
 
                 processedEpisodes++;
@@ -138,16 +138,16 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     _ => null,
                 };
 
-                string? prefId = null;
-                if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
-                    prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+                string? preferredOrderingId = null;
+                if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out preferredOrderingId))
+                    prefIdCache[episode.ShokoSeriesID] = preferredOrderingId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
-                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+                var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
+                var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    logger.LogTrace("CriticRatingService: Skipped episode -> {LogName} because rating {Rating} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Skipped episode -> {LogName} because rating {Rating} matches Plex", episodeLogName, item.Rating?.ToString("F2") ?? "n/a");
                     return;
                 }
 
@@ -157,12 +157,12 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     appliedChanges.Add(
                         new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Episode", item.RatingKey!, item.Rating, rating)
                     );
-                    logger.LogTrace("CriticRatingService: Updated episode -> {LogName} to {Rating}", epLogName, rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Updated episode -> {LogName} to {Rating}", episodeLogName, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
                     errors++;
-                    errorsList.Add($"CriticRatingService: Failed update for episode -> {epLogName}");
+                    errorsList.Add($"CriticRatingService: Failed update for episode -> {episodeLogName}");
                 }
             }
 
@@ -170,12 +170,12 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
             {
                 if (string.IsNullOrWhiteSpace(item.Guid))
                     return;
-                var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                if (!epId.HasValue)
+                var episodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                if (!episodeId.HasValue)
                     return;
 
-                var episode = metadataService.GetShokoEpisodeByID(epId.Value);
-                if (episode == null || (allowedSet != null && !allowedSet.Contains(episode.ShokoSeriesID)))
+                var episode = metadataService.GetShokoEpisodeByID(episodeId.Value);
+                if (episode == null || (allowedSet != null && !allowedSet.Contains(OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService))))
                     return;
 
                 processedEpisodes++;
@@ -190,16 +190,16 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     _ => null,
                 };
 
-                string? prefId = null;
-                if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
-                    prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+                string? preferredOrderingId = null;
+                if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out preferredOrderingId))
+                    prefIdCache[episode.ShokoSeriesID] = preferredOrderingId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
 
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
-                var epLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
+                var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
+                var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2} (RatingKey: {item.RatingKey})";
 
                 if (!NeedsRatingUpdate(item.Rating, rating))
                 {
-                    logger.LogTrace("CriticRatingService: Skipped movie -> {LogName} because rating {Rating} matches Plex", epLogName, item.Rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Skipped movie -> {LogName} because rating {Rating} matches Plex", episodeLogName, item.Rating?.ToString("F2") ?? "n/a");
                     return;
                 }
 
@@ -209,12 +209,12 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     appliedChanges.Add(
                         new RatingChange($"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - S{coords.Season:D2}E{coords.Episode:D2}", "Movie", item.RatingKey!, item.Rating, rating)
                     );
-                    logger.LogTrace("CriticRatingService: Updated movie -> {LogName} to {Rating}", epLogName, rating?.ToString("F2") ?? "n/a");
+                    logger.LogTrace("CriticRatingService: Updated movie -> {LogName} to {Rating}", episodeLogName, rating?.ToString("F2") ?? "n/a");
                 }
                 else
                 {
                     errors++;
-                    errorsList.Add($"CriticRatingService: Failed update for movie -> {epLogName}");
+                    errorsList.Add($"CriticRatingService: Failed update for movie -> {episodeLogName}");
                 }
             }
 

@@ -100,9 +100,9 @@
    */
   const formatTime = (seconds) => {
     if (isNaN(seconds)) return "0:00";
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+    const minutes = Math.floor(seconds / 60);
+    const seconds = Math.floor(seconds % 60);
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
   };
 
   /**
@@ -122,21 +122,21 @@
    */
   const syncVolumeUI = () => {
     if (!playerVideo) return;
-    const vol = playerVideo.volume;
-    const isMuted = playerVideo.muted || vol === 0;
+    const volume = playerVideo.volume;
+    const isMuted = playerVideo.muted || volume === 0;
 
-    if (playerVolText) playerVolText.textContent = isMuted ? "Muted" : `${Math.round(vol * 100)}%`;
+    if (playerVolText) playerVolText.textContent = isMuted ? "Muted" : `${Math.round(volume * 100)}%`;
     if (playerMuteBtn) playerMuteBtn.title = isMuted ? "Unmute" : "Mute";
 
     let level = "mute";
     if (!isMuted) {
-      if (vol > 0.66) level = "high";
-      else if (vol > 0.33) level = "med";
+      if (volume > 0.66) level = "high";
+      else if (volume > 0.33) level = "med";
       else level = "low";
     }
     if (playerContainer) playerContainer.dataset.volumeLevel = level;
 
-    localStorage.setItem("player-volume", vol);
+    localStorage.setItem("player-volume", volume);
     localStorage.setItem("player-muted", playerVideo.muted);
   };
 
@@ -193,10 +193,10 @@
    * @returns {Object[]} The filtered list of theme entries.
    */
   const getFilteredItems = () => {
-    const rawFt = (uiFilter?.value || "").toLowerCase().trim();
-    if (!rawFt) return webmTreeData;
+    const rawFilter = (uiFilter?.value || "").toLowerCase().trim();
+    if (!rawFilter) return webmTreeData;
 
-    const words = rawFt.split(/\s+/).filter((word) => word.length > 0);
+    const words = rawFilter.split(/\s+/).filter((word) => word.length > 0);
     const isFavQuery = words.includes("favs");
     const tagExclusions = [];
     const tagInclusions = [];
@@ -301,10 +301,10 @@
   /**
    * Toggles the favourite status of a video on the server and synchronizes UI heart icons.
    * @param {number} videoId - The AnimeThemes video ID to toggle.
-   * @param {HTMLElement} [heartEl] - The optional heart icon element inside the tree to toggle.
+   * @param {HTMLElement} [heartElement] - The optional heart icon element inside the tree to toggle.
    * @returns {Promise<void>}
    */
-  async function toggleFavourite(videoId, heartEl) {
+  async function toggleFavourite(videoId, heartElement) {
     if (!canModifyServerState()) return;
     if (!videoId || videoId <= 0) return console.warn("VideoId missing.");
     const response = await fetchJson(base + "/animethemes/webm/favourites", {
@@ -317,7 +317,7 @@
     if (response.isOk && isFav !== undefined) {
       isFav ? favourites.add(videoId) : favourites.delete(videoId);
 
-      if (heartEl) heartEl.classList.toggle("favourited", isFav);
+      if (heartElement) heartElement.classList.toggle("favourited", isFav);
       const isCurrentVideo = webmTreeData.find((item) => item.path === currentWebmPath)?.videoId === videoId;
       const treeHeart = isCurrentVideo ? playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`) : null;
       if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
@@ -538,7 +538,7 @@
 
     let currentScope = playerTree;
     pathSegments.forEach((segment) => {
-      const details = [...currentScope.querySelectorAll("details")].find((detailsEl) => getSummaryTitle(detailsEl.querySelector("summary")) === segment);
+      const details = [...currentScope.querySelectorAll("details")].find((detailsElement) => getSummaryTitle(detailsElement.querySelector("summary")) === segment);
       if (details) {
         details.open = true;
         if (!details.dataset.rendered) details.dispatchEvent(new Event("toggle"));
@@ -548,7 +548,7 @@
 
     const leaf = playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"]`);
     if (leaf) {
-      playerTree.querySelectorAll(".leaf").forEach((leafEl) => leafEl.classList.toggle("active", leafEl.dataset.path === currentWebmPath));
+      playerTree.querySelectorAll(".leaf").forEach((leafElement) => leafElement.classList.toggle("active", leafElement.dataset.path === currentWebmPath));
       leaf.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
@@ -616,7 +616,7 @@
       playerAnidb.rel = "noopener noreferrer";
       playerAnidb.style.pointerEvents = item && item.anidbId ? "auto" : "none";
     }
-    playerTree?.querySelectorAll(".leaf").forEach((leafEl) => leafEl.classList.toggle("active", leafEl.dataset.path === path));
+    playerTree?.querySelectorAll(".leaf").forEach((leafElement) => leafElement.classList.toggle("active", leafElement.dataset.path === path));
   }
 
   /**
@@ -726,6 +726,10 @@
 
     ["play", "pause", "ended", "loadstart"].forEach((event) => playerVideo.addEventListener(event, syncPlaybackUI));
 
+    /**
+     * Drives smooth requestAnimationFrame updates for the playback progress bar while playing.
+     * @returns {void}
+     */
     const updateProgressLoop = () => {
       syncProgressUI();
       if (!playerVideo.paused && !playerVideo.ended) progressRaf = requestAnimationFrame(updateProgressLoop);
@@ -772,11 +776,16 @@
     playerVideo.ondblclick = toggleFullscreen;
 
     if (playerTrack) {
+      /**
+       * Seeks the video element proportionally to the pointer's horizontal position along the progress track.
+       * @param {MouseEvent} event - The pointer event over the progress track.
+       * @returns {void}
+       */
       const updateSeek = (event) => {
         if (!playerVideo.duration) return;
-        const rect = playerTrack.getBoundingClientRect();
-        const pos = (event.clientX - rect.left) / rect.width;
-        playerVideo.currentTime = Math.max(0, Math.min(1, pos)) * playerVideo.duration;
+        const bounds = playerTrack.getBoundingClientRect();
+        const position = (event.clientX - bounds.left) / bounds.width;
+        playerVideo.currentTime = Math.max(0, Math.min(1, position)) * playerVideo.duration;
         if (playerVideo.paused) syncProgressUI();
       };
       playerTrack.onmousedown = (event) => {
@@ -862,9 +871,9 @@
 
     if (playerFullscreenBtn) playerFullscreenBtn.onclick = toggleFullscreen;
     document.addEventListener("fullscreenchange", () => {
-      const isFS = !!document.fullscreenElement;
-      playerFullscreenBtn.setAttribute("data-state", isFS ? "fullscreen" : "idle");
-      playerFullscreenBtn.title = isFS ? "Exit Fullscreen" : "Fullscreen";
+      const isFullscreen = !!document.fullscreenElement;
+      playerFullscreenBtn.setAttribute("data-state", isFullscreen ? "fullscreen" : "idle");
+      playerFullscreenBtn.title = isFullscreen ? "Exit Fullscreen" : "Fullscreen";
     });
 
     if (playerCloseBtn) {
@@ -892,7 +901,7 @@
           playerNowPlayingFav.classList.remove("favourited");
         }
         if (playerLocateBtn) playerLocateBtn.style.pointerEvents = "none";
-        playerTree?.querySelectorAll(".leaf").forEach((leafEl) => leafEl.classList.remove("active"));
+        playerTree?.querySelectorAll(".leaf").forEach((leafElement) => leafElement.classList.remove("active"));
         if (playerFill) playerFill.style.width = "0%";
         if (playerTime) playerTime.textContent = "0:00 / 0:00";
       };

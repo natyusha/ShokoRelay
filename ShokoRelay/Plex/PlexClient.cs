@@ -131,23 +131,23 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         var targets = GetMatchingTargetsForPath(path);
         bool anyOk = false;
 
-        foreach (var (tgt, guessedPath) in targets)
+        foreach (var (target, guessedPath) in targets)
         {
             try
             {
-                using var request = CreateRequest(HttpMethod.Get, $"/library/sections/{tgt.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", tgt.ServerUrl);
+                using var request = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", target.ServerUrl);
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {
                     anyOk = true;
-                    logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, tgt.ServerUrl, tgt.SectionId);
+                    logger.LogDebug("PlexClient: refresh triggered for -> '{Path}' on {ServerUrl}:{SectionId}", guessedPath, target.ServerUrl, target.SectionId);
                 }
                 else
-                    logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", response.StatusCode, guessedPath, tgt.SectionId);
+                    logger.LogWarning("PlexClient: refresh failed ({StatusCode}) for folder -> '{Path}' in section {SectionId}", response.StatusCode, guessedPath, target.SectionId);
             }
             catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
             {
-                logger.LogWarning("PlexClient: Network timeout triggering refresh for '{Path}' in section {SectionId}", guessedPath, tgt.SectionId);
+                logger.LogWarning("PlexClient: Network timeout triggering refresh for '{Path}' in section {SectionId}", guessedPath, target.SectionId);
             }
         }
 
@@ -546,11 +546,11 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 logger.LogWarning("PlexClient: Failed to query section {SectionId} on {ServerName} (HTTP {StatusCode})", target.SectionId, target.ServerName, response.StatusCode);
                 break;
             }
-            var cont = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
-            if (cont?.Metadata == null || cont.Metadata.Count == 0)
+            var container = await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false);
+            if (container?.Metadata == null || container.Metadata.Count == 0)
                 break;
-            results.AddRange(cont.Metadata);
-            if (results.Count >= (cont.TotalSize ?? cont.Size))
+            results.AddRange(container.Metadata);
+            if (results.Count >= (container.TotalSize ?? container.Size))
                 break;
             start += 200;
         }

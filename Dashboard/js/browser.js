@@ -57,18 +57,18 @@
   function getFilteredItems() {
     const root = displayRoots.find((rootItem) => rootItem.name === activeTabName);
     if (!root) return [];
-    const rawFt = (uiFilter?.value || "").toLowerCase();
-    const filterText = rawFt.trim();
+    const rawFilter = (uiFilter?.value || "").toLowerCase();
+    const filterText = rawFilter.trim();
     if (!filterText) return root.series;
 
-    const isExact = rawFt.endsWith(" ");
-    if (/^a\d+\s*$/.test(rawFt.trimStart())) {
-      const aid = filterText.substring(1);
-      return root.series.filter((series) => (isExact ? String(series.anidbId) === aid : String(series.anidbId).startsWith(aid)));
+    const isExact = rawFilter.endsWith(" ");
+    if (/^a\d+\s*$/.test(rawFilter.trimStart())) {
+      const anidbId = filterText.substring(1);
+      return root.series.filter((series) => (isExact ? String(series.anidbId) === anidbId : String(series.anidbId).startsWith(anidbId)));
     }
-    if (/^m\d+\s*$/.test(rawFt.trimStart())) {
-      const sid = filterText.substring(1);
-      return root.series.filter((series) => (isExact ? String(series.id) === sid : String(series.id).startsWith(sid)));
+    if (/^m\d+\s*$/.test(rawFilter.trimStart())) {
+      const seriesId = filterText.substring(1);
+      return root.series.filter((series) => (isExact ? String(series.id) === seriesId : String(series.id).startsWith(seriesId)));
     }
     return root.series.filter((series) => series.title.toLowerCase().includes(filterText) || String(series.id).includes(filterText));
   }
@@ -232,11 +232,11 @@
     nameSpan.title = file.name;
     nameSpan.dataset.tooltipOverflowOnly = "true";
 
-    const src = file.source || "Unknown";
+    const source = file.source || "Unknown";
     const sourceSpan = document.createElement("span");
     sourceSpan.className = "source-path";
-    sourceSpan.textContent = src;
-    sourceSpan.title = src;
+    sourceSpan.textContent = source;
+    sourceSpan.title = source;
     sourceSpan.dataset.tooltipOverflowOnly = "true";
 
     leaf.append(nameSpan, sourceSpan);
@@ -270,12 +270,12 @@
 
     [...subfolders.entries()]
       .sort((left, right) => left[0].localeCompare(right[0]))
-      .forEach(([subName, files]) => {
-        const seasonLi = document.createElement("li");
-        const subUl = document.createElement("ul");
-        const subDet = window._sr.createLazyDetails(subName, subUl, (container) => renderSeasonContents({ files }, container), false);
-        seasonLi.appendChild(subDet);
-        seasonUl.appendChild(seasonLi);
+      .forEach(([subFolderName, files]) => {
+        const subFolderItem = document.createElement("li");
+        const subList = document.createElement("ul");
+        const subDetails = window._sr.createLazyDetails(subFolderName, subList, (container) => renderSeasonContents({ files }, container), false);
+        subFolderItem.appendChild(subDetails);
+        seasonUl.appendChild(subFolderItem);
       });
   }
 
@@ -292,8 +292,8 @@
     let movieCount = 0;
 
     const renderSeason = (season) => {
-      const seasonLi = document.createElement("li");
-      const seasonUl = document.createElement("ul");
+      const seasonListItem = document.createElement("li");
+      const seasonList = document.createElement("ul");
       const isMovie = season.name.startsWith("Movie ❯ ");
       const movieId = isMovie ? season.name.split(" ❯ ")[1] : null;
 
@@ -309,9 +309,9 @@
           ? `<a href="${base}/metadata/${series.id}s${season.seasonId}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${series.id}s${season.seasonId}]</a>`
           : "";
 
-      const seasonDet = window._sr.createLazyDetails(
+      const seasonDetails = window._sr.createLazyDetails(
         displayName,
-        seasonUl,
+        seasonList,
         (container) => {
           renderSeasonContents(season, container);
         },
@@ -319,8 +319,8 @@
         seasonLink ? ` ${seasonLink}` : "",
       );
 
-      seasonLi.appendChild(seasonDet);
-      unorderedList.appendChild(seasonLi);
+      seasonListItem.appendChild(seasonDetails);
+      unorderedList.appendChild(seasonListItem);
     };
 
     // Movie Branches First
@@ -346,6 +346,7 @@
     }
 
     const items = getFilteredItems();
+    if (vfsCount) vfsCount.textContent = `${items.length} Series`;
     vfsTree.innerHTML = "";
     if (!items.length) {
       vfsTree.innerHTML = `<div class="placeholder">${uiFilter?.value ? "No matching folders" : "This root is empty"}</div>`;
@@ -429,16 +430,21 @@
           showToast(`${label}: Generating...`, "info", TOAST_MS);
 
           const response = await fetchJson(`${base}/animethemes/mp3?path=${encodeURIComponent(physicalPath)}`);
-          toastOperation(response, label, { hideOnSucceed: TOAST_MS });
-
           const themeData = getData(response);
-          if (response.isOk && (themeData?.Status === "ok" || themeData?.status === "ok")) refreshSeries(series.id);
-        };
-      } else {
-        // Swallows the click to prevent the parent VFS details folder from toggling
-        theme.onclick = (event) => {
-          event.preventDefault();
-          event.stopPropagation();
+          const themeStatus = themeData?.Status || themeData?.status;
+          const themeMessage = themeData?.Message || themeData?.message;
+
+          if (response.isOk && themeStatus === "skipped") {
+            const isNoTheme = themeMessage === "Entry not found." || (themeMessage && themeMessage.includes("No entry"));
+            toastOperation(response, label, {
+              summary: themeMessage || "Skipped",
+              hideOnSucceed: TOAST_MS,
+              type: isNoTheme ? "warning" : "info",
+            });
+          } else {
+            toastOperation(response, label, { hideOnSucceed: TOAST_MS });
+            if (response.isOk && themeStatus === "ok") refreshSeries(series.id);
+          }
         };
       }
 

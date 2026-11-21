@@ -227,9 +227,9 @@ public class CollectionService(
                     int? seriesId = null;
                     if (isMovieTarget)
                     {
-                        var epId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                        if (epId.HasValue)
-                            seriesId = metadataService.GetShokoEpisodeByID(epId.Value)?.ShokoSeriesID;
+                        var episodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                        if (episodeId.HasValue && metadataService.GetShokoEpisodeByID(episodeId.Value) is { } movieEpisode)
+                            seriesId = OverrideHelper.GetPrimary(movieEpisode.ShokoSeriesID, metadataService);
                     }
                     else
                         seriesId = PlexHelper.ExtractShokoSeriesIdFromGuid(item.Guid);
@@ -287,16 +287,16 @@ public class CollectionService(
                     // Always handle standard poster and image application
                     if (!string.IsNullOrEmpty(collectionName))
                     {
-                        if (!collectionIdMap.TryGetValue(collectionName, out int cid))
+                        if (!collectionIdMap.TryGetValue(collectionName, out int collectionId))
                         {
                             var newId = await plexCollections.GetOrCreateCollectionIdAsync(collectionName, target, cancellationToken).ConfigureAwait(false);
                             if (newId.HasValue)
-                                cid = collectionIdMap[collectionName] = newId.Value;
+                                collectionId = collectionIdMap[collectionName] = newId.Value;
                         }
 
-                        if (cid > 0)
+                        if (collectionId > 0)
                         {
-                            if (posted.Add((cid, "metadata")))
+                            if (posted.Add((collectionId, "metadata")))
                             {
                                 var group = metadataService.GetShokoGroupByID(series!.TopLevelGroupID);
                                 var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series!;
@@ -304,15 +304,15 @@ public class CollectionService(
                                 var tmdbDesc = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value
                                     ?? primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
                                 var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
-                                await plexCollections.UpdateCollectionMetadataAsync(cid, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
+                                await plexCollections.UpdateCollectionMetadataAsync(collectionId, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
                             }
 
                             foreach (var (prefix, suffix, suffixes, label, defaultFallback) in PlexConstants.CollectionImageConfigs)
                             {
-                                if (posted.Add((cid, prefix)))
+                                if (posted.Add((collectionId, prefix)))
                                 {
                                     var fallback = defaultFallback && Settings.CollectionImages;
-                                    var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, cid, suffix, suffixes, metadataService, fallback);
+                                    var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, collectionId, suffix, suffixes, metadataService, fallback);
                                     if (!string.IsNullOrEmpty(imagePath))
                                     {
                                         long ticks = 0;
@@ -322,13 +322,15 @@ public class CollectionService(
                                         }
                                         catch { }
                                         string cacheVal = $"{imagePath}?t={ticks}";
-                                        string cacheKey = $"{target.SectionId}|{cid}|{prefix}";
+                                        string cacheKey = $"{target.SectionId}|{collectionId}|{prefix}";
 
                                         // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
                                         bool plexHasPoster =
                                             prefix != "posters"
                                             || (
-                                                collectionRatingKeyMap.TryGetValue(cid.ToString(), out var pCol) && pCol.Thumb != null && !pCol.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
+                                                collectionRatingKeyMap.TryGetValue(collectionId.ToString(), out var plexCollection)
+                                                && plexCollection.Thumb != null
+                                                && !plexCollection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
                                             );
 
                                         if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
@@ -337,12 +339,12 @@ public class CollectionService(
                                             continue;
                                         }
 
-                                        if (await plexCollections.UploadCollectionImageAsync(cid, imagePath, prefix, target, cancellationToken).ConfigureAwait(false))
+                                        if (await plexCollections.UploadCollectionImageAsync(collectionId, imagePath, prefix, target, cancellationToken).ConfigureAwait(false))
                                         {
                                             cache[cacheKey] = cacheVal;
                                             cacheModified = true;
                                             uploaded++;
-                                            uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, cid));
+                                            uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, collectionId));
                                             logger.LogDebug("CollectionService: Applied {Label} for collection -> {Collection}", label, collectionName);
                                         }
                                     }

@@ -33,10 +33,10 @@ public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, s
 /// <param name="plexAutomationService">Plex automation service.</param>
 /// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="logger">Logger instance.</param>
-[RelayAdminAuthorize]
 [ApiController]
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
+[RelayAdminAuthorize]
 [Route(ShokoRelayConstants.BasePath)]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 public class PlexController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -415,7 +415,7 @@ public class PlexController(
         if (shokoEpisode == null)
             return Ok(new { status = "ignored", reason = "episode_not_found" });
 
-        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(usr => usr.LocalID).FirstOrDefault();
+        var user = !string.IsNullOrWhiteSpace(mappedShokoUser) ? userService.GetUserByUsername(mappedShokoUser) : userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault();
         if (user == null)
         {
             if (!string.IsNullOrWhiteSpace(mappedShokoUser))

@@ -60,16 +60,32 @@ public static partial class TagHelper
     }
 
     /// <summary>Composite key identifying a unique tag configuration context (including per-library overrides).</summary>
+    /// <param name="Overrides">The raw tag override lines.</param>
+    /// <param name="Sources">The enabled tag sources.</param>
+    /// <param name="MinWeight">The minimum AniDB tag weight threshold.</param>
     private readonly record struct TagCacheKey(string Overrides, TagSources Sources, MinimumTagWeight MinWeight);
 
     /// <summary>Holds compiled override rules and pre-warmed cross-series display name mappings for a single tag configuration.</summary>
+    /// <param name="blacklist">Set of normalized blacklisted tag keys.</param>
+    /// <param name="merges">Dictionary mapping source tag keys to target display names.</param>
     private sealed class TagCacheState(HashSet<string> blacklist, Dictionary<string, string> merges)
     {
+        /// <summary>Set of normalized blacklisted tag keys.</summary>
         public readonly HashSet<string> Blacklist = blacklist;
+
+        /// <summary>Dictionary mapping source tag keys to target display names.</summary>
         public readonly Dictionary<string, string> Merges = merges;
+
+        /// <summary>Global display-name frequency entries keyed by normalized tag key.</summary>
         public readonly ConcurrentDictionary<string, CacheHelper.GlobalNameEntry> DisplayNames = new();
+
+        /// <summary>Series IDs already recorded into <see cref="DisplayNames"/>.</summary>
         public readonly ConcurrentDictionary<int, byte> RecordedSeriesIds = new();
+
+        /// <summary>Lock synchronizing initial cache warming.</summary>
         public readonly Lock WarmLock = new();
+
+        /// <summary>Indicates whether <see cref="DisplayNames"/> has been warmed across all series.</summary>
         public volatile bool IsWarmed;
     }
 
@@ -110,8 +126,13 @@ public static partial class TagHelper
     /// <summary>Thread-local accumulation state used during parallel tag cache warming.</summary>
     private sealed class WarmThreadState
     {
+        /// <summary>Memoized cleanup and merge resolution results per raw tag name.</summary>
         public readonly Dictionary<string, (string NormKey, string TitleCased, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+
+        /// <summary>Observed series counts per tag variant tuple.</summary>
         public readonly Dictionary<(string NormKey, int Priority, string TitleCased), int> Counts = [];
+
+        /// <summary>Best-priority tag variant encountered within the current series.</summary>
         public readonly Dictionary<string, (int Priority, string TitleCased)> BestInSeries = new(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -146,13 +167,13 @@ public static partial class TagHelper
             var (userBlacklist, userMerges, userMergeMentioned) = TextHelper.ParseOverrides(reader, NormalizeTagKey);
 
             var activeMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            foreach (var def in s_defaultTagMerges)
+            foreach (var defaultEntry in s_defaultTagMerges)
             {
-                var normKey = NormalizeTagKey(def.Key);
-                var normVal = NormalizeTagKey(def.Value);
+                var normKey = NormalizeTagKey(defaultEntry.Key);
+                var normVal = NormalizeTagKey(defaultEntry.Value);
                 // If a default source or target is mentioned on a user merge line, drop the default rule entirely to allow the user to redefine it
                 if (!userMergeMentioned.Contains(normKey) && !userMergeMentioned.Contains(normVal))
-                    activeMerges[normKey] = def.Value;
+                    activeMerges[normKey] = defaultEntry.Value;
             }
 
             foreach (var (normSource, target) in userMerges)
@@ -295,9 +316,9 @@ public static partial class TagHelper
 
         var normalized = text.Normalize(NormalizationForm.FormD);
         var stringBuilderNorm = new StringBuilder(normalized.Length);
-        foreach (char ch in normalized)
-            if (CharUnicodeInfo.GetUnicodeCategory(ch) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(ch))
-                stringBuilderNorm.Append(char.ToLowerInvariant(ch));
+        foreach (char character in normalized)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character))
+                stringBuilderNorm.Append(char.ToLowerInvariant(character));
 
         string key = stringBuilderNorm.ToString();
 

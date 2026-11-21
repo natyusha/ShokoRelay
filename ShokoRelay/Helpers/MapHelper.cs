@@ -188,19 +188,19 @@ public static class MapHelper
 
         foreach (var video in allVideos)
         {
-            if (!videoToEpisodes.TryGetValue(video.LocalID, out var epList))
+            if (!videoToEpisodes.TryGetValue(video.LocalID, out var episodeList))
                 continue;
 
             // Fast path: If the video has only 1 episode link, skip all crossover and deduplication checks
-            if (epList.Count == 1)
+            if (episodeList.Count == 1)
             {
-                videoCoords[video.LocalID] = (epList[0].Coords, epList);
-                seasonsSet.Add(epList[0].Coords.Season);
+                videoCoords[video.LocalID] = (episodeList[0].Coords, episodeList);
+                seasonsSet.Add(episodeList[0].Coords.Season);
                 continue;
             }
 
             // Handle multi-type tiebreaks using cross-reference ordering
-            var sortedEpisodes = epList.OrderBy(item => item.Coords.Season).ThenBy(item => item.Coords.Episode).ToList();
+            var sortedEpisodes = episodeList.OrderBy(item => item.Coords.Season).ThenBy(item => item.Coords.Episode).ToList();
 
             if (sortedEpisodes.Select(item => item.Episode.Type).Distinct().Count() > 1)
             {
@@ -277,7 +277,7 @@ public static class MapHelper
         }
 
         // Pass 2: Build final mappings
-        var tmdbEpsCache = new Dictionary<int, List<IEpisode>>();
+        var tmdbEpisodesCache = new Dictionary<int, List<IEpisode>>();
         foreach (var video in allVideos)
         {
             if (!videoCoords.TryGetValue(video.LocalID, out var info))
@@ -292,14 +292,14 @@ public static class MapHelper
 
             // TMDB Episode metadata override for multi-part files
             IEpisode? tmdbEpisode = null;
-            if (allowPt && EnforceTmdbNumbering && firstEpisode is IShokoEpisode se && !OverrideHelper.HasCustomCoords(se, metadataService: metadataService))
+            if (allowPt && EnforceTmdbNumbering && firstEpisode is IShokoEpisode shokoEpisode && !OverrideHelper.HasCustomCoords(shokoEpisode, metadataService: metadataService))
             {
-                if (!tmdbEpsCache.TryGetValue(se.LocalID, out var tmdbEps))
+                if (!tmdbEpisodesCache.TryGetValue(shokoEpisode.LocalID, out var tmdbEpisodes))
                 {
-                    var rawEps = se.GetLinkedEpisodes(MetadataSource.TMDB);
-                    tmdbEpsCache[se.LocalID] = tmdbEps = rawEps is { Count: > 0 } ? SelectPreferredTmdbOrdering(rawEps, prefId) : [];
+                    var rawEpisodes = shokoEpisode.GetLinkedEpisodes(MetadataSource.TMDB);
+                    tmdbEpisodesCache[shokoEpisode.LocalID] = tmdbEpisodes = rawEpisodes is { Count: > 0 } ? SelectPreferredTmdbOrdering(rawEpisodes, prefId) : [];
                 }
-                tmdbEpisode = tmdbEps.ElementAtOrDefault(fileIndex);
+                tmdbEpisode = tmdbEpisodes.ElementAtOrDefault(fileIndex);
             }
             result.Add(
                 new FileMapping(video, [.. deduped.Select(item => item.Episode)], firstEpisode, coords, fileName, allowPt ? fileIndex + 1 : null, allowPt ? fileCount : 1, tmdbEpisode, video.IsVariation)
@@ -332,9 +332,9 @@ public static class MapHelper
             }
             if (xrefPos == null)
                 continue;
-            int exPos = xrefPos.GetValueOrDefault(deduped[existingIdx].Episode.ID, -1);
-            int enPos = xrefPos.GetValueOrDefault(entry.Episode.ID, -1);
-            if (enPos >= 0 && (exPos == -1 || enPos < exPos))
+            int existingPosition = xrefPos.GetValueOrDefault(deduped[existingIdx].Episode.ID, -1);
+            int entryPosition = xrefPos.GetValueOrDefault(entry.Episode.ID, -1);
+            if (entryPosition >= 0 && (existingPosition == -1 || entryPosition < existingPosition))
                 deduped[existingIdx] = entry;
         }
         // Reorder list so the first cross-referenced episode is the Primary

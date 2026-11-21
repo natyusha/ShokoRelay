@@ -59,7 +59,7 @@ public class SyncToShoko(
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
         bool actualProgress = includeProgress ?? auto.ShokoSyncWatchedIncludeProgress;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(usr => usr.LocalID).FirstOrDefault() is not { } defaultUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault() is not { } defaultUser)
             return result;
 
         string? adminUsername = configProvider.GetAdminUsername();
@@ -192,7 +192,7 @@ public class SyncToShoko(
 
                 if (progressIncludeAdmin || progressExtraUsers.Count > 0)
                 {
-                    var (progressBuckets, prResult) = await SyncHelper
+                    var (progressBuckets, progressResult) = await SyncHelper
                         .FetchUserBucketsAsync(
                             plexAuth,
                             plexClient,
@@ -210,7 +210,7 @@ public class SyncToShoko(
                             cancellationToken
                         )
                         .ConfigureAwait(false);
-                    result = prResult;
+                    result = progressResult;
 
                     foreach (var progressBucket in progressBuckets)
                     {
@@ -252,8 +252,8 @@ public class SyncToShoko(
                         continue;
                     }
 
-                    var epUserData = GetCachedUserData(episode, targetShokoUser);
-                    bool alreadyWatched = epUserData?.IsWatched == true;
+                    var episodeUserData = GetCachedUserData(episode, targetShokoUser);
+                    bool alreadyWatched = episodeUserData?.IsWatched == true;
 
                     bool isWatchedInPlex = item.ViewCount > 0;
                     bool hasProgressInPlex = item.ViewOffset > 0;
@@ -351,7 +351,7 @@ public class SyncToShoko(
                     {
                         result = SyncHelper.IncVotesFound(result);
                         double clampedRating = Math.Clamp(item.UserRating.Value, 1.0, 10.0);
-                        if (epUserData?.UserRating == null || Math.Abs(epUserData.UserRating.Value - clampedRating) > 0.05)
+                        if (episodeUserData?.UserRating == null || Math.Abs(episodeUserData.UserRating.Value - clampedRating) > 0.05)
                         {
                             if (!dryRun)
                                 await userDataService.RateEpisode(episode, targetShokoUser, clampedRating).ConfigureAwait(false);

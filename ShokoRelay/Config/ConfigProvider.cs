@@ -81,7 +81,7 @@ public partial class ConfigProvider : IDisposable
 
     /// <summary>The absolute path to the plugin's task reports directory.</summary>
     /// <remarks>Does not use <see cref="IApplicationPaths.LogsPath"/> as these are not traditional logs but temporary report files.</remarks>
-    public string LogsDirectory => Path.Combine(CacheDirectory, "reports");
+    public string ReportsDirectory => Path.Combine(CacheDirectory, "reports");
 
     /// <summary>The externally-reachable base URL of Shoko server. Priority: 1. Advanced.ShokoServerUrl setting, 2. Current HTTP Context, 3. Last discovered value, 4. Localhost fallback.</summary>
     public string ServerBaseUrl
@@ -134,7 +134,7 @@ public partial class ConfigProvider : IDisposable
         CacheDirectory = pluginPaths?.CachePath ?? Path.Combine(applicationPaths.CachePath, ShokoRelayConstants.PluginId);
         Directory.CreateDirectory(ConfigDirectory);
         Directory.CreateDirectory(CacheDirectory);
-        Directory.CreateDirectory(LogsDirectory);
+        Directory.CreateDirectory(ReportsDirectory);
 
         _filePath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePreferences);
         _tokenPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FilePlexToken);

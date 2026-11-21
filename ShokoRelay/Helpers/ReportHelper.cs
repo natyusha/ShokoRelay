@@ -25,7 +25,7 @@ public static class ReportHelper
         {
             var stringBuilder = new StringBuilder();
             builder(stringBuilder, data);
-            string logsDir = LogsDirectory;
+            string logsDir = ReportsDirectory;
             Directory.CreateDirectory(logsDir);
             File.WriteAllText(Path.Combine(logsDir, fileName), stringBuilder.ToString(), Encoding.UTF8);
         }
@@ -569,24 +569,43 @@ public static class ReportHelper
         /// <param name="category">Optional isolation category (e.g., "Person" vs "Company") preventing cross-category merges.</param>
         public delegate void RecordDelegate(string source, int sourceOrder, string? rawName, string category = "");
 
+        /// <summary>Memoized resolution result for a single raw item name.</summary>
+        /// <param name="NormKey">The normalized deduplication key.</param>
+        /// <param name="DisplayName">The formatted display name.</param>
+        /// <param name="MergeTarget">Optional canonical merge target display name.</param>
+        /// <param name="IsBlacklisted">Whether the item should be excluded.</param>
         private readonly record struct ResolvedItem(string NormKey, string DisplayName, string? MergeTarget, bool IsBlacklisted);
 
+        /// <summary>Tracks occurrence count for a single source/spelling variant.</summary>
         private sealed class VariantStats
         {
+            /// <summary>Number of series where this variant appeared.</summary>
             public int Count;
         }
 
+        /// <summary>Aggregates all variants and unique series IDs under a single normalized key.</summary>
         private sealed class GroupStats
         {
+            /// <summary>Canonical display target if an explicit merge rule matched.</summary>
             public string? MergeTarget;
+
+            /// <summary>Unique Shoko series IDs contributing to this group.</summary>
             public readonly HashSet<int> SeriesIds = [];
+
+            /// <summary>Variant counts keyed by source order, source name, and display name.</summary>
             public readonly Dictionary<(int SourceOrder, string Source, string DisplayName), VariantStats> Variants = [];
         }
 
+        /// <summary>Per-thread working state used to accumulate report entries without lock contention.</summary>
         private sealed class ThreadState
         {
+            /// <summary>Thread-local cache of resolved raw names.</summary>
             public readonly Dictionary<string, ResolvedItem> ResolveCache = new(StringComparer.Ordinal);
+
+            /// <summary>Thread-local group accumulators.</summary>
             public readonly Dictionary<(string Category, string NormKey), GroupStats> Groups = [];
+
+            /// <summary>Deduplication set preventing double-counting within a single series.</summary>
             public readonly HashSet<(string Category, string Source, string NormKey, string DisplayName)> SeenInSeries = [];
         }
 
@@ -622,11 +641,11 @@ public static class ReportHelper
                             foreach (var seriesId in localGroup.SeriesIds)
                                 globalGroup.SeriesIds.Add(seriesId);
 
-                            foreach (var (variantKey, vStats) in localGroup.Variants)
+                            foreach (var (variantKey, variantStats) in localGroup.Variants)
                             {
-                                if (!globalGroup.Variants.TryGetValue(variantKey, out var genreValues))
-                                    globalGroup.Variants[variantKey] = genreValues = new VariantStats();
-                                genreValues.Count += vStats.Count;
+                                if (!globalGroup.Variants.TryGetValue(variantKey, out var globalVariantStats))
+                                    globalGroup.Variants[variantKey] = globalVariantStats = new VariantStats();
+                                globalVariantStats.Count += variantStats.Count;
                             }
                         }
                     }
@@ -672,17 +691,17 @@ public static class ReportHelper
             if (resolved.IsBlacklisted || !local.SeenInSeries.Add((category, source, resolved.NormKey, resolved.DisplayName)))
                 return;
 
-            var gKey = (category, resolved.NormKey);
-            if (!local.Groups.TryGetValue(gKey, out var group))
-                local.Groups[gKey] = group = new GroupStats();
+            var groupKey = (category, resolved.NormKey);
+            if (!local.Groups.TryGetValue(groupKey, out var group))
+                local.Groups[groupKey] = group = new GroupStats();
 
             group.MergeTarget ??= resolved.MergeTarget;
             group.SeriesIds.Add(seriesId);
 
-            var vKey = (sourceOrder, source, resolved.DisplayName);
-            if (!group.Variants.TryGetValue(vKey, out var vStats))
-                group.Variants[vKey] = vStats = new VariantStats();
-            vStats.Count++;
+            var variantKey = (sourceOrder, source, resolved.DisplayName);
+            if (!group.Variants.TryGetValue(variantKey, out var variantStats))
+                group.Variants[variantKey] = variantStats = new VariantStats();
+            variantStats.Count++;
         }
 
         /// <summary>Orders normalized groups and formats each line with merged variants separated by semicolons.</summary>
@@ -723,12 +742,12 @@ public static class ReportHelper
                         attached[matchIdx >= 0 ? matchIdx : 0].Add(sec);
                     }
 
-                    for (int primIdx = 0; primIdx < primaries.Count; primIdx++)
+                    for (int primaryIndex = 0; primaryIndex < primaries.Count; primaryIndex++)
                     {
-                        var (sourceOrder, source, displayName, count) = primaries[primIdx];
+                        var (sourceOrder, source, displayName, count) = primaries[primaryIndex];
                         var stringBuilderSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
-                        foreach (var (_, sourceAtch, displayNameAtch, countAtch) in attached[primIdx])
-                            stringBuilderSplit.Append($";{sourceAtch},{TextHelper.EscapeCsvCommas(displayNameAtch)},{countAtch}");
+                        foreach (var (_, attachedSource, attachedDisplayName, attachedCount) in attached[primaryIndex])
+                            stringBuilderSplit.Append($";{attachedSource},{TextHelper.EscapeCsvCommas(attachedDisplayName)},{attachedCount}");
                         rows.Add((sourceOrder, displayName, count, stringBuilderSplit.ToString()));
                     }
                     continue;
@@ -752,8 +771,8 @@ public static class ReportHelper
                 else
                 {
                     stringBuilderLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
-                    for (int ordIdx = 1; ordIdx < ordered.Count; ordIdx++)
-                        stringBuilderLine.Append($";{ordered[ordIdx].Source},{TextHelper.EscapeCsvCommas(ordered[ordIdx].DisplayName)},{ordered[ordIdx].Count}");
+                    for (int orderedIndex = 1; orderedIndex < ordered.Count; orderedIndex++)
+                        stringBuilderLine.Append($";{ordered[orderedIndex].Source},{TextHelper.EscapeCsvCommas(ordered[orderedIndex].DisplayName)},{ordered[orderedIndex].Count}");
                 }
 
                 rows.Add((primaryOrder, primaryName, primaryCount, stringBuilderLine.ToString()));

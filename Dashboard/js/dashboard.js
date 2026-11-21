@@ -13,20 +13,20 @@
   // #region Helpers
   /**
    * Toggle a button's loading state by adding/removing a spinner overlay.
-   * @param {HTMLElement} btn - The button element to modify.
+   * @param {HTMLElement} button - The button element to modify.
    * @param {boolean} isLoading - Whether to enable or disable the loading state.
    * @returns {void}
    */
-  function setButtonLoading(btn, isLoading) {
-    if (!btn) return;
-    btn.classList.toggle("loading", isLoading);
-    isLoading ? btn.setAttribute("disabled", "") : btn.removeAttribute("disabled");
-    if (isLoading && !btn.querySelector(".button-spinner")) {
+  function setButtonLoading(button, isLoading) {
+    if (!button) return;
+    button.classList.toggle("loading", isLoading);
+    isLoading ? button.setAttribute("disabled", "") : button.removeAttribute("disabled");
+    if (isLoading && !button.querySelector(".button-spinner")) {
       const spinner = document.createElement("span");
       spinner.className = "button-spinner";
       spinner.innerHTML = '<svg class="icon-svg"><use href="img/icons.svg#loading"></use></svg>';
-      btn.appendChild(spinner);
-    } else if (!isLoading) btn.querySelector(".button-spinner")?.remove();
+      button.appendChild(spinner);
+    } else if (!isLoading) button.querySelector(".button-spinner")?.remove();
   }
 
   let isTaskSyncing = false;
@@ -46,27 +46,27 @@
       const isPlexLinked = !!window._sr.isPlexLinked;
 
       MANAGED_TASK_IDS.forEach((id) => {
-        const btn = element(id);
-        if (!btn) return;
+        const button = element(id);
+        if (!button) return;
 
         if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(id)) {
-          setButtonLoading(btn, false);
-          btn.disabled = true;
+          setButtonLoading(button, false);
+          button.disabled = true;
         } else {
-          setButtonLoading(btn, activeTasks.includes(id) || btn.classList.contains("clicking"));
-          if (btn.classList.contains("plex-auth") && !isPlexLinked) btn.disabled = true;
+          setButtonLoading(button, activeTasks.includes(id) || button.classList.contains("clicking"));
+          if (button.classList.contains("plex-auth") && !isPlexLinked) button.disabled = true;
         }
       });
 
-      const completeRes = await fetchJson(base + "/tasks/completed", {}, false);
-      const completeData = getData(completeRes);
-      if (completeRes.isOk && completeData) {
+      const completeResponse = await fetchJson(base + "/tasks/completed", {}, false);
+      const completeData = getData(completeResponse);
+      if (completeResponse.isOk && completeData) {
         let hasNewLogs = false;
         for (const [taskName, result] of Object.entries(completeData)) {
-          const btn = element(taskName);
-          if (btn?.classList.contains("clicking")) continue;
+          const button = element(taskName);
+          if (button?.classList.contains("clicking")) continue;
           const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
-          const filterInput = btn?.dataset.relayPersistIfEmpty ? document.querySelector(btn.dataset.relayPersistIfEmpty) : null;
+          const filterInput = button?.dataset.relayPersistIfEmpty ? document.querySelector(button.dataset.relayPersistIfEmpty) : null;
 
           toastOperation({ isOk: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
           await fetchJson(base + `/tasks/clear/${taskName}`, { method: "POST" }, false);
@@ -120,21 +120,21 @@
 
   /**
    * Core logic to wrap an async action with loading states and task management.
-   * @param {HTMLElement} btn - The button element trigger.
+   * @param {HTMLElement} button - The button element trigger.
    * @param {Function} handler - The async function to execute.
    * @returns {Promise<void>}
    */
-  async function runAction(btn, handler) {
-    if (!btn || btn.classList.contains("clicking")) return;
-    btn.classList.add("clicking");
-    setButtonLoading(btn, true);
-    const taskId = btn.id;
+  async function runAction(button, handler) {
+    if (!button || button.classList.contains("clicking")) return;
+    button.classList.add("clicking");
+    setButtonLoading(button, true);
+    const taskId = button.id;
     try {
-      await handler(btn);
+      await handler(button);
       if (taskId && MANAGED_TASK_IDS.includes(taskId)) await fetchJson(base + `/tasks/clear/${taskId}`, { method: "POST" }, false);
     } finally {
-      btn.classList.remove("clicking");
-      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(btn, false), TOAST_MS);
+      button.classList.remove("clicking");
+      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(button, false), TOAST_MS);
       else syncActiveTasks();
       loadLogs();
     }
@@ -142,16 +142,16 @@
 
   /**
    * Initialize a button as an aria-pressed toggle with a click handler.
-   * @param {HTMLElement|string} btn - The button element or its DOM id.
+   * @param {HTMLElement|string} button - The button element or its DOM id.
    * @param {boolean} [defaultState=false] - Initial pressed state.
    * @returns {HTMLElement|null} The resolved button element.
    */
-  function initToggle(btn, defaultState = false) {
-    const elBtn = typeof btn === "string" ? element(btn) : btn;
-    if (!elBtn) return null;
-    if (!elBtn.hasAttribute("aria-pressed")) elBtn.setAttribute("aria-pressed", String(!!defaultState));
-    elBtn.onclick = () => elBtn.setAttribute("aria-pressed", elBtn.getAttribute("aria-pressed") === "true" ? "false" : "true");
-    return elBtn;
+  function initToggle(button, defaultState = false) {
+    const buttonElement = typeof button === "string" ? element(button) : button;
+    if (!buttonElement) return null;
+    if (!buttonElement.hasAttribute("aria-pressed")) buttonElement.setAttribute("aria-pressed", String(!!defaultState));
+    buttonElement.onclick = () => buttonElement.setAttribute("aria-pressed", buttonElement.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    return buttonElement;
   }
   // #endregion
 
@@ -162,13 +162,13 @@
     setButtonLoading,
     /**
      * Binds an async click handler to a button element wrapped with loading state management.
-     * @param {HTMLElement|string} btn - The button element or its DOM id.
+     * @param {HTMLElement|string} button - The button element or its DOM id.
      * @param {Function} handler - The async action handler to execute on click.
      * @returns {void}
      */
-    withButtonAction: (btn, handler) => {
-      const elBtn = typeof btn === "string" ? element(btn) : btn;
-      if (elBtn) elBtn.onclick = () => runAction(elBtn, handler);
+    withButtonAction: (button, handler) => {
+      const buttonElement = typeof button === "string" ? element(button) : button;
+      if (buttonElement) buttonElement.onclick = () => runAction(buttonElement, handler);
     },
   });
   // #endregion
@@ -178,14 +178,20 @@
     const target = event.target.closest("[data-relay-endpoint], [data-relay-action]");
     if (!target) return;
 
-    const action = async (btn, forceDryRun = false) => {
-      let endpoint = btn.dataset.relayEndpoint;
-      const actionKey = btn.dataset.relayAction;
-      const label = btn.dataset.relayLabel;
-      const paramFnName = btn.dataset.relayParams;
-      const method = btn.dataset.relayMethod || "GET";
-      const persistAttr = btn.dataset.relayPersist === "true";
-      const persistIfEmptySelector = btn.dataset.relayPersistIfEmpty;
+    /**
+     * Dispatches a configured endpoint request or registered action for a clicked control.
+     * @param {HTMLElement} button - The triggered button element.
+     * @param {boolean} [forceDryRun=false] - Whether to rewrite dryRun=false to dryRun=true.
+     * @returns {Promise<void>}
+     */
+    const action = async (button, forceDryRun = false) => {
+      let endpoint = button.dataset.relayEndpoint;
+      const actionKey = button.dataset.relayAction;
+      const label = button.dataset.relayLabel;
+      const paramFnName = button.dataset.relayParams;
+      const method = button.dataset.relayMethod || "GET";
+      const persistAttr = button.dataset.relayPersist === "true";
+      const persistIfEmptySelector = button.dataset.relayPersistIfEmpty;
 
       if (endpoint) {
         if (forceDryRun) endpoint = endpoint.replace(/dryRun=false/i, "dryRun=true");
@@ -202,10 +208,10 @@
         showToast(`${label}${forceDryRun ? " (Dry Run)" : ""}: Processing...`, "info", TOAST_MS);
         const response = await fetchJson(url, { method });
         toastOperation(response, label, { hideOnSucceed });
-        if (btn.id === window._sr.tasks.plexAuthRefresh && response.isOk) window._sr.refreshPlexState?.();
+        if (button.id === window._sr.tasks.plexAuthRefresh && response.isOk) window._sr.refreshPlexState?.();
       } else if (actionKey) {
         const handler = window._sr.actions[actionKey];
-        if (handler) await handler(btn);
+        if (handler) await handler(button);
       }
     };
 
@@ -223,11 +229,11 @@
       element("confirm-cancel").onclick = close;
       execBtn.onclick = () => {
         close();
-        runAction(target, (btn) => action(btn, false));
+        runAction(target, (button) => action(button, false));
       };
       dryBtn.onclick = () => {
         close();
-        runAction(target, (btn) => action(btn, true));
+        runAction(target, (button) => action(button, true));
       };
     } else runAction(target, action);
   });

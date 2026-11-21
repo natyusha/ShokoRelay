@@ -451,14 +451,14 @@ public class AnimeThemesMp3Generator(
                 {
                     var (bestTheme, bestIndex, _, _) = validThemes
                         .Select(
-                            (theme, index) =>
+                            (theme, themeIndex) =>
                             {
                                 string slug = theme.Slug ?? "";
                                 var (baseSlug, _) = AnimeThemesHelper.ParseSlug(slug);
                                 int numberValue = AnimeThemesHelper.ExtractSlugNumber(baseSlug);
 
                                 int group = AnimeThemesHelper.IsOp(baseSlug) ? 1 : (AnimeThemesHelper.IsEd(baseSlug) ? 2 : 3);
-                                return (Theme: theme, OriginalIndex: index, Group: group, Number: numberValue);
+                                return (Theme: theme, OriginalIndex: themeIndex, Group: group, Number: numberValue);
                             }
                         )
                         .OrderBy(item => item.Group)
@@ -668,21 +668,24 @@ public class AnimeThemesMp3Generator(
 
                         var anime = await _apiClient.FetchAnimeThemesAsync(series.AnidbAnimeID, token).ConfigureAwait(false);
                         var animethemes = anime?.FirstOrDefault()?.Animethemes ?? [];
-                        var operation = animethemes.Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug)).OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!)).FirstOrDefault();
-                        var episodeDuration = animethemes
+                        var firstOpTheme = animethemes
+                            .Where(theme => theme.Slug != null && AnimeThemesHelper.IsOp(theme.Slug))
+                            .OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!))
+                            .FirstOrDefault();
+                        var firstEdTheme = animethemes
                             .Where(theme => theme.Slug != null && AnimeThemesHelper.IsEd(theme.Slug))
                             .OrderBy(theme => AnimeThemesHelper.ExtractSlugNumber(theme.Slug!))
                             .FirstOrDefault();
 
-                        int? opNum = operation?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(operation.Slug) : null;
-                        int? edNum = episodeDuration?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(episodeDuration.Slug) : null;
+                        int? firstOpNumber = firstOpTheme?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(firstOpTheme.Slug) : null;
+                        int? firstEdNumber = firstEdTheme?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(firstEdTheme.Slug) : null;
 
-                        bool hasOpUpgrade = operation != null && (isEd || (isOp && opNum.HasValue && opNum.Value < currentSlugNum));
-                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && operation == null && episodeDuration != null && edNum.HasValue && edNum.Value < currentSlugNum;
+                        bool hasOpUpgrade = firstOpTheme != null && (isEd || (isOp && firstOpNumber.HasValue && firstOpNumber.Value < currentSlugNum));
+                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && firstOpTheme == null && firstEdTheme != null && firstEdNumber.HasValue && firstEdNumber.Value < currentSlugNum;
 
                         if (hasOpUpgrade || hasEdUpgrade)
                         {
-                            string newUpgrade = (hasOpUpgrade ? operation!.Slug : episodeDuration!.Slug)!;
+                            string newUpgrade = (hasOpUpgrade ? firstOpTheme!.Slug : firstEdTheme!.Slug)!;
                             if (newUpgrade != upgrade)
                             {
                                 upgrade = newUpgrade;

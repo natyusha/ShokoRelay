@@ -222,34 +222,34 @@ public static partial class VfsHelper
     /// <summary>Builds a filename for extra content (trailers, credits, etc.) using special type prefixes and title metadata.</summary>
     /// <param name="mapping">The mapping containing coordinates and metadata.</param>
     /// <param name="extra">A tuple containing the target folder and the Plex extra subtype.</param>
-    /// <param name="pad">The number of digits to pad the extra number with.</param>
-    /// <param name="ext">The file extension (including the dot).</param>
+    /// <param name="padding">The number of digits to pad the extra number with.</param>
+    /// <param name="extension">The file extension (including the dot).</param>
     /// <param name="seriesTitle">The display title of the parent series used for name resolution.</param>
-    /// <param name="partIdx">Optional 1-based index for multi-part extras.</param>
+    /// <param name="partIndex">Optional 1-based index for multi-part extras.</param>
     /// <param name="partCount">Optional total number of parts for multi-part extras.</param>
-    /// <param name="vIdx">Optional version index for duplicate extras.</param>
+    /// <param name="versionIndex">Optional version index for duplicate extras.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
     /// <returns>A sanitized and formatted filename string for Plex extras (e.g., "C01 ❯ Episode Title [variation].mkv").</returns>
     public static string BuildExtrasFileName(
         MapHelper.FileMapping mapping,
         (string Folder, string Subtype) extra,
-        int pad,
-        string ext,
+        int padding,
+        string extension,
         string seriesTitle,
-        int? partIdx = null,
+        int? partIndex = null,
         int? partCount = null,
-        int? vIdx = null,
+        int? versionIndex = null,
         bool isVariation = false
     )
     {
-        string episode = s_extraTypePrefixes.TryGetValue(extra.Subtype, out var pref) ? pref + mapping.Coords.Episode.ToString($"D{pad}") : mapping.Coords.Episode.ToString($"D{pad}");
+        string episode = s_extraTypePrefixes.TryGetValue(extra.Subtype, out var prefix) ? prefix + mapping.Coords.Episode.ToString($"D{padding}") : mapping.Coords.Episode.ToString($"D{padding}");
         int totalParts = partCount ?? mapping.PartCount;
-        string part = totalParts > 1 ? $"-pt{partIdx ?? mapping.PartIndex}" : (vIdx.HasValue ? $"-dup{vIdx}" : "");
+        string part = totalParts > 1 ? $"-pt{partIndex ?? mapping.PartIndex}" : (versionIndex.HasValue ? $"-dup{versionIndex}" : "");
 
         string name = $"{episode}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle))}";
         if (isVariation && totalParts <= 1)
             name += "[variation]";
-        return SanitizeName(name + ext);
+        return SanitizeName(name + extension);
     }
 
     #endregion

@@ -156,7 +156,7 @@
     trigger.onclick = (clickEvent) => {
       clickEvent.stopPropagation();
       const willOpen = !container.classList.contains("open");
-      document.querySelectorAll(".multiselect.open").forEach((elOpen) => elOpen.classList.remove("open"));
+      document.querySelectorAll(".multiselect.open").forEach((openElement) => openElement.classList.remove("open"));
       if (willOpen) container.classList.add("open");
     };
 
@@ -167,7 +167,7 @@
     wrap.appendChild(container);
   }
 
-  document.addEventListener("click", () => document.querySelectorAll(".multiselect.open").forEach((elOpen) => elOpen.classList.remove("open")));
+  document.addEventListener("click", () => document.querySelectorAll(".multiselect.open").forEach((openElement) => openElement.classList.remove("open")));
 
   /**
    * Generates a dual-textarea UI for mapping dictionaries and binds it to the configuration state.
@@ -198,13 +198,13 @@
     rightArea.value = keys.map((key) => (keyOnLeft ? mappingDict[key] : key)).join("\n");
 
     leftArea.onchange = rightArea.onchange = async () => {
-      const value = {};
-      const lLines = leftArea.value.split("\n");
-      const rLines = rightArea.value.split("\n");
-      lLines.forEach((leftVal, index) => {
-        if (leftVal.trim() && rLines[index]?.trim()) value[keyOnLeft ? leftVal.trim() : rLines[index].trim()] = keyOnLeft ? rLines[index].trim() : leftVal.trim();
+      const mappingValue = {};
+      const leftLines = leftArea.value.split("\n");
+      const rightLines = rightArea.value.split("\n");
+      leftLines.forEach((leftVal, index) => {
+        if (leftVal.trim() && rightLines[index]?.trim()) mappingValue[keyOnLeft ? leftVal.trim() : rightLines[index].trim()] = keyOnLeft ? rightLines[index].trim() : leftVal.trim();
       });
-      setValueByPath(config, prop.Path, value);
+      setValueByPath(config, prop.Path, mappingValue);
       await saveSettings(config);
     };
   }
@@ -221,12 +221,12 @@
     if (!schemaRes.isOk || !configRes.isOk) return showToast("Failed to Load Config", "error", 0);
 
     const schema = schemaRes.data.properties || [];
-    const rawCfg = configRes.data || {};
-    const config = window._sr.syncConfig(unwrapConfig(rawCfg));
+    const rawConfig = configRes.data || {};
+    const config = window._sr.syncConfig(unwrapConfig(rawConfig));
     const overridesBtn = element("vfs-overrides");
 
     element("config-form").innerHTML = "";
-    if (element("overrides-text")) element("overrides-text").value = rawCfg.overrides || "";
+    if (element("overrides-text")) element("overrides-text").value = rawConfig.overrides || "";
 
     const primarySection = document.createElement("details");
     const primaryContent = document.createElement("div");
@@ -267,7 +267,7 @@
         input.add(new Option("Default", "default"));
         input.add(new Option("Shoko Gray", "shoko-gray"));
 
-        (rawCfg.themes || []).forEach((theme) => {
+        (rawConfig.themes || []).forEach((theme) => {
           const opt = new Option(theme.name, theme.id);
           opt.selected = theme.id === value;
           input.add(opt);

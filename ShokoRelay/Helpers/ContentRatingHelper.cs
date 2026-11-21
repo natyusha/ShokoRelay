@@ -25,7 +25,10 @@ public static class ContentRatingHelper
     /// <summary>Thread-local reusable state to prevent allocating new HashSets and Dictionaries for every series during a full library scan.</summary>
     private sealed class RatingState
     {
+        /// <summary>Set of matching rating indicator tag names for the current series.</summary>
         public readonly HashSet<string> TagSet = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>Lookup of AniDB tag weights keyed by lowercased tag name.</summary>
         public readonly Dictionary<string, int> AniDbWeights = new(StringComparer.OrdinalIgnoreCase);
     }
 
@@ -68,9 +71,9 @@ public static class ContentRatingHelper
         }
 
         // Build AniDB weight dictionary and populate tagSet for precision-based decisions (defaults to 0 when not present).
-        if (series is IShokoSeries ss && ss.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> atags)
+        if (series is IShokoSeries shokoSeries && shokoSeries.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
         {
-            foreach (var animeTag in atags)
+            foreach (var animeTag in anidbTags)
             {
                 var name = animeTag?.Name?.Trim();
                 if (string.IsNullOrWhiteSpace(name) || !s_ratingTags.Contains(name))
@@ -100,12 +103,12 @@ public static class ContentRatingHelper
             // Iterate tags in order, check AniDB weight thresholds
             (string Rating, bool IsAdult)? ApplyWeightedChecks((string Key, int Tv14, int TvMa)[] checks)
             {
-                foreach (var (key, tv14, tvma) in checks)
+                foreach (var (key, tv14, tvMa) in checks)
                 {
                     if (!tagSet.Contains(key))
                         continue;
                     int weight = anidbWeights.TryGetValue(key, out int tagWeight) ? tagWeight : 0;
-                    if (weight >= tvma)
+                    if (weight >= tvMa)
                         return ("TV-MA" + descriptor, false);
                     if (weight >= tv14 && contentRating != "TV-MA")
                         contentRating = "TV-14";

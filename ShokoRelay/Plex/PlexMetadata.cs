@@ -257,15 +257,16 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var movieImages = tmdbMovie as IWithImages;
         var tmdbSeries = ctx.TmdbSeries;
 
-        var mappedFile = ctx.FileData.Mappings.FirstOrDefault(mapping => mapping.Episodes.Any(episode => episode.ID == episode.ID));
+        var mappedFile = ctx.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID));
         List<IEpisode> fileMainEpisodes =
-            mappedFile != null ? [.. mappedFile.Episodes.Where(episode => episode.Type == EpisodeType.Episode)]
-            : episode is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
+            mappedFile != null ? [.. mappedFile.Episodes.Where(mappedEpisode => mappedEpisode.Type == EpisodeType.Episode)]
+            : episode is IShokoEpisode { Videos: { Count: > 0 } videos } shokoEpisode
                 ?
                 [
-                    .. vids.SelectMany(vid => vid.Episodes)
-                        .Where(episode => episode.Type == EpisodeType.Episode && episode.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(episode))
-                        .DistinctBy(episode => episode.LocalID),
+                    .. videos
+                        .SelectMany(video => video.Episodes)
+                        .Where(linkedEpisode => linkedEpisode.Type == EpisodeType.Episode && linkedEpisode.ShokoSeriesID == shokoEpisode.ShokoSeriesID && !MapHelper.IsHidden(linkedEpisode))
+                        .DistinctBy(linkedEpisode => linkedEpisode.LocalID),
                 ]
             : [];
         bool isMultiEpMovie = fileMainEpisodes.Count > 1;
@@ -303,7 +304,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["year"]                  = episode.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
-            ["duration"]              = isMultiEpMovie ? (int)Math.Min(int.MaxValue, fileMainEpisodes.Sum(episode => episode.Runtime.TotalMilliseconds)) : (int)Math.Min(int.MaxValue, episode.Runtime.TotalMilliseconds),
+            ["duration"]              = isMultiEpMovie ? (int)Math.Min(int.MaxValue, fileMainEpisodes.Sum(mainEpisode => mainEpisode.Runtime.TotalMilliseconds)) : (int)Math.Min(int.MaxValue, episode.Runtime.TotalMilliseconds),
             //["tagline"]             = TMDB has this but it is not exposed
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
@@ -349,7 +350,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 .Select(metadataService.GetShokoSeriesByID)
                 .OfType<IShokoSeries>()
                 .SelectMany(groupSeries => groupSeries.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
-                .FirstOrDefault(ts => ts.SeasonNumber == seasonNum);
+                .FirstOrDefault(seasonItem => seasonItem.SeasonNumber == seasonNum);
         }
 
         if (tmdbSeason != null)
@@ -429,12 +430,12 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             : TextHelper.ResolveEpisodeTitle(episode, actualSeries.LocalID == series.LocalID ? ctx.Titles.DisplayTitle : (actualSeries.GetDisplayTitle() ?? ctx.Titles.DisplayTitle), tmdbEp);
 
         string epDescription =
-            Settings.TmdbEpGroupNames && tmdbEpisode != null && TextHelper.GetDescriptionByLanguage(tmdbEpisode, Settings.DescriptionLanguage) is { Length: > 0 } gd
-                ? gd
+            Settings.TmdbEpGroupNames && tmdbEpisode != null && TextHelper.GetDescriptionByLanguage(tmdbEpisode, Settings.DescriptionLanguage) is { Length: > 0 } groupOverview
+                ? groupOverview
                 : TextHelper.GetDescriptionByLanguage(episode, Settings.DescriptionLanguage);
         if (isMovieOverride && string.IsNullOrWhiteSpace(epDescription))
-            epDescription = (tmdbMovie != null ? TextHelper.GetDescriptionByLanguage(tmdbMovie, Settings.DescriptionLanguage) : null) is { Length: > 0 } md
-                ? md
+            epDescription = (tmdbMovie != null ? TextHelper.GetDescriptionByLanguage(tmdbMovie, Settings.DescriptionLanguage) : null) is { Length: > 0 } movieOverview
+                ? movieOverview
                 : TextHelper.GetDescriptionByLanguage(actualSeries, Settings.DescriptionLanguage);
 
         string? parentThumb = null;
@@ -445,7 +446,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 .Select(metadataService.GetShokoSeriesByID)
                 .OfType<IShokoSeries>()
                 .SelectMany(groupSeries => groupSeries.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
-                .FirstOrDefault(ts => ts.SeasonNumber == mapped.Season)
+                .FirstOrDefault(tmdbSeason => tmdbSeason.SeasonNumber == mapped.Season)
                 ?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
         }
 

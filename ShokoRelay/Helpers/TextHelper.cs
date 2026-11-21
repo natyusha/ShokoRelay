@@ -310,15 +310,18 @@ public static partial class TextHelper
         string display = (Settings.MoveCommonSeriesTitlePrefixes && !string.IsNullOrWhiteSpace(raw)) ? SeriesPrefixRegex().Replace(raw, "$2 — $1") : raw;
 
         // Get Alternate Title according to the language preference
-        string? alt = GetTitleByLanguage(series, Settings.SeriesAltTitleLanguage);
+        string? alternateTitle = GetTitleByLanguage(series, Settings.SeriesAltTitleLanguage);
 
         // Duplicate check to avoid redundant metadata
-        string? finalAlt = (string.IsNullOrEmpty(alt) || alt.Equals(raw, StringComparison.OrdinalIgnoreCase) || alt.Equals(display, StringComparison.OrdinalIgnoreCase)) ? null : alt;
+        string? finalAlternate =
+            (string.IsNullOrEmpty(alternateTitle) || alternateTitle.Equals(raw, StringComparison.OrdinalIgnoreCase) || alternateTitle.Equals(display, StringComparison.OrdinalIgnoreCase))
+                ? null
+                : alternateTitle;
 
         // Append Alternate to Sort Title to make it searchable in Plex UI
-        string sortTitle = string.IsNullOrWhiteSpace(finalAlt) ? display : $"{display} – {finalAlt}";
+        string sortTitle = string.IsNullOrWhiteSpace(finalAlternate) ? display : $"{display} – {finalAlternate}";
 
-        return (display, sortTitle, finalAlt);
+        return (display, sortTitle, finalAlternate);
     }
 
     /// <summary>Compute the best title to display for an episode, handling ambiguous names and TMDB reassignments.</summary>
@@ -369,11 +372,11 @@ public static partial class TextHelper
     /// <param name="episode">The movie episode to inspect.</param>
     /// <returns>True if at least one video file linked to this episode also contains other main episodes from the same series.</returns>
     public static bool IsMultiEpisodeMovieFile(IEpisode episode) =>
-        episode is IShokoEpisode { Videos: { Count: > 0 } vids } shokoEp
-        && vids.Any(video =>
+        episode is IShokoEpisode { Videos: { Count: > 0 } videos } shokoEpisode
+        && videos.Any(video =>
             video
-                .Episodes.Where(episode => episode.Type == EpisodeType.Episode && episode.ShokoSeriesID == shokoEp.ShokoSeriesID && !MapHelper.IsHidden(episode))
-                .Select(episode => episode.LocalID)
+                .Episodes.Where(linkedEpisode => linkedEpisode.Type == EpisodeType.Episode && linkedEpisode.ShokoSeriesID == shokoEpisode.ShokoSeriesID && !MapHelper.IsHidden(linkedEpisode))
+                .Select(linkedEpisode => linkedEpisode.LocalID)
                 .Distinct()
                 .Skip(1)
                 .Any()

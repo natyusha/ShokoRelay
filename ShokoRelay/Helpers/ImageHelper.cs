@@ -44,9 +44,9 @@ public static class ImageHelper
     #region Image Builders
 
     /// <summary>Maps a file extension to its corresponding MIME content type for collection poster images.</summary>
-    /// <param name="ext">The file extension string.</param>
+    /// <param name="extension">The file extension string.</param>
     /// <returns>A MIME type string or null if unsupported.</returns>
-    public static string? GetMimeType(string ext) => !string.IsNullOrWhiteSpace(ext) && PlexConstants.LocalMediaAssets.Artwork.TryGetValue(ext, out var mime) ? mime : null;
+    public static string? GetMimeType(string extension) => !string.IsNullOrWhiteSpace(extension) && PlexConstants.LocalMediaAssets.Artwork.TryGetValue(extension, out var mime) ? mime : null;
 
     /// <summary>Filters and returns only enabled, desired, and locally available images from the supplied entity.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
@@ -65,23 +65,23 @@ public static class ImageHelper
         if (entity is ISeason season && season.ID.Source == MetadataSource.TMDB)
             options.LinkedEntityImages = false;
 
-        var imgs = entity.GetImages(options).ToList();
+        var images = entity.GetImages(options).ToList();
 
         // Exclude Plex-synced generated thumbnails from episode metadata responses so TMDB Thumbnails remain distinct
         if (entity is IEpisode && type == ImageEntityType.Backdrop)
-            imgs = [.. imgs.Where(img => img.CrossReference?.Source != ServiceRegistration.RelayPlexSource)];
+            images = [.. images.Where(image => image.CrossReference?.Source != ServiceRegistration.RelayPlexSource)];
 
         if (entity is ISeries)
         {
             // Push TMDB Season type posters to the end of the array to prioritize TMDB Series posters
-            imgs = [.. imgs.OrderBy(img => img.CrossReference?.EntityID.EntityType == MetadataEntityType.Season ? 1 : 0)];
+            images = [.. images.OrderBy(image => image.CrossReference?.EntityID.EntityType == MetadataEntityType.Season ? 1 : 0)];
 
             // Reverse AniDB images to prioritize the newest posters in their original positions
-            var aniDbRev = new Queue<IImage>(imgs.Where(img => img.Source == MetadataSource.AniDB).Reverse());
-            imgs = [.. imgs.Select(img => img.Source == MetadataSource.AniDB ? aniDbRev.Dequeue() : img)];
+            var anidbReversed = new Queue<IImage>(images.Where(image => image.Source == MetadataSource.AniDB).Reverse());
+            images = [.. images.Select(image => image.Source == MetadataSource.AniDB ? anidbReversed.Dequeue() : image)];
         }
 
-        return imgs;
+        return images;
     }
 
     /// <summary>Gets the URL of the preferred image for the entity based on the language setting.</summary>
@@ -216,8 +216,8 @@ public static class ImageHelper
 
     /// <summary>Create a set of cover poster images specifically for a season entry.</summary>
     /// <remarks>
-    /// Season posters are hardcoded by the caller to always use direct CDN routing when TMDB season posters are present.
-    /// This forces 'addEveryImage' to true to bypass local metadata limitations until Shoko's WebUI supports selecting the preferred poster.
+    ///   - Season posters are hardcoded by the caller to always use direct CDN routing when TMDB season posters are present.
+    ///   - This forces 'addEveryImage' to true to bypass local metadata limitations until Shoko's WebUI supports selecting the preferred poster.
     /// </remarks>
     /// <param name="seriesImages">Fallback series images.</param>
     /// <param name="alt">Alt text for entries.</param>

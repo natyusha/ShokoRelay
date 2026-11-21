@@ -52,7 +52,7 @@ public sealed record AnimeThemesMappingEntry(
             filePath,
             lookup.VideoId,
             lookup.AniDbId,
-            lookup.NC,
+            lookup.Nc,
             lookup.Slug,
             lookup.Version,
             lookup.ArtistName,
@@ -93,13 +93,11 @@ public sealed record WebmCacheEntry(string VfsPath, int VideoId, int Bitmask);
 public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<WebmCacheEntry> CacheEntries, TimeSpan Elapsed);
 
 /// <summary>Internal helper record used when looking up theme metadata by video identifier.</summary>
-/// <remarks><c>ThemeId</c>: AnimeThemes theme identifier.</remarks>
 /// <inheritdoc cref="AnimeThemesMappingEntry" />
 internal sealed record AnimeThemesVideoLookup(
     int VideoId,
-    int ThemeId,
     int AniDbId,
-    bool NC,
+    bool Nc,
     string Slug,
     int Version,
     string ArtistName,
@@ -120,7 +118,6 @@ internal sealed record AnimeThemesVideoLookup(
     internal AnimeThemesVideoLookup(AnimeThemesMappingEntry entry)
         : this(
             entry.VideoId,
-            0,
             entry.AniDbId,
             entry.Nc,
             entry.Slug,
@@ -309,17 +306,17 @@ internal static partial class AnimeThemesHelper
             passedHeader = true;
 
             var fields = TextHelper.SplitCsvLine(trimmedLine);
-            if (fields.Length < 17 || !int.TryParse(fields[1], out int vid) || !int.TryParse(fields[2], out int aid) || !int.TryParse(fields[5], out int ver))
+            if (fields.Length < 17 || !int.TryParse(fields[1], out int videoId) || !int.TryParse(fields[2], out int anidbId) || !int.TryParse(fields[5], out int version))
                 continue;
 
             entries.Add(
                 new AnimeThemesMappingEntry(
                     fields[0],
-                    vid,
-                    aid,
+                    videoId,
+                    anidbId,
                     fields[3] == "1",
                     fields[4],
-                    ver,
+                    version,
                     TextHelper.UnescapeUnicode(fields[7]),
                     TextHelper.UnescapeUnicode(fields[6]),
                     fields[8] == "1",
@@ -328,7 +325,7 @@ internal static partial class AnimeThemesHelper
                     fields[11] == "1",
                     fields[12] == "1",
                     fields[13],
-                    int.TryParse(fields[14], out var parsedResult) ? parsedResult : 0,
+                    int.TryParse(fields[14], out var parsedResolution) ? parsedResolution : 0,
                     fields[15],
                     fields[16]
                 )
@@ -432,8 +429,8 @@ internal static partial class AnimeThemesHelper
         if (parts.Length > 0)
         {
             string yearPart = parts[0];
-            if (yearPart.EndsWith("s", StringComparison.OrdinalIgnoreCase) && int.TryParse(yearPart[..^1], out int dec))
-                return 1900 + dec;
+            if (yearPart.EndsWith("s", StringComparison.OrdinalIgnoreCase) && int.TryParse(yearPart[..^1], out int decade))
+                return 1900 + decade;
             if (int.TryParse(yearPart, out int year))
                 return year;
         }
@@ -449,7 +446,7 @@ internal static partial class AnimeThemesHelper
     {
         var (baseSlug, slugSuffix) = ParseSlug(lookup.Slug ?? "");
         string overridePrefix = overrideIndex > 0 ? $"P{overrideIndex + 1} ❯ " : "";
-        string nc = lookup.NC ? "NC" : "";
+        string nc = lookup.Nc ? "NC" : "";
         string slug = string.IsNullOrWhiteSpace(baseSlug) ? "Theme" : baseSlug;
 
         // Zero-width space (\u200B) and hair space (\u200A) bypass Plex's undocumented behavior of automatically stripping OP/ED/extra prefixes from display titles and sort OP before ED
@@ -458,7 +455,7 @@ internal static partial class AnimeThemesHelper
         else if (slug.StartsWith("ED", StringComparison.OrdinalIgnoreCase))
             slug = $"E{TextHelper.ZeroWidthSpace}D{slug[2..]}";
 
-        string ver = lookup.Version > 1 ? $"v{lookup.Version}" : "";
+        string versionSuffix = lookup.Version > 1 ? $"v{lookup.Version}" : "";
         string title = string.IsNullOrWhiteSpace(lookup.SongTitle) ? "" : " ❯ " + lookup.SongTitle;
         string slugTag = FormatSlugTag(slugSuffix);
 
@@ -471,26 +468,26 @@ internal static partial class AnimeThemesHelper
             1 => artistList[0],
             _ => "",
         };
-        string artistStr = string.IsNullOrWhiteSpace(artistDisplay) ? "" : " ❯ " + artistDisplay;
+        string artistText = string.IsNullOrWhiteSpace(artistDisplay) ? "" : " ❯ " + artistDisplay;
 
-        var attr = new List<string>();
+        var attributes = new List<string>();
         if (lookup.Lyrics)
-            attr.Add("LYRICS");
+            attributes.Add("LYRICS");
         if (lookup.Subbed)
-            attr.Add("SUBS");
+            attributes.Add("SUBS");
         if (lookup.Uncen)
-            attr.Add("UNCEN");
+            attributes.Add("UNCEN");
         if (lookup.NSFW)
-            attr.Add("NSFW");
+            attributes.Add("NSFW");
         if (lookup.Spoiler)
-            attr.Add("SPOIL");
+            attributes.Add("SPOIL");
         if (lookup.Overlap == "Transition")
-            attr.Add("TRANS");
+            attributes.Add("TRANS");
         else if (lookup.Overlap == "Over")
-            attr.Add("OVER");
+            attributes.Add("OVER");
 
-        string attrStr = (Settings.Advanced.AnimeThemesAppendTags && attr.Count > 0) ? $" [{string.Join(", ", attr)}]" : "";
-        return VfsHelper.CleanEpisodeTitleForFilename($"{overridePrefix}{nc}{slug}{ver}{title}{slugTag}{artistStr}{attrStr}{extension}");
+        string attributesText = (Settings.Advanced.AnimeThemesAppendTags && attributes.Count > 0) ? $" [{string.Join(", ", attributes)}]" : "";
+        return VfsHelper.CleanEpisodeTitleForFilename($"{overridePrefix}{nc}{slug}{versionSuffix}{title}{slugTag}{artistText}{attributesText}{extension}");
     }
 
     /// <summary>Parses a theme slug into base and suffix components.</summary>
@@ -500,9 +497,12 @@ internal static partial class AnimeThemesHelper
     {
         if (string.IsNullOrWhiteSpace(slug))
             return ("", null);
-        int dash = slug.IndexOf('-');
-        string basePart = dash < 0 ? slug : slug[..dash];
-        return (basePart.Equals("OP1", StringComparison.OrdinalIgnoreCase) || basePart.Equals("ED1", StringComparison.OrdinalIgnoreCase) ? basePart[..2] : basePart, dash < 0 ? null : slug[(dash + 1)..]);
+        int dashIndex = slug.IndexOf('-');
+        string basePart = dashIndex < 0 ? slug : slug[..dashIndex];
+        return (
+            basePart.Equals("OP1", StringComparison.OrdinalIgnoreCase) || basePart.Equals("ED1", StringComparison.OrdinalIgnoreCase) ? basePart[..2] : basePart,
+            dashIndex < 0 ? null : slug[(dashIndex + 1)..]
+        );
     }
 
     /// <summary>Formats a slug variant suffix into a human-readable tag.</summary>

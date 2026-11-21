@@ -53,7 +53,7 @@ public class SyncToPlex(
         var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(usr => usr.LocalID).FirstOrDefault() is not { } defaultUser)
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault() is not { } defaultUser)
             return result;
         var targets = plexClient.GetConfiguredTargets();
         if (targets.Count == 0)

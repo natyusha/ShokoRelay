@@ -28,10 +28,10 @@ namespace ShokoRelay.Controllers;
 /// <param name="userService">Shoko user service.</param>
 /// <param name="throttleService">Shoko throttle service.</param>
 /// <param name="logger">Logger instance.</param>
-[RelayAdminAuthorize]
 [ApiController]
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
+[RelayAdminAuthorize]
 [Route(ShokoRelayConstants.BasePath)]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 public class DashboardController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -249,7 +249,7 @@ public class DashboardController(
                   --hover-color: #64b3ff;
                   --danger-color: #ff6c6c;
                   --warning-color: #f9c851;
-                  --isOk-color: #10c469;
+                  --ok-color: #10c469;
                   --logo-outline: #000;
                   --logo-skin: #fdf5e8;
                   --logo-face-shadow: #fe514d;
@@ -309,7 +309,7 @@ public class DashboardController(
                           --hover-color: var(--button-primary-hover, #ea005e);
                           --danger-color: var(--panel-icon-danger, #cc0000);
                           --warning-color: var(--panel-icon-warning, #f9c851);
-                          --isOk-color: var(--panel-text-important, #00ab3f);
+                          --ok-color: var(--panel-text-important, #00ab3f);
                         }
                         """,
                     "text/css"
@@ -354,11 +354,11 @@ public class DashboardController(
     /// <returns>A list of report file metadata objects.</returns>
     [HttpGet("logs/list")]
     public IActionResult GetLogsList() =>
-        !Directory.Exists(ConfigProvider.LogsDirectory)
+        !Directory.Exists(ConfigProvider.ReportsDirectory)
             ? Ok(Array.Empty<object>())
             : Ok(
                 Directory
-                    .EnumerateFiles(ConfigProvider.LogsDirectory, "*.report")
+                    .EnumerateFiles(ConfigProvider.ReportsDirectory, "*.report")
                     .Select(Path.GetFileName)
                     .OfType<string>()
                     .OrderBy(file => file)
@@ -375,7 +375,7 @@ public class DashboardController(
         if (string.IsNullOrWhiteSpace(fileName))
             return BadRequest(new { status = "error", message = "fileName is required" });
 
-        string logsDir = Path.GetFullPath(ConfigProvider.LogsDirectory);
+        string logsDir = Path.GetFullPath(ConfigProvider.ReportsDirectory);
         string logsDirWithSep = logsDir.EndsWith(Path.DirectorySeparatorChar) ? logsDir : logsDir + Path.DirectorySeparatorChar;
         string safeFileName = Path.GetFileName(fileName);
         string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));

@@ -29,10 +29,10 @@ namespace ShokoRelay.Controllers;
 /// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="logger">Logger instance.</param>
-[RelayAdminAuthorize]
 [ApiController]
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
+[RelayAdminAuthorize]
 [Route(ShokoRelayConstants.BasePath)]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 public class ShokoController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
@@ -220,8 +220,8 @@ public class ShokoController(
                                 .GroupBy(season => season.Name)
                                 .Select(seasonGroup =>
                                 {
-                                    var sFirst = seasonGroup.First();
-                                    return seasonGroup.Count() == 1 ? sFirst : (sFirst with { Files = [.. seasonGroup.SelectMany(season => season.Files).DistinctBy(file => file.Name)] });
+                                    var firstSeason = seasonGroup.First();
+                                    return seasonGroup.Count() == 1 ? firstSeason : (firstSeason with { Files = [.. seasonGroup.SelectMany(season => season.Files).DistinctBy(file => file.Name)] });
                                 })
                                 .ToList();
 

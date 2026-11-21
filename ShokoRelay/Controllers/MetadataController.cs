@@ -15,11 +15,11 @@ namespace ShokoRelay.Controllers;
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
-[Route(ShokoRelayConstants.BasePath + "/options/{overrides}")]
 [Route(ShokoRelayConstants.BasePath + "/movie")]
+[Route(ShokoRelayConstants.BasePath + "/options/{overrides}")]
 [Route(ShokoRelayConstants.BasePath + "/movie/options/{overrides}")]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService, ILogger<MetadataController> logger)
     : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -153,7 +153,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             }
 
             // Fallback to Movie (type 1)
-            episode ??= series.Episodes.FirstOrDefault(episode => episode.Type == EpisodeType.Episode);
+            episode ??= series.Episodes.FirstOrDefault(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode);
             if (episode == null)
                 return EmptyMatch();
 
@@ -210,13 +210,13 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
     /// <summary>Returns detailed Plex-formatted metadata for a specific ratingKey.</summary>
     /// <remarks>
-    /// **Supported RatingKey Formats:**
-    /// - '123' (Shoko Series ID) / 'a123' (AniDB Series ID)
-    /// - '123s4' (Shoko Series Season 4) / 'a123s4' (AniDB Series Season 4)
-    /// - 'e567' (Shoko Episode ID) / 'ae567' (AniDB Episode ID)
-    /// - 'e567p2' (Shoko Episode Part 2) / 'ae567p2' (AniDB Episode Part 2)
-    /// - 'm890' (Shoko Episode ID mapped as a Movie)
-    /// - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
+    ///   **Supported RatingKey Formats:**
+    ///   - <c>123</c>    (Shoko Series ID)       / <c>a123</c>    (AniDB Series ID)
+    ///   - <c>123s4</c>  (Shoko Series Season 4) / <c>a123s4</c>  (AniDB Series Season 4)
+    ///   - <c>e567</c>   (Shoko Episode ID)      / <c>ae567</c>   (AniDB Episode ID)
+    ///   - <c>e567p2</c> (Shoko Episode Part 2)  / <c>ae567p2</c> (AniDB Episode Part 2)
+    ///   - <c>m890</c>   (Shoko Episode ID mapped as a Movie)
+    ///   - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
     /// </remarks>
     /// <param name="ratingKey">Custom Plex-style rating key.</param>
     /// <param name="includeChildren">Whether to embed immediate children (seasons/episodes).</param>
@@ -510,8 +510,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
         var episode = isAniDbEpisode ? MetadataService.GetShokoEpisodeByAnidbID(id) : MetadataService.GetShokoEpisodeByID(id);
         if (episode == null)
             return (null, partIdx, null);
-        var mapping = ctx.FileData.Mappings.FirstOrDefault(mapping => mapping.Episodes.Any(episode => episode.ID == episode.ID) && mapping.PartIndex == partIdx)
-            ?? ctx.FileData.Mappings.FirstOrDefault(mapping => mapping.Episodes.Any(episode => episode.ID == episode.ID));
+        var mapping = ctx.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID) && fileMapping.PartIndex == partIdx)
+            ?? ctx.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID));
         if (mapping == null)
             return (episode, partIdx, null);
 

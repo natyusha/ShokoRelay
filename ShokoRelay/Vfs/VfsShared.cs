@@ -56,8 +56,8 @@ internal static class VfsShared
     public static bool IsVfsEnabledFolder(IManagedFolder? folder) =>
         folder != null
         && (!folder.DropFolderType.HasFlag(DropFolderType.Source) || folder.DropFolderType.HasFlag(DropFolderType.Destination))
-        && !(Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? []).Any(exception =>
-            string.Equals(exception, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(exception, folder.Name, StringComparison.OrdinalIgnoreCase)
+        && !(Settings.Advanced.ManagedFolderExclusions?.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? []).Any(exclusion =>
+            string.Equals(exclusion, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(exclusion, folder.Name, StringComparison.OrdinalIgnoreCase)
         );
 
     /// <summary>Determines the root import path for a video file.</summary>
@@ -395,8 +395,8 @@ internal static class VfsShared
 
             if (end > start)
             {
-                var seg = path.AsSpan(start, end - start);
-                if (alternateLookup.Contains(seg) || (plexLocalExtras && VfsHelper.IsLocalExtraDir(seg)))
+                var segment = path.AsSpan(start, end - start);
+                if (alternateLookup.Contains(segment) || (plexLocalExtras && VfsHelper.IsLocalExtraDir(segment)))
                     return true;
             }
 

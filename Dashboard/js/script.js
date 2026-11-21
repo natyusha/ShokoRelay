@@ -527,6 +527,11 @@
     const content = tooltipEl.querySelector(".rt-content");
     let showTimer;
 
+    /**
+     * Displays the hover tooltip positioned relative to the target element.
+     * @param {HTMLElement} target - The hovered element providing tooltip text.
+     * @returns {void}
+     */
     const show = (target) => {
       const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || target.getAttribute("title");
       if (target.disabled || !text) return;
@@ -535,17 +540,17 @@
       tooltipEl.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
       tooltipEl.setAttribute("aria-hidden", "false");
       const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
-      const rect = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
+      const bounds = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = document.documentElement.clientHeight;
       const margin = 10;
       let place = "top";
-      let top = rect.top - tooltipEl.offsetHeight - margin;
-      let left = rect.left + rect.width / 2 - tooltipEl.offsetWidth / 2;
+      let top = bounds.top - tooltipEl.offsetHeight - margin;
+      let left = bounds.left + bounds.width / 2 - tooltipEl.offsetWidth / 2;
       if (top < margin) {
-        const spaceBelow = viewportHeight - rect.bottom;
+        const spaceBelow = viewportHeight - bounds.bottom;
         if (spaceBelow > tooltipEl.offsetHeight + margin) {
-          top = rect.bottom + margin;
+          top = bounds.bottom + margin;
           place = "bottom";
         }
       }
@@ -560,6 +565,10 @@
       target.setAttribute("aria-describedby", "shoko-tooltip");
     };
 
+    /**
+     * Hides the hover tooltip and cancels any pending display timer.
+     * @returns {void}
+     */
     const hide = () => {
       clearTimeout(showTimer);
       tooltipEl.classList.remove("tooltip-show");
@@ -571,6 +580,11 @@
     window.addEventListener("blur", hide);
     document.addEventListener("mouseleave", hide);
 
+    /**
+     * Attaches custom tooltip handlers and external-link security attributes to an element.
+     * @param {HTMLElement} target - The element to inspect and bind.
+     * @returns {void}
+     */
     const attach = (target) => {
       // Tooltip logic
       if (target.title) {

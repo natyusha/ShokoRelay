@@ -133,7 +133,7 @@ namespace ShokoRelay.Plex
             /// <summary>Dictionary of image file extensions to MIME types considered local artwork by Plex.</summary>
             /// <remarks>Contrary to Plex's docs most of the formats supported by FreeImage work: https://freeimage.sourceforge.io/features.html</remarks>
             public static readonly FrozenDictionary<string, string> Artwork = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
-                { ".bmp", "image/bmp" }, { ".gif", "image/gif" }, { ".jpe", "image/jpeg" }, { ".jpeg", "image/jpeg" }, { ".jpg", "image/jpeg" },
+                { ".bmp", "image/bmp" }, { ".gif", "image/gif" },  { ".jpe", "image/jpeg" }, { ".jpeg", "image/jpeg" }, { ".jpg", "image/jpeg" },
                 { ".png", "image/png" }, { ".tbn", "image/jpeg" }, { ".tif", "image/tiff" }, { ".tiff", "image/tiff" }, { ".webp", "image/webp" }
             }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 

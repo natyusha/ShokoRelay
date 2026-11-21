@@ -16,8 +16,8 @@ namespace ShokoRelay.Controllers;
 
 /// <summary>Issues and validates signed HttpOnly session cookies for Shoko Relay administrator authentication.</summary>
 /// <remarks>
-/// Cookie-authenticated requests do not carry a Shoko <see cref="ApiToken"/>, so Shoko's <see cref="IActorContext.Current"/> remains <c>null</c> (system) on triggered events.
-/// Pass Shoko's <c>apikey</c> header when per-token actor attribution is required.
+///   - Cookie-authenticated requests do not carry a Shoko <see cref="ApiToken"/>, so Shoko's <see cref="IActorContext.Current"/> remains <c>null</c> (system) on triggered events.
+///   - Pass Shoko's <c>apikey</c> header when per-token actor attribution is required.
 /// </remarks>
 internal static class RelayAuthSession
 {
@@ -164,8 +164,8 @@ public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilt
 /// <param name="plexLibrary">Plex client.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
-[ApiVersion(ShokoRelayConstants.ApiVersion)]
 [Route(ShokoRelayConstants.BasePath)]
+[ApiVersion(ShokoRelayConstants.ApiVersion)]
 public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, ILogger logger) : ControllerBase
 {
     #region Setup

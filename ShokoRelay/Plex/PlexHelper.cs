@@ -68,11 +68,11 @@ public static partial class PlexHelper
     /// <summary>Extracts the corresponding Shoko Series ID from any valid Plex Rating Key.</summary>
     /// <remarks>
     ///   **Supported RatingKey Formats:**
-    ///   - '123' (Shoko Series ID) / 'a123' (AniDB Series ID)
-    ///   - '123s4' (Shoko Series Season 4) / 'a123s4' (AniDB Series Season 4)
-    ///   - 'e567' (Shoko Episode ID) / 'ae567' (AniDB Episode ID)
-    ///   - 'e567p2' (Shoko Episode Part 2) / 'ae567p2' (AniDB Episode Part 2)
-    ///   - 'm890' (Shoko Episode ID mapped as a Movie)
+    ///   - <c>123</c>    (Shoko Series ID)       / <c>a123</c>    (AniDB Series ID)
+    ///   - <c>123s4</c>  (Shoko Series Season 4) / <c>a123s4</c>  (AniDB Series Season 4)
+    ///   - <c>e567</c>   (Shoko Episode ID)      / <c>ae567</c>   (AniDB Episode ID)
+    ///   - <c>e567p2</c> (Shoko Episode Part 2)  / <c>ae567p2</c> (AniDB Episode Part 2)
+    ///   - <c>m890</c>   (Shoko Episode ID mapped as a Movie)
     ///   - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
     /// </remarks>
     /// <param name="ratingKey">Plex rating key representing a show, season, episode, or movie.</param>
@@ -143,7 +143,7 @@ public static partial class PlexHelper
         List<string> roots =
             series != null ? [.. ResolveImportRoots(series, metadataService)]
             : globalRoots != null ? [.. globalRoots]
-            : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(series => ResolveImportRoots(series, metadataService)).Distinct(VfsShared.PathComparer)];
+            : [.. (metadataService.GetAllShokoSeries() ?? []).SelectMany(shokoSeries => ResolveImportRoots(shokoSeries, metadataService)).Distinct(VfsShared.PathComparer)];
 
         if (roots.Count == 0)
             return null;

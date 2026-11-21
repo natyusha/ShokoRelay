@@ -59,12 +59,12 @@ public partial class VfsBuilder
 
         var blueprint = VfsShared.LoadBlueprint();
 
-        void AuditRoot(string rName, HashSet<int> validIds)
+        void AuditRoot(string rootFolderName, HashSet<int> validIds)
         {
             foreach (var root in allRoots)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string vfsRoot = Path.Combine(root, rName);
+                string vfsRoot = Path.Combine(root, rootFolderName);
                 if (!Directory.Exists(vfsRoot))
                     continue;
 

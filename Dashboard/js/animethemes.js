@@ -264,9 +264,19 @@
     const modeButton = element("at-mode");
     const playButton = element("at-play");
 
+    /**
+     * Retrieves a nested configuration value by dot-delimited path.
+     * @param {string} path - The dot-delimited property path.
+     * @returns {*} The resolved property value.
+     */
     const getVal = (path) => window._sr.getValueByPath(config, path);
 
     if (playback) {
+      /**
+       * Synchronizes playback control visibility and UI state.
+       * @param {boolean} isVisible - Whether playback controls should be visible.
+       * @returns {void}
+       */
       const sync = (isVisible) => {
         if (playButton) playButton.hidden = !isVisible;
         if (modeButton) modeButton.hidden = !isVisible;

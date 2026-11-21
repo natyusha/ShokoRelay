@@ -350,7 +350,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             int effectiveAnidbId = overrideAnidbId ?? (lookup.AniDbId > 0 ? lookup.AniDbId : (match?.AniDbId ?? 0));
             var effectiveLookup = lookup with { AniDbId = effectiveAnidbId };
             var entry = new AnimeThemesMappingEntry(relPath, effectiveLookup);
-            string genFileName = AnimeThemesHelper.BuildNewFileName(effectiveLookup, Path.GetExtension(fileName));
+            string generatedFileName = AnimeThemesHelper.BuildNewFileName(effectiveLookup, Path.GetExtension(fileName));
 
             var changedFields = new List<string>();
             if (match != null)
@@ -388,14 +388,18 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             }
 
             if (!save)
-                return (entry, idMissing && effectiveAnidbId <= 0 ? "AniDB ID missing on AnimeThemes" : null, genFileName, false, changedFields);
+                return (entry, idMissing && effectiveAnidbId <= 0 ? "AniDB ID missing on AnimeThemes" : null, generatedFileName, false, changedFields);
 
-            entries.RemoveAll(entry =>
-                string.Equals(entry.FilePath, relPath, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(entry.FilePath), fileName, StringComparison.OrdinalIgnoreCase)
+            entries.RemoveAll(existingEntry =>
+                string.Equals(existingEntry.FilePath, relPath, StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetFileName(existingEntry.FilePath), fileName, StringComparison.OrdinalIgnoreCase)
             );
             entries.Add(entry);
 
-            var finalEntries = entries.DistinctBy(entry => entry.FilePath).OrderBy(entry => AnimeThemesHelper.GetYearForSort(entry.FilePath)).ThenBy(entry => entry.FilePath).ToList();
+            var finalEntries = entries
+                .DistinctBy(existingEntry => existingEntry.FilePath)
+                .OrderBy(existingEntry => AnimeThemesHelper.GetYearForSort(existingEntry.FilePath))
+                .ThenBy(existingEntry => existingEntry.FilePath)
+                .ToList();
             await VfsShared.WriteTextAtomicAsync(mapPath, AnimeThemesHelper.SerializeMapping(existingComments, finalEntries), cancellationToken).ConfigureAwait(false);
 
             if (changedFields.Count > 0)
@@ -407,7 +411,7 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
             if (entry.AniDbId > 0 && metadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } shokoSeries)
                 await ApplyMappingAsync([shokoSeries.LocalID], CancellationToken.None).ConfigureAwait(false);
 
-            return (entry, null, genFileName, true, changedFields);
+            return (entry, null, generatedFileName, true, changedFields);
         }
         finally
         {
@@ -500,15 +504,15 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                     string candidateSrc = Path.Combine(root, themeRootName, VfsShared.NormalizeSeparators(relPath));
                                     if (!File.Exists(candidateSrc))
                                         return null;
-                                    string src = Path.GetFullPath(candidateSrc);
+                                    string sourcePath = Path.GetFullPath(candidateSrc);
                                     var lookup = new AnimeThemesVideoLookup(entry);
                                     return new
                                     {
                                         Entry = entry,
                                         Lookup = lookup,
-                                        Signature = Path.GetFileNameWithoutExtension(AnimeThemesHelper.BuildNewFileName(lookup with { NC = false }, "")),
-                                        SourcePath = src,
-                                        Extension = Path.GetExtension(src),
+                                        Signature = Path.GetFileNameWithoutExtension(AnimeThemesHelper.BuildNewFileName(lookup with { Nc = false }, "")),
+                                        SourcePath = sourcePath,
+                                        Extension = Path.GetExtension(sourcePath),
                                         RelativePath = relPath,
                                         SeriesIndex = seriesIdx,
                                         OriginalId = series.LocalID,
@@ -640,9 +644,9 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                     int endIdx = parts[0].IndexOf('/', startIdx);
                                     if (endIdx > startIdx)
                                     {
-                                        string seriesIdStr = parts[0][startIdx..endIdx];
-                                        // Safely drop lines belonging to the incrementally updated series to prevent ghosts
-                                        if (primaryIdsToPurge.Contains(seriesIdStr))
+                                        string seriesIdText = parts[0][startIdx..endIdx];
+                                        // Safely drop lines belonging to the incrementally updated or deleted series to prevent ghosts
+                                        if (primaryIdsToPurge.Contains(seriesIdText) || (int.TryParse(seriesIdText, out int cachedSeriesId) && metadataService.GetShokoSeriesByID(cachedSeriesId) is null))
                                             continue;
                                     }
                                 }
@@ -655,11 +659,13 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
                                         int endIdx = parts[0].IndexOf('/', startIdx);
                                         if (endIdx > startIdx)
                                         {
-                                            string epIdStr = parts[0][startIdx..endIdx];
+                                            string episodeIdText = parts[0][startIdx..endIdx];
                                             if (
-                                                int.TryParse(epIdStr, out int epId)
-                                                && metadataService.GetShokoEpisodeByID(epId) is { ShokoSeriesID: var sid }
-                                                && primaryIdsToPurge.Contains((EnforceTmdbNumbering ? OverrideHelper.GetPrimary(sid, metadataService) : sid).ToString())
+                                                int.TryParse(episodeIdText, out int episodeId)
+                                                && (
+                                                    metadataService.GetShokoEpisodeByID(episodeId) is not { ShokoSeriesID: var seriesId }
+                                                    || primaryIdsToPurge.Contains((EnforceTmdbNumbering ? OverrideHelper.GetPrimary(seriesId, metadataService) : seriesId).ToString())
+                                                )
                                             )
                                                 continue;
                                         }
@@ -735,7 +741,6 @@ public class AnimeThemesMapping(AnimeThemesApi apiClient, HttpClient httpClient,
         return (
             new AnimeThemesVideoLookup(
                 videoEntry.Id,
-                theme.Id,
                 anidbId,
                 videoEntry.Nc,
                 theme.Slug ?? "",

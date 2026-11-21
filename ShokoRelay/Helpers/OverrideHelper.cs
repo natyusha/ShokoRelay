@@ -137,21 +137,21 @@ public static class OverrideHelper
             if (int.TryParse(idStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
             {
                 ruleList = [];
-                foreach (var rStr in coordStr.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                foreach (var ruleText in coordStr.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
-                    var match = TextHelper.CustomCoordRegex().Match(rStr);
+                    var match = TextHelper.CustomCoordRegex().Match(ruleText);
                     if (!match.Success)
                         continue;
 
-                    string tStr = match.Groups[1].Value;
-                    EpisodeType episodeType = EpisodeType.FromPrefix(tStr.ToUpperInvariant());
+                    string typePrefix = match.Groups[1].Value;
+                    EpisodeType episodeType = EpisodeType.FromPrefix(typePrefix.ToUpperInvariant());
 
                     int startEpisode = match.Groups[2].Success ? int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture) : 1;
                     int endEpisode = match.Groups[3].Success ? int.Parse(match.Groups[3].Value, CultureInfo.InvariantCulture) : (match.Groups[2].Success ? startEpisode : int.MaxValue);
-                    int targetS = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
-                    int targetE = int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
+                    int targetSeason = int.Parse(match.Groups[4].Value, CultureInfo.InvariantCulture);
+                    int targetEpisode = int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture);
 
-                    ruleList.Add(new CustomCoordRule(episodeType, startEpisode, endEpisode, targetS, targetE));
+                    ruleList.Add(new CustomCoordRule(episodeType, startEpisode, endEpisode, targetSeason, targetEpisode));
                 }
             }
         }
