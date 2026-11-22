@@ -12,7 +12,7 @@ public class VfsResourceResolver(IServiceProvider serviceProvider) : IResourceRe
     #region Resource Resolution
 
     /// <inheritdoc/>
-    public string Name => ShokoRelayConstants.Name;
+    public string Name => $"{ShokoRelayConstants.Name}: VFS Browser";
 
     /// <inheritdoc/>
     public IReadOnlyList<Resource> Resolve(IWithResources entity)
