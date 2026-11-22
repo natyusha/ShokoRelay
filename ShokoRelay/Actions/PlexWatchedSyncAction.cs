@@ -5,7 +5,7 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Actions;
 
 /// <summary>Scheduled action to synchronize watched states and progress from Plex into Shoko.</summary>
-public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvider configProvider, ILogger<PlexWatchedSyncAction> logger) : IScheduledAction
+public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, PlexClient plexClient, ConfigProvider configProvider, ILogger<PlexWatchedSyncAction> logger) : IScheduledAction
 {
     #region Action Metadata
 
@@ -24,6 +24,14 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, ConfigProvide
     #endregion
 
     #region Execution
+
+    /// <inheritdoc/>
+    public Task<ActionValidationResult?> Validate(CancellationToken token) =>
+        Task.FromResult<ActionValidationResult?>(
+            !plexClient.IsEnabled ? new("Plex server configuration is missing or no library is selected.")
+            : configProvider.GetSettings().Automation.ShokoSyncWatchedUserType == SyncUserType.None ? new("Watched sync is disabled because Sync Users is set to None.")
+            : null
+        );
 
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)

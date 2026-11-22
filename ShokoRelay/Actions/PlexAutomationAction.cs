@@ -6,7 +6,7 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Actions;
 
 /// <summary>Scheduled action to automate Plex Collections, Critic Ratings, Image Sync, and Trash emptying.</summary>
-public class PlexAutomationAction(PlexAutomationService plexAutomationService, ConfigProvider configProvider, ILogger<PlexAutomationAction> logger) : IScheduledAction
+public class PlexAutomationAction(PlexAutomationService plexAutomationService, PlexClient plexClient, ConfigProvider configProvider, ILogger<PlexAutomationAction> logger) : IScheduledAction
 {
     #region Action Metadata
 
@@ -25,6 +25,10 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, C
     #endregion
 
     #region Execution
+
+    /// <inheritdoc/>
+    public Task<ActionValidationResult?> Validate(CancellationToken token) =>
+        Task.FromResult<ActionValidationResult?>(!plexClient.IsEnabled ? new("Plex server configuration is missing or no library is selected.") : null);
 
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)

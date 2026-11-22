@@ -7,14 +7,14 @@
   /**
    * Prevents rapid execution of expensive functions like tree rendering.
    * @param {Function} callback - The function to debounce.
-   * @param {number} ms - Delay in milliseconds.
+   * @param {number} delayMs - Delay in milliseconds.
    * @returns {Function} A debounced wrapper around the supplied function.
    */
-  window._sr.debounce = (callback, ms) => {
+  window._sr.debounce = (callback, delayMs) => {
     let timeout;
     return (...args) => {
       clearTimeout(timeout);
-      timeout = setTimeout(() => callback(...args), ms);
+      timeout = setTimeout(() => callback(...args), delayMs);
     };
   };
   // #endregion

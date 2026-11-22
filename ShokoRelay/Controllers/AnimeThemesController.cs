@@ -427,12 +427,12 @@ public class AnimeThemesController(
                         if (!physicalThemes.TryGetValue(normRel, out var absolutePath))
                             continue;
 
-                        // Check if anime is in Shoko and has physical files without querying the entire database upfront
+                        // Check if anime is in Shoko and has active physical files without querying the entire database upfront
                         if (entry.AniDbId > 0)
                         {
                             if (!localSeriesHasFiles.TryGetValue(entry.AniDbId, out bool hasFiles))
                                 localSeriesHasFiles[entry.AniDbId] = hasFiles =
-                                    MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } localSeries && localSeries.Episodes.Any(episode => episode.Videos?.Count > 0);
+                                    MetadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } localSeries && MapHelper.GetActiveVideos(localSeries, MetadataService).Any();
                             if (hasFiles)
                                 continue;
                         }

@@ -46,7 +46,7 @@ public static class ActionScheduleHelper
                     var utcTime = DateTime.SpecifyKind(todayUtc.AddHours(utcHour), DateTimeKind.Utc);
                     var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, TimeZoneInfo.Local);
 
-                    triggers.Add(ActionTrigger.DailyAt(TimeOnly.FromDateTime(localTime)));
+                    triggers.Add(ActionTrigger.DailyAt(new TimeOnly(localTime.Hour, localTime.Minute)));
                 }
             }
             else

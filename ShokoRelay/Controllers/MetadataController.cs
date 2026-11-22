@@ -89,7 +89,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
                 _ => PlexConstants.TypeShow,
             };
 
-            bool isMoviePath = rawPath?.Contains(Settings.Advanced.MovieVfsRootPath, StringComparison.OrdinalIgnoreCase) == true;
+            bool isMoviePath = rawPath?.Contains(VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase) == true;
             if (typeInt == PlexConstants.TypeMovie || Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || isMoviePath)
                 typeInt = PlexConstants.TypeMovie;
 
@@ -160,7 +160,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             }
 
             // Fallback to Movie (type 1)
-            episode ??= series.Episodes.FirstOrDefault(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode);
+            episode ??= series.Episodes.FirstOrDefault(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode && !MapHelper.IsHidden(seriesEpisode))
+                ?? series.Episodes.FirstOrDefault(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode);
             if (episode == null)
                 return EmptyMatch();
 
