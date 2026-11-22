@@ -77,9 +77,9 @@ public static class OverrideHelper
         {
             try
             {
-                foreach (var raw in File.ReadAllLines(path))
+                foreach (var rawLine in File.ReadAllLines(path))
                 {
-                    var line = raw.Trim();
+                    var line = rawLine.Trim();
                     if (line.Length == 0 || line[0] == '#')
                         continue;
 
@@ -96,16 +96,16 @@ public static class OverrideHelper
 
                     var group = new List<int> { primaryId };
 
-                    for (int partIdx = 1; partIdx < parts.Count; partIdx++)
+                    for (int partIndex = 1; partIndex < parts.Count; partIndex++)
                     {
-                        var (secId, secRules) = ParsePart(parts[partIdx]);
-                        if (secId <= 0)
+                        var (secondaryId, secondaryRules) = ParsePart(parts[partIndex]);
+                        if (secondaryId <= 0)
                             continue;
 
-                        if (secRules != null)
-                            newCoordOverrides[secId] = secRules;
+                        if (secondaryRules != null)
+                            newCoordOverrides[secondaryId] = secondaryRules;
 
-                        group.Add(secId);
+                        group.Add(secondaryId);
                     }
 
                     if (group.Count >= 2)
@@ -129,15 +129,15 @@ public static class OverrideHelper
         int anidbId = 0;
         List<CustomCoordRule>? ruleList = null;
 
-        int sepIdx = part.IndexOf(';');
-        if (sepIdx > 0)
+        int separatorIndex = part.IndexOf(';');
+        if (separatorIndex > 0)
         {
-            var idStr = part[..sepIdx].Trim();
-            var coordStr = part[(sepIdx + 1)..].Trim();
-            if (int.TryParse(idStr, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
+            var idText = part[..separatorIndex].Trim();
+            var coordText = part[(separatorIndex + 1)..].Trim();
+            if (int.TryParse(idText, NumberStyles.Integer, CultureInfo.InvariantCulture, out anidbId) && anidbId > 0)
             {
                 ruleList = [];
-                foreach (var ruleText in coordStr.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                foreach (var ruleText in coordText.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 {
                     var match = TextHelper.CustomCoordRegex().Match(ruleText);
                     if (!match.Success)
@@ -183,17 +183,17 @@ public static class OverrideHelper
             return shokoSeriesId;
 
         // 1. Manual override takes precedence (abort entire line if primary series is not in Shoko)
-        if (s_groups.TryGetValue(animeId, out var manualGrp) && manualGrp.Count > 0)
-            return metadataService?.GetShokoSeriesByAnidbID(manualGrp[0])?.LocalID ?? shokoSeriesId;
+        if (s_groups.TryGetValue(animeId, out var manualGroup) && manualGroup.Count > 0)
+            return metadataService?.GetShokoSeriesByAnidbID(manualGroup[0])?.LocalID ?? shokoSeriesId;
 
         // 2. Auto TMDB Merge fast-path
         if (Settings.Advanced.MergeTmdbSeries)
         {
             if (series?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
             {
-                if (s_tmdbGroups.TryGetValue(tmdbSeries.ID.ID, out var cachedGroup) && cachedGroup.Count > 0)
+                if (s_tmdbGroups.TryGetValue(tmdbSeries.ID.ID, out var linkedCachedGroup) && linkedCachedGroup.Count > 0)
                 {
-                    if (metadataService!.GetShokoSeriesByAnidbID(cachedGroup[0]) is { } cachedPrimary)
+                    if (metadataService!.GetShokoSeriesByAnidbID(linkedCachedGroup[0]) is { } cachedPrimary)
                         return cachedPrimary.LocalID;
                     s_tmdbGroups.TryRemove(tmdbSeries.ID.ID, out _);
                 }
@@ -204,8 +204,8 @@ public static class OverrideHelper
             }
 
             // Fallback when the series row has already been removed from Shoko's database
-            if (s_tmdbGroups.Values.FirstOrDefault(group => group.Contains(animeId)) is { Count: > 0 } cachedGrp)
-                return metadataService?.GetShokoSeriesByAnidbID(cachedGrp[0])?.LocalID ?? shokoSeriesId;
+            if (s_tmdbGroups.Values.FirstOrDefault(group => group.Contains(animeId)) is { Count: > 0 } cachedGroup)
+                return metadataService?.GetShokoSeriesByAnidbID(cachedGroup[0])?.LocalID ?? shokoSeriesId;
         }
 
         return shokoSeriesId;
@@ -223,10 +223,10 @@ public static class OverrideHelper
             return [shokoSeriesId];
 
         // 1. Manual override takes precedence; abort the entire override line if its primary series is missing from Shoko
-        if (s_groups.TryGetValue(series.AnidbAnimeID, out var manualGrp) && manualGrp.Count > 0)
-            return metadataService.GetShokoSeriesByAnidbID(manualGrp[0]) is null
+        if (s_groups.TryGetValue(series.AnidbAnimeID, out var manualGroup) && manualGroup.Count > 0)
+            return metadataService.GetShokoSeriesByAnidbID(manualGroup[0]) is null
                 ? [shokoSeriesId]
-                : [.. manualGrp.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.LocalID)];
+                : [.. manualGroup.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.LocalID)];
 
         // 2. Auto TMDB Merge Just-In-Time Resolution
         if (Settings.Advanced.MergeTmdbSeries && series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
@@ -271,7 +271,7 @@ public static class OverrideHelper
     public static (int Season, int Episode)? GetCustomCoords(int anidbAnimeId, EpisodeType type, int episodeNumber, IMetadataService? metadataService = null)
     {
         EnsureLoaded();
-        if (metadataService != null && s_groups.TryGetValue(anidbAnimeId, out var manualGrp) && manualGrp.Count > 0 && metadataService.GetShokoSeriesByAnidbID(manualGrp[0]) is null)
+        if (metadataService != null && s_groups.TryGetValue(anidbAnimeId, out var manualGroup) && manualGroup.Count > 0 && metadataService.GetShokoSeriesByAnidbID(manualGroup[0]) is null)
             return null;
 
         if (s_coordOverrides.TryGetValue(anidbAnimeId, out var rules))

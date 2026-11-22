@@ -55,14 +55,14 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             return results;
 
         string mapped = MapShokoPathToPlexPath(path);
-        string normMapped = PlexHelper.NormalizePathForPlex(mapped);
+        string normalizedMappedPath = PlexHelper.NormalizePathForPlex(mapped);
         var allTargets = GetConfiguredTargets();
 
         var exactMatches = allTargets.Where(target =>
             target.Locations.Any(location =>
             {
-                string normLoc = PlexHelper.NormalizePathForPlex(location);
-                return normMapped.Equals(normLoc, StringComparison.OrdinalIgnoreCase) || normMapped.StartsWith(normLoc + "/", StringComparison.OrdinalIgnoreCase);
+                string normalizedLocation = PlexHelper.NormalizePathForPlex(location);
+                return normalizedMappedPath.Equals(normalizedLocation, StringComparison.OrdinalIgnoreCase) || normalizedMappedPath.StartsWith(normalizedLocation + "/", StringComparison.OrdinalIgnoreCase);
             })
         );
         if (exactMatches.Any())
@@ -72,38 +72,41 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         string vfsRootName = VfsShared.ResolveRootFolderName();
         string movieRootName = VfsShared.ResolveMovieRootFolderName();
 
-        int GetRootIndex(string rootName) => normMapped.StartsWith(rootName + "/", StringComparison.OrdinalIgnoreCase) ? 0 : normMapped.IndexOf($"/{rootName}/", StringComparison.OrdinalIgnoreCase);
+        int GetRootIndex(string rootName) =>
+            normalizedMappedPath.StartsWith(rootName + "/", StringComparison.OrdinalIgnoreCase) ? 0 : normalizedMappedPath.IndexOf($"/{rootName}/", StringComparison.OrdinalIgnoreCase);
 
-        int vfsIdx = GetRootIndex(movieRootName);
-        string? activeRootName = vfsIdx >= 0 ? movieRootName : ((vfsIdx = GetRootIndex(vfsRootName)) >= 0 ? vfsRootName : null);
+        int vfsIndex = GetRootIndex(movieRootName);
+        string? activeRootName = vfsIndex >= 0 ? movieRootName : ((vfsIndex = GetRootIndex(vfsRootName)) >= 0 ? vfsRootName : null);
 
-        if (vfsIdx >= 0 && activeRootName != null)
+        if (vfsIndex >= 0 && activeRootName != null)
         {
-            int tokenLength = vfsIdx == 0 ? activeRootName.Length + 1 : activeRootName.Length + 2;
-            string relativeSuffix = normMapped[(vfsIdx + tokenLength)..];
+            int tokenLength = vfsIndex == 0 ? activeRootName.Length + 1 : activeRootName.Length + 2;
+            string relativeSuffix = normalizedMappedPath[(vfsIndex + tokenLength)..];
 
             // Extract Shoko's parent directory name preceding the VFS root
-            string shokoParentName = vfsIdx > 0 && normMapped.LastIndexOf('/', vfsIdx - 1) is int parentStartIdx && parentStartIdx >= 0 ? normMapped[(parentStartIdx + 1)..vfsIdx] : "";
+            string shokoParentName =
+                vfsIndex > 0 && normalizedMappedPath.LastIndexOf('/', vfsIndex - 1) is int parentStartIndex && parentStartIndex >= 0 ? normalizedMappedPath[(parentStartIndex + 1)..vfsIndex] : "";
 
             var potentialFallbacks = new List<(PlexLibraryTarget Target, string GuessedPath, bool IsParentMatch)>();
 
             foreach (var target in allTargets)
             {
-                foreach (var loc in target.Locations)
+                foreach (var location in target.Locations)
                 {
-                    string normLoc = PlexHelper.NormalizePathForPlex(loc);
-                    string locSuffix = $"/{activeRootName}";
+                    string normalizedLocation = PlexHelper.NormalizePathForPlex(location);
+                    string locationSuffix = $"/{activeRootName}";
 
-                    if (normLoc.EndsWith(locSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normLoc, activeRootName, StringComparison.OrdinalIgnoreCase))
+                    if (normalizedLocation.EndsWith(locationSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normalizedLocation, activeRootName, StringComparison.OrdinalIgnoreCase))
                     {
                         // Detect Plex's native directory separator and format the path to match the target OS
-                        char plexSep = loc.Contains('\\') ? '\\' : '/';
-                        string nativeSuffix = relativeSuffix.Replace('/', plexSep);
-                        string guessedPath = $"{loc.TrimEnd('\\', '/')}{plexSep}{nativeSuffix}";
+                        char plexSeparator = location.Contains('\\') ? '\\' : '/';
+                        string nativeSuffix = relativeSuffix.Replace('/', plexSeparator);
+                        string guessedPath = $"{location.TrimEnd('\\', '/')}{plexSeparator}{nativeSuffix}";
 
                         // Extract Plex's parent directory name preceding the VFS root
-                        int plexEndIdx = normLoc.LastIndexOf(locSuffix, StringComparison.OrdinalIgnoreCase);
-                        string plexParentName = plexEndIdx > 0 && normLoc.LastIndexOf('/', plexEndIdx - 1) is int plexStartIdx && plexStartIdx >= 0 ? normLoc[(plexStartIdx + 1)..plexEndIdx] : "";
+                        int plexEndIndex = normalizedLocation.LastIndexOf(locationSuffix, StringComparison.OrdinalIgnoreCase);
+                        string plexParentName =
+                            plexEndIndex > 0 && normalizedLocation.LastIndexOf('/', plexEndIndex - 1) is int plexStartIndex && plexStartIndex >= 0 ? normalizedLocation[(plexStartIndex + 1)..plexEndIndex] : "";
 
                         bool isParentMatch = !string.IsNullOrEmpty(shokoParentName) && string.Equals(shokoParentName, plexParentName, StringComparison.OrdinalIgnoreCase);
                         potentialFallbacks.Add((target, guessedPath, isParentMatch));
@@ -234,9 +237,9 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             int typeId = target.LibraryType == PlexLibraryType.Movie ? PlexConstants.TypeMovie : PlexConstants.TypeEpisode;
 
             // Get Total Library Size at the episode/movie level
-            using var totalReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
-            using var totalResp = await httpClient.SendAsync(totalReq, cancellationToken).ConfigureAwait(false);
-            var totalContainer = await PlexApi.ReadContainerAsync(totalResp, cancellationToken).ConfigureAwait(false);
+            using var totalRequest = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&X-Plex-Container-Start=0&X-Plex-Container-Size=0", target.ServerUrl);
+            using var totalResponse = await httpClient.SendAsync(totalRequest, cancellationToken).ConfigureAwait(false);
+            var totalContainer = await PlexApi.ReadContainerAsync(totalResponse, cancellationToken).ConfigureAwait(false);
             int totalSize = totalContainer?.TotalSize ?? totalContainer?.Size ?? 0;
 
             if (totalSize == 0)
@@ -247,9 +250,13 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             var (start, trashedSize) = (0, 0);
             while (true)
             {
-                using var trashReq = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/all?type={typeId}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200", target.ServerUrl);
-                using var trashResp = await httpClient.SendAsync(trashReq, cancellationToken).ConfigureAwait(false);
-                var trashContainer = await PlexApi.ReadContainerAsync(trashResp, cancellationToken).ConfigureAwait(false);
+                using var trashRequest = CreateRequest(
+                    HttpMethod.Get,
+                    $"/library/sections/{target.SectionId}/all?type={typeId}&trash=1&X-Plex-Container-Start={start}&X-Plex-Container-Size=200",
+                    target.ServerUrl
+                );
+                using var trashResponse = await httpClient.SendAsync(trashRequest, cancellationToken).ConfigureAwait(false);
+                var trashContainer = await PlexApi.ReadContainerAsync(trashResponse, cancellationToken).ConfigureAwait(false);
 
                 trashedSize = trashContainer?.TotalSize ?? trashContainer?.Size ?? trashedSize;
 
@@ -281,10 +288,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             if (!dryRun)
             {
-                using var emptyReq = CreateRequest(HttpMethod.Put, $"/library/sections/{target.SectionId}/emptyTrash", target.ServerUrl);
-                using var emptyResp = await httpClient.SendAsync(emptyReq, cancellationToken).ConfigureAwait(false);
-                if (!emptyResp.IsSuccessStatusCode)
-                    return (false, trashedItems, $"Plex API rejected the empty trash request: {emptyResp.StatusCode}");
+                using var emptyRequest = CreateRequest(HttpMethod.Put, $"/library/sections/{target.SectionId}/emptyTrash", target.ServerUrl);
+                using var emptyResponse = await httpClient.SendAsync(emptyRequest, cancellationToken).ConfigureAwait(false);
+                if (!emptyResponse.IsSuccessStatusCode)
+                    return (false, trashedItems, $"Plex API rejected the empty trash request: {emptyResponse.StatusCode}");
             }
 
             return (true, trashedItems, $"Successfully processed {trashedSize} trashed items ({percent:F1}%).");
@@ -337,18 +344,18 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     /// <returns>A read-only list of configured library targets.</returns>
     public IReadOnlyList<PlexLibraryTarget> GetConfiguredTargets()
     {
-        var libs = DiscoveredLibraries;
+        var libraries = DiscoveredLibraries;
         var customUrl = Settings.Advanced.PlexServerUrl;
         lock (_targetsLock)
         {
-            if (!ReferenceEquals(_lastDiscoveredLibraries, libs) || _lastConfiguredPlexUrl != customUrl)
+            if (!ReferenceEquals(_lastDiscoveredLibraries, libraries) || _lastConfiguredPlexUrl != customUrl)
             {
-                _lastDiscoveredLibraries = libs;
+                _lastDiscoveredLibraries = libraries;
                 _lastConfiguredPlexUrl = customUrl;
                 string? trimmedUrl = !string.IsNullOrWhiteSpace(customUrl) ? customUrl.Trim().TrimEnd('/') : null;
                 _cachedTargets =
                 [
-                    .. libs.Select(library => new PlexLibraryTarget
+                    .. libraries.Select(library => new PlexLibraryTarget
                     {
                         SectionId = library.Id,
                         Title = library.Title,
@@ -381,7 +388,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (!IsEnabled || string.IsNullOrWhiteSpace(libraryName))
             return null;
 
-        var server = configProvider.GetPlexDiscoveredServers().FirstOrDefault(srv => !string.IsNullOrWhiteSpace(srv.PreferredUri));
+        var server = configProvider.GetPlexDiscoveredServers().FirstOrDefault(server => !string.IsNullOrWhiteSpace(server.PreferredUri));
         if (server == null && string.IsNullOrWhiteSpace(Settings.Advanced.PlexServerUrl))
             return null;
 
@@ -396,30 +403,30 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         try
         {
             using var doc = JsonDocument.Parse(content);
-            if (!doc.RootElement.TryGetProperty("MediaContainer", out var metadataClient) || !metadataClient.TryGetProperty("Directory", out var dirs))
+            if (!doc.RootElement.TryGetProperty("MediaContainer", out var metadataClient) || !metadataClient.TryGetProperty("Directory", out var directories))
                 return null;
 
-            foreach (var dir in dirs.EnumerateArray())
+            foreach (var directory in directories.EnumerateArray())
             {
-                if (dir.TryGetProperty("title", out var titleProp) && string.Equals(titleProp.GetString(), libraryName, StringComparison.OrdinalIgnoreCase))
+                if (directory.TryGetProperty("title", out var titleProp) && string.Equals(titleProp.GetString(), libraryName, StringComparison.OrdinalIgnoreCase))
                 {
-                    int id = dir.TryGetProperty("key", out var keyProp) && int.TryParse(keyProp.GetString(), out int parsedKey) ? parsedKey : 0;
+                    int id = directory.TryGetProperty("key", out var keyProp) && int.TryParse(keyProp.GetString(), out int parsedKey) ? parsedKey : 0;
                     if (id == 0)
                         continue;
 
-                    string type = dir.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
+                    string type = directory.TryGetProperty("type", out var typeProp) ? typeProp.GetString() ?? "" : "";
                     var locations = new List<string>();
-                    if (dir.TryGetProperty("Location", out var locs))
-                        foreach (var location in locs.EnumerateArray())
-                            if (location.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } pathVal)
-                                locations.Add(pathVal);
+                    if (directory.TryGetProperty("Location", out var locationEntries))
+                        foreach (var location in locationEntries.EnumerateArray())
+                            if (location.TryGetProperty("path", out var pathProp) && pathProp.GetString() is { } pathValue)
+                                locations.Add(pathValue);
 
                     return new PlexLibraryTarget
                     {
                         SectionId = id,
                         Title = titleProp.GetString() ?? libraryName,
                         Type = type,
-                        Uuid = dir.TryGetProperty("uuid", out var uuidProp) ? uuidProp.GetString() ?? "" : "",
+                        Uuid = directory.TryGetProperty("uuid", out var uuidProp) ? uuidProp.GetString() ?? "" : "",
                         ServerId = server?.Id ?? "",
                         ServerName = server?.Name ?? "Plex Server",
                         ServerUrl = preferredUri,

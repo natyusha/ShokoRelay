@@ -115,8 +115,8 @@ public static partial class TextHelper
         string? line;
         while ((line = reader.ReadLine()) != null)
         {
-            int commentIdx = line.IndexOf("##", StringComparison.Ordinal);
-            var trimmed = (commentIdx >= 0 ? line[..commentIdx] : line).Trim();
+            int commentIndex = line.IndexOf("##", StringComparison.Ordinal);
+            var trimmed = (commentIndex >= 0 ? line[..commentIndex] : line).Trim();
             if (trimmed.Length == 0 || trimmed.StartsWith('#'))
                 continue;
 
@@ -140,13 +140,13 @@ public static partial class TextHelper
                 if (string.IsNullOrWhiteSpace(target))
                     continue;
 
-                var normTarget = normalizeKey(target);
-                if (normTarget.Length > 0)
-                    mergeMentioned.Add(normTarget);
+                var normalizedTarget = normalizeKey(target);
+                if (normalizedTarget.Length > 0)
+                    mergeMentioned.Add(normalizedTarget);
 
-                for (int partIdx = 1; partIdx < parts.Length; partIdx++)
+                for (int partIndex = 1; partIndex < parts.Length; partIndex++)
                 {
-                    var source = UnescapeUnicode(parts[partIdx].Trim());
+                    var source = UnescapeUnicode(parts[partIndex].Trim());
                     if (normalizeKey(source) is { Length: > 0 } normSource)
                     {
                         merges[normSource] = target;
@@ -192,14 +192,14 @@ public static partial class TextHelper
         List<ITitle>? titles = null;
         TitleSelection? baseSelection = null;
 
-        foreach (var lang in languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        foreach (var language in languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
+            if (language.Equals("shoko", StringComparison.OrdinalIgnoreCase))
                 return item.PreferredTitle?.Value ?? "";
 
             titles ??= [.. item.Titles.Where(title => title.Type != TitleType.Short)];
 
-            if (TextManager != null && lang.TryGetTitleLanguage(out var targetLang))
+            if (TextManager != null && language.TryGetTitleLanguage(out var targetLang))
             {
                 if (
                     targetLang != TitleLanguage.Main
@@ -258,7 +258,7 @@ public static partial class TextHelper
                             _ => 4,
                         }
                     )
-                    .FirstOrDefault(title => title.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(title.Value));
+                    .FirstOrDefault(title => title.LanguageCode.Equals(language, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(title.Value));
                 if (match != null)
                     return match.Value;
             }
@@ -279,14 +279,14 @@ public static partial class TextHelper
         IReadOnlyList<IText>? overviews = null;
         OverviewSelection? baseSelection = null;
 
-        foreach (var lang in languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        foreach (var language in languageSetting.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {
-            if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
+            if (language.Equals("shoko", StringComparison.OrdinalIgnoreCase))
                 return item.PreferredOverview?.Value ?? "";
 
             overviews ??= item.Overviews;
 
-            if (TextManager != null && lang.TryGetTitleLanguage(out var targetLang))
+            if (TextManager != null && language.TryGetTitleLanguage(out var targetLang))
             {
                 if (overviews.FirstOrDefault(overview => overview.Preference == TextPreference.Language && overview.Language == targetLang && !string.IsNullOrEmpty(overview.Value)) is { } langPref)
                     return langPref.Value;
@@ -305,7 +305,7 @@ public static partial class TextHelper
             }
             else
             {
-                var match = overviews.FirstOrDefault(overview => overview.LanguageCode.Equals(lang, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(overview.Value));
+                var match = overviews.FirstOrDefault(overview => overview.LanguageCode.Equals(language, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(overview.Value));
                 if (match != null)
                     return match.Value;
             }
@@ -313,6 +313,11 @@ public static partial class TextHelper
 
         return item.PreferredOverview?.Value ?? "";
     }
+
+    /// <summary>Resolves and sanitizes an item's description using Shoko's configured language priority and the active summary mode.</summary>
+    /// <param name="item">Object that exposes an Overviews collection.</param>
+    /// <returns>The sanitized summary string.</returns>
+    public static string GetSanitizedDescription(IWithOverviews item) => SummarySanitizer(GetDescriptionByLanguage(item, Settings.DescriptionLanguage), Settings.SummaryMode);
 
     /// <summary>Determine display, sortable, and original titles for a series based on preferences and prefix reordering settings.</summary>
     /// <param name="series">The Shoko series metadata.</param>

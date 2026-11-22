@@ -47,27 +47,27 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
         var stopwatch = Stopwatch.StartNew();
         progress?.Report(10);
 
-        var swCollections = Stopwatch.StartNew();
-        var collectionRes = await collectionService.BuildCollectionsAsync(null, cancellationToken: token).ConfigureAwait(false);
-        swCollections.Stop();
-        ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexCollectionsBuild}.report", collectionRes, ReportHelper.BuildCollectionsReport, logger);
+        var collectionsStopwatch = Stopwatch.StartNew();
+        var collectionsResult = await collectionService.BuildCollectionsAsync(null, cancellationToken: token).ConfigureAwait(false);
+        collectionsStopwatch.Stop();
+        ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexCollectionsBuild}.report", collectionsResult, ReportHelper.BuildCollectionsReport, logger);
         progress?.Report(40);
 
-        var swRatings = Stopwatch.StartNew();
-        var ratingRes = await criticRatingService.ApplyRatingsAsync(null, token).ConfigureAwait(false);
-        swRatings.Stop();
-        ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexRatingsApply}.report", ratingRes, ReportHelper.BuildRatingsReport, logger);
+        var ratingsStopwatch = Stopwatch.StartNew();
+        var ratingsResult = await criticRatingService.ApplyRatingsAsync(null, token).ConfigureAwait(false);
+        ratingsStopwatch.Stop();
+        ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexRatingsApply}.report", ratingsResult, ReportHelper.BuildRatingsReport, logger);
         progress?.Report(70);
 
         TimeSpan? imageSyncElapsed = null;
-        ImageSyncResult? imageSyncRes = null;
+        ImageSyncResult? imageSyncResult = null;
         if (Settings.Advanced.EnableImageSync)
         {
-            var swImages = Stopwatch.StartNew();
-            imageSyncRes = await imageSyncService.SyncImagesAsync(cancellationToken: token).ConfigureAwait(false);
-            swImages.Stop();
-            imageSyncElapsed = swImages.Elapsed;
-            ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexImagesSync}.report", imageSyncRes, ReportHelper.BuildImageSyncReport, logger);
+            var imagesStopwatch = Stopwatch.StartNew();
+            imageSyncResult = await imageSyncService.SyncImagesAsync(cancellationToken: token).ConfigureAwait(false);
+            imagesStopwatch.Stop();
+            imageSyncElapsed = imagesStopwatch.Elapsed;
+            ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexImagesSync}.report", imageSyncResult, ReportHelper.BuildImageSyncReport, logger);
         }
         progress?.Report(90);
 
@@ -76,20 +76,30 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
         int threshold = Settings.Advanced.EmptyPlexTrashThreshold;
         if (threshold > 0)
         {
-            var swTrash = Stopwatch.StartNew();
+            var trashStopwatch = Stopwatch.StartNew();
             foreach (var target in plexClient.GetConfiguredTargets())
             {
                 var (_, _, message) = await plexClient.EmptyTrashWithSafetyAsync(target, threshold, false, token).ConfigureAwait(false);
                 trashMessages.Add($"[{target.Title}] {message}");
             }
-            swTrash.Stop();
-            trashElapsed = swTrash.Elapsed;
+            trashStopwatch.Stop();
+            trashElapsed = trashStopwatch.Elapsed;
         }
 
         stopwatch.Stop();
         progress?.Report(100);
 
-        return new PlexAutomationRunResult(stopwatch.Elapsed, swCollections.Elapsed, collectionRes, swRatings.Elapsed, ratingRes, imageSyncElapsed, imageSyncRes, trashElapsed, trashMessages);
+        return new PlexAutomationRunResult(
+            stopwatch.Elapsed,
+            collectionsStopwatch.Elapsed,
+            collectionsResult,
+            ratingsStopwatch.Elapsed,
+            ratingsResult,
+            imageSyncElapsed,
+            imageSyncResult,
+            trashElapsed,
+            trashMessages
+        );
     }
 
     #endregion

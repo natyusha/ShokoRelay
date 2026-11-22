@@ -186,8 +186,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <summary>Client used for interacting with configured Plex server instances.</summary>
     protected readonly PlexClient PlexLibrary = plexLibrary;
 
-    /// <summary>Returns the absolute base URL of the plugin's API on the current host.</summary>
-    protected string ApiBase => $"{Request.Scheme}://{Request.Host}{Request.PathBase}{ShokoRelayConstants.BasePath}";
+    /// <summary>Returns the absolute base URL of the plugin's API on the current host, honouring reverse-proxy forwarding headers.</summary>
+    protected string ApiBase =>
+        ConfigProvider.DetectRequestBaseUrl() is { } detectedBase ? $"{detectedBase}{ShokoRelayConstants.BasePath}" : $"{Request.Scheme}://{Request.Host}{Request.PathBase}{ShokoRelayConstants.BasePath}";
 
     #endregion
 
@@ -319,6 +320,14 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Response Formatting
 
+    /// <summary>Applies response headers preventing browser and proxy caching of dynamic responses.</summary>
+    protected void SetNoCacheHeaders()
+    {
+        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
+        Response.Headers["Pragma"] = "no-cache";
+        Response.Headers["Expires"] = "0";
+    }
+
     /// <summary>Wrap a single metadata object in the standard Plex MediaContainer envelope.</summary>
     /// <param name="metadata">The metadata item to embed.</param>
     /// <param name="identifier">Optional provider identifier override.</param>
@@ -443,8 +452,8 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
             ConfigProvider.UpdatePlexTokenInfo(servers: servers);
         }
 
-        var libs = CollectDiscoveredLibraries(discovery.ShokoLibraries);
-        ConfigProvider.UpdatePlexTokenInfo(libraries: libs);
+        var libraries = CollectDiscoveredLibraries(discovery.ShokoLibraries);
+        ConfigProvider.UpdatePlexTokenInfo(libraries: libraries);
     }
 
     #endregion

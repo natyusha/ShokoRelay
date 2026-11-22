@@ -81,8 +81,8 @@ public static partial class VfsHelper
         if (name.AsSpan().IndexOfAny(InvalidFileNameChars) >= 0)
             processed = string.Create(name.Length, name, (chars, state) =>
             {
-                for (int charIdx = 0; charIdx < state.Length; charIdx++)
-                    chars[charIdx] = InvalidFileNameChars.Contains(state[charIdx]) ? ' ' : state[charIdx];
+                for (int charIndex = 0; charIndex < state.Length; charIndex++)
+                    chars[charIndex] = InvalidFileNameChars.Contains(state[charIndex]) ? ' ' : state[charIndex];
             });
 
         var cleaned = TextHelper.CondenseSpaces(processed).Trim().TrimEnd('.');
@@ -110,8 +110,8 @@ public static partial class VfsHelper
         if (cleanedTitle.AsSpan().IndexOfAny(s_replacementChars) >= 0)
             cleanedTitle = string.Create(cleanedTitle.Length, cleanedTitle, (chars, state) =>
             {
-                for (int charIdx = 0; charIdx < state.Length; charIdx++)
-                    chars[charIdx] = ReplacementCharMap.TryGetValue(state[charIdx], out var replacementChar) ? replacementChar : state[charIdx];
+                for (int charIndex = 0; charIndex < state.Length; charIndex++)
+                    chars[charIndex] = ReplacementCharMap.TryGetValue(state[charIndex], out var replacementChar) ? replacementChar : state[charIndex];
             });
 
         return WhitespaceRegex().Replace(cleanedTitle, " ").Trim(' ');
@@ -133,7 +133,7 @@ public static partial class VfsHelper
     public static int? GetSeasonId(string name) =>
         name.StartsWith("Season ", StringComparison.OrdinalIgnoreCase) && int.TryParse(name[7..], out int numberValue) ? numberValue
         : string.Equals(name, "Specials", StringComparison.OrdinalIgnoreCase) ? PlexConstants.SeasonSpecials
-        : PlexConstants.ExtraSeasons.FirstOrDefault(kvp => string.Equals(kvp.Value.Folder, name, StringComparison.OrdinalIgnoreCase)) is var match && match.Value.Folder != null ? match.Key
+        : PlexConstants.ExtraSeasons.FirstOrDefault(entry => string.Equals(entry.Value.Folder, name, StringComparison.OrdinalIgnoreCase)) is var match && match.Value.Folder != null ? match.Key
         : null;
 
     /// <summary>Builds a standard episode filename based on coordinates, versioning, and variation status.</summary>
@@ -337,12 +337,12 @@ public static partial class VfsHelper
                     }
                     catch { }
 
-            var dirs = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length).ToList();
-            foreach (var dir in dirs)
+            var directories = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length).ToList();
+            foreach (var directory in directories)
                 try
                 {
-                    if (!Directory.EnumerateFileSystemEntries(dir).Any())
-                        Directory.Delete(dir);
+                    if (!Directory.EnumerateFileSystemEntries(directory).Any())
+                        Directory.Delete(directory);
                 }
                 catch { }
         }
@@ -374,8 +374,8 @@ public static partial class VfsHelper
             }))
             .Value;
 
-        string normalizedRel = relativePath.Replace('\\', '/').TrimLeadingSlashes();
-        return cache.TryGetValue(normalizedRel, out string? absPath) ? absPath : null;
+        string normalizedRelativePath = relativePath.Replace('\\', '/').TrimLeadingSlashes();
+        return cache.TryGetValue(normalizedRelativePath, out string? absPath) ? absPath : null;
     }
 
     #endregion

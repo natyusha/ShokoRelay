@@ -216,11 +216,11 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
             if (response.Headers.TryGetValues("X-RateLimit-Remaining", out var remainingValues) && int.TryParse(remainingValues.FirstOrDefault(), out int remaining))
                 _rateLimitRemaining = remaining;
 
-            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetValues) && long.TryParse(resetValues.FirstOrDefault(), out long resetVal))
+            if (response.Headers.TryGetValues("X-RateLimit-Reset", out var resetValues) && long.TryParse(resetValues.FirstOrDefault(), out long resetValue))
                 _rateLimitReset =
-                    resetVal > 10_000_000_000L ? DateTimeOffset.FromUnixTimeMilliseconds(resetVal)
-                    : resetVal > 1_000_000_000L ? DateTimeOffset.FromUnixTimeSeconds(resetVal)
-                    : resetVal > 0 ? DateTimeOffset.UtcNow.AddSeconds(resetVal)
+                    resetValue > 10_000_000_000L ? DateTimeOffset.FromUnixTimeMilliseconds(resetValue)
+                    : resetValue > 1_000_000_000L ? DateTimeOffset.FromUnixTimeSeconds(resetValue)
+                    : resetValue > 0 ? DateTimeOffset.UtcNow.AddSeconds(resetValue)
                     : DateTimeOffset.MinValue;
         }
     }

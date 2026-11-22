@@ -91,7 +91,7 @@ public static class ImageHelper
     /// <param name="forceRemote">If true, forces the returned URL to point to the remote CDN.</param>
     /// <returns>The URL of the preferred image, or null if none exists.</returns>
     public static string? GetPreferredImageUrl(this IWithImages entity, ImageEntityType type, string languageSetting, bool forceRemote = false) =>
-        FilterImagesByLanguage(entity.GetAvailableImages(type), languageSetting, false).FirstOrDefault() is { } img ? GetImageUrl(img, forceRemote) : null;
+        FilterImagesByLanguage(entity.GetAvailableImages(type), languageSetting, false).FirstOrDefault() is { } image ? GetImageUrl(image, forceRemote) : null;
 
     /// <summary>Filters and orders images based on a prioritized list of language codes.</summary>
     /// <param name="images">The collection of images to filter.</param>
@@ -104,30 +104,33 @@ public static class ImageHelper
         if (all.Count == 0)
             return all;
 
+        static IImage? FindPreferred(IEnumerable<IImage> source) => source.FirstOrDefault(image => image.IsPreferred) ?? source.FirstOrDefault(image => image.CrossReference?.IsPreferred == true);
+
         if (string.IsNullOrWhiteSpace(imageLanguage) || imageLanguage.Trim().Equals("SHOKO", StringComparison.OrdinalIgnoreCase))
             return addEveryImage
-                ? all.OrderByDescending(img => img.IsPreferred).ThenByDescending(img => img.CrossReference?.IsPreferred == true)
-                : ((all.FirstOrDefault(img => img.IsPreferred) ?? all.FirstOrDefault(img => img.CrossReference?.IsPreferred == true)) is { } pref ? [pref] : all.Take(1));
+                ? all.OrderByDescending(image => image.IsPreferred).ThenByDescending(image => image.CrossReference?.IsPreferred == true)
+                : (FindPreferred(all) is { } preferred ? [preferred] : all.Take(1));
 
-        var langs = imageLanguage.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
+        var languages = imageLanguage.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         var ordered = new List<IImage>();
         var remaining = new List<IImage>(all);
 
-        foreach (var lang in langs)
+        foreach (var language in languages)
         {
-            if (lang.Equals("shoko", StringComparison.OrdinalIgnoreCase))
+            if (language.Equals("shoko", StringComparison.OrdinalIgnoreCase))
             {
-                if ((remaining.FirstOrDefault(img => img.IsPreferred) ?? remaining.FirstOrDefault(img => img.CrossReference?.IsPreferred == true)) is { } prefImg)
+                if (FindPreferred(remaining) is { } preferredImage)
                 {
-                    ordered.Add(prefImg);
-                    remaining.Remove(prefImg);
+                    ordered.Add(preferredImage);
+                    remaining.Remove(preferredImage);
                 }
             }
             else
             {
                 var matches = remaining
-                    .Where(img =>
-                        (img.LanguageCode ?? "") is var code && (code.Equals(lang, StringComparison.OrdinalIgnoreCase) || (lang.Equals("none", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(code)))
+                    .Where(image =>
+                        (image.LanguageCode ?? "") is var code
+                        && (code.Equals(language, StringComparison.OrdinalIgnoreCase) || (language.Equals("none", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(code)))
                     )
                     .ToList();
 
@@ -143,9 +146,9 @@ public static class ImageHelper
         }
 
         if (addEveryImage)
-            ordered.AddRange(remaining.OrderByDescending(img => img.IsPreferred).ThenByDescending(img => img.CrossReference?.IsPreferred == true));
+            ordered.AddRange(remaining.OrderByDescending(image => image.IsPreferred).ThenByDescending(image => image.CrossReference?.IsPreferred == true));
         else if (ordered.Count == 0 && remaining.Count > 0)
-            ordered.Add(remaining.FirstOrDefault(img => img.IsPreferred) ?? remaining.FirstOrDefault(img => img.CrossReference?.IsPreferred == true) ?? remaining.First());
+            ordered.Add(FindPreferred(remaining) ?? remaining.First());
 
         return ordered;
     }
@@ -160,11 +163,11 @@ public static class ImageHelper
     {
         IEnumerable<ImageInfo> Project(ImageEntityType type, string kind) =>
             FilterImagesByLanguage(images.GetAvailableImages(type), imageLanguage, addEveryImage)
-                .Select(img => new ImageInfo
+                .Select(image => new ImageInfo
                 {
                     Alt = title,
                     Type = kind,
-                    Url = GetImageUrl(img, forceRemote: addEveryImage),
+                    Url = GetImageUrl(image, forceRemote: addEveryImage),
                 });
 
         return [.. Project(ImageEntityType.Backdrop, "background"), .. Project(ImageEntityType.Logo, "clearLogo"), .. Project(ImageEntityType.Primary, "coverPoster")];
@@ -190,22 +193,22 @@ public static class ImageHelper
         if (episodeNumber > 1 && movieImages != null)
         {
             var tmdbImages = FilterImagesByLanguage(movieImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, true).ToList();
-            var uniqueImage = tmdbImages.FirstOrDefault(img => GetImageUrl(img) != defaultThumb);
+            var uniqueImage = tmdbImages.FirstOrDefault(image => GetImageUrl(image) != defaultThumb);
 
             if (uniqueImage != null)
             {
                 thumbUrl = GetImageUrl(uniqueImage);
-                imagesArray.RemoveAll(img => img.Type == "coverPoster");
+                imagesArray.RemoveAll(image => image.Type == "coverPoster");
 
-                var uniqueImages = tmdbImages.Where(img => GetImageUrl(img) != defaultThumb).ToList();
+                var uniqueImages = tmdbImages.Where(image => GetImageUrl(image) != defaultThumb).ToList();
                 var selectedImages = addEveryImage ? uniqueImages : uniqueImages.Take(1);
 
                 imagesArray.AddRange(
-                    selectedImages.Select(img => new ImageInfo
+                    selectedImages.Select(image => new ImageInfo
                     {
                         Alt = title,
                         Type = "coverPoster",
-                        Url = GetImageUrl(img, forceRemote: addEveryImage),
+                        Url = GetImageUrl(image, forceRemote: addEveryImage),
                     })
                 );
             }
@@ -251,11 +254,11 @@ public static class ImageHelper
             :
             [
                 .. FilterImagesByLanguage(seriesImages.GetAvailableImages(ImageEntityType.Primary), imageLanguage, addEveryImage)
-                    .Select(img => new ImageInfo
+                    .Select(image => new ImageInfo
                     {
                         Alt = alt,
                         Type = "coverPoster",
-                        Url = GetImageUrl(img, forceRemote: addEveryImage),
+                        Url = GetImageUrl(image, forceRemote: addEveryImage),
                     }),
             ];
 
@@ -268,11 +271,11 @@ public static class ImageHelper
     public static ImageInfo[] BuildSnapshotArray(IWithImages images, string alt, bool addEveryImage, string imageLanguage) =>
         [
             .. FilterImagesByLanguage(images.GetAvailableImages(ImageEntityType.Backdrop), imageLanguage, addEveryImage)
-                .Select(img => new ImageInfo
+                .Select(image => new ImageInfo
                 {
                     Alt = alt,
                     Type = "snapshot",
-                    Url = GetImageUrl(img, forceRemote: addEveryImage),
+                    Url = GetImageUrl(image, forceRemote: addEveryImage),
                 }),
         ];
 

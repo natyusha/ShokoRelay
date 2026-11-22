@@ -9,7 +9,7 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Helpers;
 
 /// <summary>Utility methods for writing plugin-specific diagnostic reports and CSV summaries.</summary>
-public static class ReportHelper
+public static partial class ReportHelper
 {
     #region Report Storage
 
@@ -76,17 +76,17 @@ public static class ReportHelper
     /// <param name="result">Plex discovery result data.</param>
     public static void BuildDiscoveryReport(StringBuilder builder, PlexDiscoveryResult result)
     {
-        var libs = result.Libraries;
+        var libraries = result.Libraries;
         string? customUrl = !string.IsNullOrWhiteSpace(result.CustomUrl) ? result.CustomUrl.Trim().TrimEnd('/') : null;
 
         AppendHeader(builder, "Plex Discovery Report");
-        builder.AppendLine($"  Libraries Found          : {libs.Count}");
+        builder.AppendLine($"  Libraries Found          : {libraries.Count}");
 
         if (customUrl != null)
             builder.AppendLine($"  Configured Override URL  : {customUrl}");
 
-        var tvLibs = libs.Where(library => !string.Equals(library.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
-        var movieLibs = libs.Where(library => string.Equals(library.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        var tvLibraries = libraries.Where(library => !string.Equals(library.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
+        var movieLibraries = libraries.Where(library => string.Equals(library.Type, "movie", StringComparison.OrdinalIgnoreCase)).ToList();
 
         void PrintLib(PlexAvailableLibrary library)
         {
@@ -98,17 +98,17 @@ public static class ReportHelper
                 builder.AppendLine($"    Paths : {string.Join(", ", library.Locations)}");
         }
 
-        if (tvLibs.Count > 0)
+        if (tvLibraries.Count > 0)
         {
             builder.AppendLine().AppendLine("TV Shows Libraries:");
-            foreach (var library in tvLibs)
+            foreach (var library in tvLibraries)
                 PrintLib(library);
         }
 
-        if (movieLibs.Count > 0)
+        if (movieLibraries.Count > 0)
         {
             builder.AppendLine().AppendLine("Movie Libraries:");
-            foreach (var library in movieLibs)
+            foreach (var library in movieLibraries)
                 PrintLib(library);
         }
     }
@@ -133,17 +133,17 @@ public static class ReportHelper
 
         void AddItems(string header, bool isMovie)
         {
-            var assigned = result.CreatedCollections.Where(col => col.IsMovie == isMovie).OrderBy(col => col.TargetTitle).ThenBy(col => col.CollectionName).ToList();
+            var assigned = result.CreatedCollections.Where(assignment => assignment.IsMovie == isMovie).OrderBy(assignment => assignment.TargetTitle).ThenBy(assignment => assignment.CollectionName).ToList();
             var uploaded = result.UploadedDetails.Where(upload => upload.IsMovie == isMovie).OrderBy(upload => upload.TargetTitle).ThenBy(upload => upload.CollectionName).ToList();
-            var deleted = result.DeletedCollections.Where(del => del.IsMovie == isMovie).OrderBy(del => del.TargetTitle).ThenBy(del => del.CollectionName).ToList();
+            var deleted = result.DeletedCollections.Where(deletion => deletion.IsMovie == isMovie).OrderBy(deletion => deletion.TargetTitle).ThenBy(deletion => deletion.CollectionName).ToList();
 
             if (assigned.Count == 0 && uploaded.Count == 0 && deleted.Count == 0)
                 return;
 
             items.Add(header);
-            items.AddRange(assigned.Select(col => $"  ASSIGNED: [{col.TargetTitle}] {col.CollectionName} (Series: {col.SeriesId})"));
+            items.AddRange(assigned.Select(assignment => $"  ASSIGNED: [{assignment.TargetTitle}] {assignment.CollectionName} (Series: {assignment.SeriesId})"));
             items.AddRange(uploaded.Select(upload => $"  UPLOADED: [{upload.TargetTitle}] Applied {upload.Label} for collection -> {upload.CollectionName} (RatingKey: {upload.RatingKey})"));
-            items.AddRange(deleted.Select(del => $"  REMOVED:  [{del.TargetTitle}] {del.CollectionName} (RatingKey: {del.RatingKey})"));
+            items.AddRange(deleted.Select(deletion => $"  REMOVED:  [{deletion.TargetTitle}] {deletion.CollectionName} (RatingKey: {deletion.RatingKey})"));
             items.Add("");
         }
 
@@ -382,11 +382,11 @@ public static class ReportHelper
             items.Add(string.IsNullOrWhiteSpace(shokoUser) ? $"User: {userGroup.Key}" : $"User: {userGroup.Key} -> Shoko: {shokoUser}");
             var byLibrary = userGroup.Value.GroupBy(change => change.LibraryName ?? "Default").OrderBy(group => group.Key);
 
-            foreach (var libGroup in byLibrary)
+            foreach (var libraryGroup in byLibrary)
             {
-                items.Add($"  Library: {libGroup.Key}");
+                items.Add($"  Library: {libraryGroup.Key}");
                 items.AddRange(
-                    libGroup
+                    libraryGroup
                         .OrderBy(change => change.SeriesTitle)
                         .ThenBy(change => change.SeasonNumber)
                         .ThenBy(change => change.EpisodeNumber)
@@ -536,257 +536,6 @@ public static class ReportHelper
     {
         var stats = new Dictionary<string, object> { ["Mode"] = result.IsPurge ? "Purge" : "Map", ["Operations Completed"] = result.Count };
         BuildReport(builder, "Source Link Report", stats, result.IsPurge ? null : "Links Created:", result.Details.OrderBy(detail => detail));
-    }
-
-    #endregion
-
-    #region CSV Generation
-
-    /// <summary>Parallelized, per-thread memoized aggregator for building diagnostic CSV reports grouped by normalized key with merged variants appended after semicolons.</summary>
-    /// <param name="title">Report title banner (e.g., "Tag" or "Credit").</param>
-    /// <param name="columnName">Name of the item column (e.g., "tag" or "credit").</param>
-    /// <param name="normalizeKey">Function generating a normalized lookup key from a raw name string.</param>
-    /// <param name="merges">Dictionary mapping alias keys to canonical target names.</param>
-    /// <param name="blacklist">Set of normalized blacklisted keys to exclude.</param>
-    /// <param name="formatDisplayName">Optional formatting function for display names (e.g., TitleCase).</param>
-    /// <param name="cleanRaw">Optional pre-cleaning function applied before normalization (e.g., stripping moderator notes).</param>
-    /// <param name="allowSamePrimaryMerge">True to allow distinct primary-source (AniDB) entries sharing a normalized key to merge; false to keep unconfigured AniDB entries separate.</param>
-    internal sealed class CsvReportBuilder(
-        string title,
-        string columnName,
-        Func<string, string> normalizeKey,
-        IReadOnlyDictionary<string, string> merges,
-        IReadOnlySet<string> blacklist,
-        Func<string, string>? formatDisplayName = null,
-        Func<string, string>? cleanRaw = null,
-        bool allowSamePrimaryMerge = true
-    )
-    {
-        /// <summary>Delegate for recording a single candidate item from a series into the report builder.</summary>
-        /// <param name="source">Display name of the metadata source (e.g., "AniDB", "TMDB", "User").</param>
-        /// <param name="sourceOrder">Numerical sort order for the source.</param>
-        /// <param name="rawName">The raw candidate name string.</param>
-        /// <param name="category">Optional isolation category (e.g., "Person" vs "Company") preventing cross-category merges.</param>
-        public delegate void RecordDelegate(string source, int sourceOrder, string? rawName, string category = "");
-
-        /// <summary>Memoized resolution result for a single raw item name.</summary>
-        /// <param name="NormKey">The normalized deduplication key.</param>
-        /// <param name="DisplayName">The formatted display name.</param>
-        /// <param name="MergeTarget">Optional canonical merge target display name.</param>
-        /// <param name="IsBlacklisted">Whether the item should be excluded.</param>
-        private readonly record struct ResolvedItem(string NormKey, string DisplayName, string? MergeTarget, bool IsBlacklisted);
-
-        /// <summary>Tracks occurrence count for a single source/spelling variant.</summary>
-        private sealed class VariantStats
-        {
-            /// <summary>Number of series where this variant appeared.</summary>
-            public int Count;
-        }
-
-        /// <summary>Aggregates all variants and unique series IDs under a single normalized key.</summary>
-        private sealed class GroupStats
-        {
-            /// <summary>Canonical display target if an explicit merge rule matched.</summary>
-            public string? MergeTarget;
-
-            /// <summary>Unique Shoko series IDs contributing to this group.</summary>
-            public readonly HashSet<int> SeriesIds = [];
-
-            /// <summary>Variant counts keyed by source order, source name, and display name.</summary>
-            public readonly Dictionary<(int SourceOrder, string Source, string DisplayName), VariantStats> Variants = [];
-        }
-
-        /// <summary>Per-thread working state used to accumulate report entries without lock contention.</summary>
-        private sealed class ThreadState
-        {
-            /// <summary>Thread-local cache of resolved raw names.</summary>
-            public readonly Dictionary<string, ResolvedItem> ResolveCache = new(StringComparer.Ordinal);
-
-            /// <summary>Thread-local group accumulators.</summary>
-            public readonly Dictionary<(string Category, string NormKey), GroupStats> Groups = [];
-
-            /// <summary>Deduplication set preventing double-counting within a single series.</summary>
-            public readonly HashSet<(string Category, string Source, string NormKey, string DisplayName)> SeenInSeries = [];
-        }
-
-        private readonly Lock _mergeLock = new();
-        private readonly Dictionary<(string Category, string NormKey), GroupStats> _globalGroups = [];
-
-        /// <summary>Scans all supplied Shoko series in parallel and formats the aggregated results into a sorted CSV report string.</summary>
-        /// <param name="seriesList">All Shoko series to evaluate.</param>
-        /// <param name="collectSeries">Callback invoked per series to record its items via the supplied recorder delegate.</param>
-        /// <returns>A CSV-formatted report string.</returns>
-        public string Build(IEnumerable<IShokoSeries> seriesList, Action<IShokoSeries, RecordDelegate> collectSeries)
-        {
-            Parallel.ForEach(
-                seriesList,
-                DefaultParallelOptions(),
-                () => new ThreadState(),
-                (series, loopState, local) =>
-                {
-                    local.SeenInSeries.Clear();
-                    collectSeries(series, (source, sourceOrder, rawName, category) => RecordLocal(local, series.LocalID, category, source, sourceOrder, rawName));
-                    return local;
-                },
-                local =>
-                {
-                    lock (_mergeLock)
-                    {
-                        foreach (var (groupKey, localGroup) in local.Groups)
-                        {
-                            if (!_globalGroups.TryGetValue(groupKey, out var globalGroup))
-                                _globalGroups[groupKey] = globalGroup = new GroupStats();
-
-                            globalGroup.MergeTarget ??= localGroup.MergeTarget;
-                            foreach (var seriesId in localGroup.SeriesIds)
-                                globalGroup.SeriesIds.Add(seriesId);
-
-                            foreach (var (variantKey, variantStats) in localGroup.Variants)
-                            {
-                                if (!globalGroup.Variants.TryGetValue(variantKey, out var globalVariantStats))
-                                    globalGroup.Variants[variantKey] = globalVariantStats = new VariantStats();
-                                globalVariantStats.Count += variantStats.Count;
-                            }
-                        }
-                    }
-                }
-            );
-
-            return FormatReport();
-        }
-
-        /// <summary>Resolves and records a single item into thread-local storage using per-thread memoization.</summary>
-        /// <param name="local">Thread-local report accumulation state.</param>
-        /// <param name="seriesId">The Shoko series identifier being evaluated.</param>
-        /// <param name="category">Isolation category preventing cross-category merges.</param>
-        /// <param name="source">Display name of the metadata source (e.g., "AniDB", "TMDB", "User").</param>
-        /// <param name="sourceOrder">Numerical sort order for the source.</param>
-        /// <param name="rawName">The raw candidate name string.</param>
-        private void RecordLocal(ThreadState local, int seriesId, string category, string source, int sourceOrder, string? rawName)
-        {
-            if (string.IsNullOrWhiteSpace(rawName))
-                return;
-
-            if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
-            {
-                string trimmed = (cleanRaw != null ? cleanRaw(rawName) : rawName).Trim();
-                if (trimmed.Length == 0)
-                {
-                    local.ResolveCache[rawName] = new ResolvedItem(string.Empty, string.Empty, null, true);
-                    return;
-                }
-
-                string origNorm = normalizeKey(trimmed);
-                bool isMerged = merges.TryGetValue(origNorm, out var target);
-                string targetStr = isMerged ? target! : trimmed;
-                string normKey = isMerged ? normalizeKey(targetStr) : origNorm;
-                bool isBlacklisted = normKey.Length == 0 || blacklist.Contains(normKey) || blacklist.Contains(origNorm);
-
-                string displayName = !isBlacklisted && formatDisplayName != null ? formatDisplayName(trimmed) : trimmed;
-                string? formattedTarget = !isBlacklisted && isMerged ? (formatDisplayName != null ? formatDisplayName(targetStr) : targetStr) : null;
-
-                resolved = local.ResolveCache[rawName] = new ResolvedItem(normKey, displayName, formattedTarget, isBlacklisted);
-            }
-
-            if (resolved.IsBlacklisted || !local.SeenInSeries.Add((category, source, resolved.NormKey, resolved.DisplayName)))
-                return;
-
-            var groupKey = (category, resolved.NormKey);
-            if (!local.Groups.TryGetValue(groupKey, out var group))
-                local.Groups[groupKey] = group = new GroupStats();
-
-            group.MergeTarget ??= resolved.MergeTarget;
-            group.SeriesIds.Add(seriesId);
-
-            var variantKey = (sourceOrder, source, resolved.DisplayName);
-            if (!group.Variants.TryGetValue(variantKey, out var variantStats))
-                group.Variants[variantKey] = variantStats = new VariantStats();
-            variantStats.Count++;
-        }
-
-        /// <summary>Orders normalized groups and formats each line with merged variants separated by semicolons.</summary>
-        /// <returns>The completed CSV report string.</returns>
-        private string FormatReport()
-        {
-            var rows = new List<(int SourceOrder, string Name, int Count, string Line)>(_globalGroups.Count);
-
-            foreach (var group in _globalGroups.Values)
-            {
-                if (group.Variants.Count == 0)
-                    continue;
-
-                // Sort variants so the primary winner comes first matching GlobalNameEntry tiebreaking:
-                // 1. Explicit CSV merge target match
-                // 2. Source priority (AniDB = 0, TMDB = 1, User = 2)
-                // 3. Highest series count
-                // 4. Shorter name, then alphabetical
-                var ordered = group
-                    .Variants.Select(entry => (entry.Key.SourceOrder, entry.Key.Source, entry.Key.DisplayName, entry.Value.Count))
-                    .OrderByDescending(variant => group.MergeTarget != null && string.Equals(variant.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase))
-                    .ThenBy(variant => variant.SourceOrder)
-                    .ThenByDescending(variant => variant.Count)
-                    .ThenBy(variant => variant.DisplayName.Length)
-                    .ThenBy(variant => variant.DisplayName, StringComparer.Ordinal)
-                    .ToList();
-
-                // When distinct primary-source (AniDB) entries are not explicitly merged by CSV rules, emit each as its own line and attach secondary-source matches
-                if (!allowSamePrimaryMerge && group.MergeTarget == null && ordered.Count(variant => variant.SourceOrder == 0) > 1)
-                {
-                    var primaries = ordered.Where(variant => variant.SourceOrder == 0).ToList();
-                    var secondaries = ordered.Where(variant => variant.SourceOrder > 0).ToList();
-                    var attached = primaries.Select(_ => new List<(int SourceOrder, string Source, string DisplayName, int Count)>()).ToList();
-
-                    foreach (var sec in secondaries)
-                    {
-                        int matchIdx = primaries.FindIndex(primary => string.Equals(primary.DisplayName, sec.DisplayName, StringComparison.OrdinalIgnoreCase));
-                        attached[matchIdx >= 0 ? matchIdx : 0].Add(sec);
-                    }
-
-                    for (int primaryIndex = 0; primaryIndex < primaries.Count; primaryIndex++)
-                    {
-                        var (sourceOrder, source, displayName, count) = primaries[primaryIndex];
-                        var stringBuilderSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
-                        foreach (var (_, attachedSource, attachedDisplayName, attachedCount) in attached[primaryIndex])
-                            stringBuilderSplit.Append($";{attachedSource},{TextHelper.EscapeCsvCommas(attachedDisplayName)},{attachedCount}");
-                        rows.Add((sourceOrder, displayName, count, stringBuilderSplit.ToString()));
-                    }
-                    continue;
-                }
-
-                var stringBuilderLine = new StringBuilder();
-                int primaryOrder = ordered[0].SourceOrder;
-                string primaryName = ordered[0].DisplayName;
-                int primaryCount = ordered[0].Count;
-
-                // Case A: The entry has an explicit CSV merge target that no series used directly -> output Override entry first, then all variants
-                if (group.MergeTarget != null && !ordered.Any(variant => string.Equals(variant.DisplayName, group.MergeTarget, StringComparison.OrdinalIgnoreCase)))
-                {
-                    primaryName = group.MergeTarget;
-                    primaryCount = group.SeriesIds.Count;
-                    stringBuilderLine.Append($"Override,{TextHelper.EscapeCsvCommas(primaryName)},{primaryCount}");
-                    foreach (var (_, source, displayName, count) in ordered)
-                        stringBuilderLine.Append($";{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
-                }
-                // Case B: Has a natural winner (or target match) as ordered[0], append any subsequent variants/plurals/sources after ';'
-                else
-                {
-                    stringBuilderLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
-                    for (int orderedIndex = 1; orderedIndex < ordered.Count; orderedIndex++)
-                        stringBuilderLine.Append($";{ordered[orderedIndex].Source},{TextHelper.EscapeCsvCommas(ordered[orderedIndex].DisplayName)},{ordered[orderedIndex].Count}");
-                }
-
-                rows.Add((primaryOrder, primaryName, primaryCount, stringBuilderLine.ToString()));
-            }
-
-            var stringBuilder = new StringBuilder();
-            stringBuilder.AppendLine($"## {title} Report ##").AppendLine();
-            stringBuilder.AppendLine($"#source,{columnName},count");
-
-            foreach (var (_, _, _, line) in rows.OrderBy(row => row.SourceOrder).ThenByDescending(row => row.Count).ThenBy(row => row.Name, StringComparer.OrdinalIgnoreCase))
-                stringBuilder.AppendLine(line);
-
-            return stringBuilder.ToString();
-        }
     }
 
     #endregion

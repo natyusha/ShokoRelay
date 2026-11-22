@@ -14,23 +14,23 @@
    * @returns {void}
    */
   function initDetailsAnimation(details, content, duration = 300) {
-    let anim = null;
+    let animation = null;
     if (details.id) {
       const saved = localStorage.getItem(`details-state-${details.id}`);
       if (saved !== null) details.open = saved === "true";
     }
     details.querySelector("summary")?.addEventListener("click", (event) => {
       event.preventDefault();
-      if (anim) anim.cancel();
+      if (animation) animation.cancel();
       const isOpening = !details.open;
       if (isOpening) details.open = true;
       if (details.id) localStorage.setItem(`details-state-${details.id}`, String(isOpening));
-      const startH = isOpening ? "0px" : content.offsetHeight + "px";
-      const endH = isOpening ? content.offsetHeight + "px" : "0px";
-      anim = content.animate({ height: [startH, endH] }, { duration, easing: "ease" });
-      anim.onfinish = anim.oncancel = () => {
+      const startHeight = isOpening ? "0px" : content.offsetHeight + "px";
+      const endHeight = isOpening ? content.offsetHeight + "px" : "0px";
+      animation = content.animate({ height: [startHeight, endHeight] }, { duration, easing: "ease" });
+      animation.onfinish = animation.oncancel = () => {
         if (!isOpening) details.open = false;
-        anim = null;
+        animation = null;
         content.style.height = "";
       };
     });
@@ -94,10 +94,10 @@
     if (typeof value !== "string" || !value.trim()) return 0;
     const trimmed = value.trim();
     if (/^\d+$/.test(trimmed)) return Number(trimmed);
-    if (trimmed.toLowerCase() === "all") return enumValues.reduce((acc, enumVal) => acc | enumVal.value, 0);
+    if (trimmed.toLowerCase() === "all") return enumValues.reduce((acc, enumValue) => acc | enumValue.value, 0);
     if (trimmed.toLowerCase() === "none") return 0;
     return trimmed.split(",").reduce((acc, part) => {
-      const match = enumValues.find((enumVal) => enumVal.name.toLowerCase() === part.trim().toLowerCase());
+      const match = enumValues.find((enumValue) => enumValue.name.toLowerCase() === part.trim().toLowerCase());
       return match ? acc | match.value : acc;
     }, 0);
   }
@@ -136,20 +136,22 @@
      * @returns {void}
      */
     const updateSummary = () => {
-      const activeNames = enumValues.filter((enumVal) => (mask & enumVal.value) === enumVal.value).map((enumVal) => enumVal.name);
+      const activeNames = enumValues.filter((enumValue) => (mask & enumValue.value) === enumValue.value).map((enumValue) => enumValue.name);
       textSpan.textContent = activeNames.length ? activeNames.join(", ") : "None";
     };
 
-    enumValues.forEach((enumVal) => {
+    enumValues.forEach((enumValue) => {
       const itemLabel = document.createElement("label");
       itemLabel.className = "shoko-checkbox";
-      itemLabel.innerHTML = `<input type="checkbox" value="${esc(enumVal.value)}">
-        <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(enumVal.name)}</span></span>`;
+      itemLabel.innerHTML = `<input type="checkbox" value="${esc(enumValue.value)}">
+        <span class="shoko-checkbox-icon" aria-hidden="true">
+        <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+        <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
+        <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(enumValue.name)}</span></span>`;
       const checkbox = itemLabel.querySelector("input");
-      checkbox.checked = (mask & enumVal.value) === enumVal.value;
+      checkbox.checked = (mask & enumValue.value) === enumValue.value;
       checkbox.onchange = async () => {
-        mask = checkbox.checked ? mask | enumVal.value : mask & ~enumVal.value;
+        mask = checkbox.checked ? mask | enumValue.value : mask & ~enumValue.value;
         updateSummary();
         setValueByPath(config, prop.Path, mask);
         await saveSettings(config);
@@ -190,7 +192,9 @@
     wrap.appendChild(label);
 
     const mappingContainer = document.createElement("div");
-    mappingContainer.innerHTML = `<div class="full"><div><small>${esc(leftHeader)}</small><textarea class="mapping-left"></textarea></div><div><small>${esc(rightHeader)}</small><textarea class="mapping-right"></textarea></div></div>`;
+    mappingContainer.innerHTML = `<div class="full">
+      <div><small>${esc(leftHeader)}</small><textarea class="mapping-left"></textarea></div>
+      <div><small>${esc(rightHeader)}</small><textarea class="mapping-right"></textarea></div></div>`;
     wrap.appendChild(mappingContainer);
 
     const leftArea = mappingContainer.querySelector(".mapping-left");
@@ -205,8 +209,8 @@
       const mappingValue = {};
       const leftLines = leftArea.value.split("\n");
       const rightLines = rightArea.value.split("\n");
-      leftLines.forEach((leftVal, index) => {
-        if (leftVal.trim() && rightLines[index]?.trim()) mappingValue[keyOnLeft ? leftVal.trim() : rightLines[index].trim()] = keyOnLeft ? rightLines[index].trim() : leftVal.trim();
+      leftLines.forEach((leftValue, index) => {
+        if (leftValue.trim() && rightLines[index]?.trim()) mappingValue[keyOnLeft ? leftValue.trim() : rightLines[index].trim()] = keyOnLeft ? rightLines[index].trim() : leftValue.trim();
       });
       setValueByPath(config, prop.Path, mappingValue);
       await saveSettings(config);
@@ -221,11 +225,11 @@
    */
   async function loadConfig() {
     if (!element("config-form")) return;
-    const [schemaRes, configRes] = await Promise.all([fetchJson(configUrl + "/schema"), fetchJson(configUrl)]);
-    if (!schemaRes.isOk || !configRes.isOk) return showToast("Failed to Load Config", "error", 0);
+    const [schemaResponse, configResponse] = await Promise.all([fetchJson(configUrl + "/schema"), fetchJson(configUrl)]);
+    if (!schemaResponse.isOk || !configResponse.isOk) return showToast("Failed to Load Config", "error", 0);
 
-    const schema = schemaRes.data.properties || [];
-    const rawConfig = configRes.data || {};
+    const schema = schemaResponse.data.properties || [];
+    const rawConfig = configResponse.data || {};
     const config = window._sr.syncConfig(unwrapConfig(rawConfig));
     const overridesBtn = element("vfs-overrides");
 
@@ -272,9 +276,9 @@
         input.add(new Option("Shoko Gray", "shoko-gray"));
 
         (rawConfig.themes || []).forEach((theme) => {
-          const opt = new Option(theme.name, theme.id);
-          opt.selected = theme.id === value;
-          input.add(opt);
+          const option = new Option(theme.name, theme.id);
+          option.selected = theme.id === value;
+          input.add(option);
         });
         wrap.appendChild(input);
 
@@ -292,8 +296,11 @@
         bindConfig(input, prop.Path, config, customSave, "text");
       } else if (prop.Type === "bool") {
         wrap.innerHTML = `<label class="shoko-checkbox"><input type="checkbox">
-          <span class="shoko-checkbox-icon" aria-hidden="true"><svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg><svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
-          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(prop.Display || prop.Path)}</span><small class="shoko-checkbox-desc" style="display:block">${esc(prop.Description || "")}</small></span></label>`;
+          <span class="shoko-checkbox-icon" aria-hidden="true">
+          <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+          <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg></span>
+          <span class="shoko-checkbox-text"><span class="shoko-checkbox-title">${esc(prop.Display || prop.Path)}</span>
+          <small class="shoko-checkbox-desc" style="display:block">${esc(prop.Description || "")}</small></span></label>`;
         input = wrap.querySelector("input");
         bindConfig(input, prop.Path, config, saveSettings, "check");
         // Re-evaluate the overrides button state when either relevant setting is toggled.
@@ -310,10 +317,10 @@
         input = document.createElement(prop.Type === "enum" ? "select" : prop.Type === "json" || prop.Path.endsWith("TagOverrides") || prop.Path.endsWith("Exclusions") ? "textarea" : "input");
         if (prop.Path === "TagOverrides") input.id = "resizable";
         if (prop.Type === "enum") {
-          (prop.EnumValues || []).forEach((enumVal) => {
-            const opt = new Option(enumVal.name, enumVal.value);
-            opt.selected = String(enumVal.value) === String(value);
-            input.add(opt);
+          (prop.EnumValues || []).forEach((enumValue) => {
+            const option = new Option(enumValue.name, enumValue.value);
+            option.selected = String(enumValue.value) === String(value);
+            input.add(option);
           });
         } else if (prop.Type === "number") {
           input.type = "number";
@@ -326,10 +333,10 @@
 
         if (prop.Path === "Advanced.RequireAuth") {
           input.onchange = async () => {
-            const nextVal = Number(input.value) || 0;
-            if (nextVal !== 0) {
-              const verifyRes = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
-              if (!verifyRes.isOk) {
+            const nextValue = Number(input.value) || 0;
+            if (nextValue !== 0) {
+              const verifyResponse = await fetchJson(`${window._sr.base}/auth/verify?force=true`, {}, false);
+              if (!verifyResponse.isOk) {
                 const authed = await window._sr.ensureAuth?.({ dismissable: true });
                 if (!authed) {
                   input.value = String(getValueByPath(config, prop.Path) ?? 0);
@@ -337,7 +344,7 @@
                 }
               }
             }
-            setValueByPath(config, prop.Path, nextVal);
+            setValueByPath(config, prop.Path, nextValue);
             await saveSettings(config);
           };
           // Custom validation for ShokoServerUrl and PlexServerUrl
@@ -345,26 +352,26 @@
           input.value = value ?? "";
           input.onchange = async () => {
             const urlRegex = /^https?:\/\/([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$/;
-            const cleanVal = input.value.trim().replace(/\/+$/, "");
-            if (cleanVal && !urlRegex.test(cleanVal)) {
+            const cleanedValue = input.value.trim().replace(/\/+$/, "");
+            if (cleanedValue && !urlRegex.test(cleanedValue)) {
               showToast(`Invalid ${prop.Path.endsWith("ShokoServerUrl") ? "Shoko" : "Plex"} URL. Use http(s)://HOST:PORT`, "error", 5000);
               input.value = getValueByPath(config, prop.Path) || "";
               return;
             }
-            input.value = cleanVal;
-            setValueByPath(config, prop.Path, cleanVal);
+            input.value = cleanedValue;
+            setValueByPath(config, prop.Path, cleanedValue);
             await saveSettings(config);
           };
         } else if (prop.Path === "Advanced.FolderExclusions") {
           input.value = value ?? "";
           input.onchange = async () => {
-            const cleanVal = input.value
+            const cleanedValue = input.value
               .split(/\r?\n/)
               .map((line) => line.trim().replace(/^[\\/]+|[\\/]+$/g, ""))
               .filter((line) => line.length > 0)
               .join("\n");
-            input.value = cleanVal;
-            setValueByPath(config, prop.Path, cleanVal);
+            input.value = cleanedValue;
+            setValueByPath(config, prop.Path, cleanedValue);
             await saveSettings(config);
           };
         } else bindConfig(input, prop.Path, config, saveSettings, prop.Type === "number" ? "number" : "text");

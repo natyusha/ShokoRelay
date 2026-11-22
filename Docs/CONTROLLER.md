@@ -24,7 +24,7 @@ Endpoints managed by `DashboardController`
 POST /auth/login                                               -> Login
 GET  /auth/verify?force={true|false}&player={true|false}       -> VerifyAuth
 GET  /dashboard                                                -> GetDashboardPage
-GET  /browser                                                  -> GetBrowserPage
+GET  /browser?seriesId={id}&anidbId={id}                       -> GetBrowserPage
 GET  /player                                                   -> GetPlayerPage
 GET  /dashboard/{*path}                                        -> GetAssetFile
 
@@ -47,6 +47,8 @@ GET  /logs/{fileName}                                          -> GetLog
   - Passing `player=true` permits an unauthenticated status check when `RequireAuth` is set to `Allow Player Access`.
 - `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
 - `GetBrowserPage` Serves the stand-alone VFS browser (`browser.cshtml`).
+  - `seriesId`: (optional) automatically switch to a matching root tab, expand the series folder, and scroll directly to it via Shoko SeriesID
+  - `anidbId`: (optional) automatically switch to a matching root tab, expand the series folder, and scroll directly to it via AniDB ID
 - `GetPlayerPage` Serves the stand-alone AnimeThemes video player (`player.cshtml`).
 - `GetAssetFile` Serves static assets (JS, CSS, fonts, images) from the `dashboard` folder using MIME type mapping and path traversal boundary checks.
 - `GetConfig` returns the current configuration payload (JSON) used by the dashboard page.

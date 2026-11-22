@@ -134,10 +134,10 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
             }
 
             // Dynamically inspect Shoko Utilities folders to find binaries placed after server start
-            if (!string.IsNullOrWhiteSpace(_applicationPath) && Path.Combine(_applicationPath, "Utilities", "FFmpeg") is { } appUtil && Directory.Exists(appUtil))
-                candidates.Add(appUtil);
-            if (!string.IsNullOrWhiteSpace(_dataPath) && Path.Combine(_dataPath, "Utilities", "FFmpeg") is { } dataUtil && Directory.Exists(dataUtil))
-                candidates.Add(dataUtil);
+            if (!string.IsNullOrWhiteSpace(_applicationPath) && Path.Combine(_applicationPath, "Utilities", "FFmpeg") is { } appUtilitiesDir && Directory.Exists(appUtilitiesDir))
+                candidates.Add(appUtilitiesDir);
+            if (!string.IsNullOrWhiteSpace(_dataPath) && Path.Combine(_dataPath, "Utilities", "FFmpeg") is { } dataUtilitiesDir && Directory.Exists(dataUtilitiesDir))
+                candidates.Add(dataUtilitiesDir);
 
             foreach (string dir in candidates)
             {
@@ -308,7 +308,7 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     /// <returns>A pre-configured <see cref="ProcessStartInfo"/> instance.</returns>
     private ProcessStartInfo CreateProcessStartInfo(string fileName, IReadOnlyList<string> args, string? workingDir = null)
     {
-        var psi = new ProcessStartInfo
+        var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
             RedirectStandardError = true,
@@ -318,9 +318,9 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
         };
 
         foreach (var arg in args)
-            psi.ArgumentList.Add(arg);
+            startInfo.ArgumentList.Add(arg);
 
-        return psi;
+        return startInfo;
     }
 
     #endregion

@@ -1,3 +1,6 @@
+using Shoko.Abstractions.User;
+using Shoko.Abstractions.User.Services;
+
 namespace ShokoRelay.Sync;
 
 #region Data Models
@@ -300,6 +303,56 @@ public static class SyncHelper
 
     #region Resolution & Fetching
 
+    /// <summary>Retrieves the cached Plex admin username or refreshes it from Plex.tv when advanced user mappings require it.</summary>
+    /// <param name="configProvider">Configuration provider.</param>
+    /// <param name="plexAuth">Plex authentication service.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The resolved Plex admin username, or <c>null</c> if unavailable.</returns>
+    public static async Task<string?> GetOrRefreshAdminUsernameAsync(ConfigProvider configProvider, PlexAuth plexAuth, CancellationToken cancellationToken = default)
+    {
+        string? adminUsername = configProvider.GetAdminUsername();
+        if (string.IsNullOrWhiteSpace(adminUsername) && configProvider.GetAdvancedUserMappingEntries().Count > 0)
+        {
+            await configProvider.RefreshAdminUsername(plexAuth, cancellationToken).ConfigureAwait(false);
+            adminUsername = configProvider.GetAdminUsername();
+        }
+        return adminUsername;
+    }
+
+    /// <summary>Resolves the target Shoko user for a Plex user bucket, recording an error if an explicit mapping target does not exist.</summary>
+    /// <param name="userService">Shoko user service.</param>
+    /// <param name="defaultUser">Fallback default Shoko user.</param>
+    /// <param name="mappedUsername">The mapped Shoko username, or <c>null</c> to use <paramref name="defaultUser"/>.</param>
+    /// <param name="plexUserName">The Plex user name for logging and error reporting.</param>
+    /// <param name="shokoUserLookup">Per-sync cache of resolved Shoko users.</param>
+    /// <param name="result">Sync result updated if the mapped user is missing.</param>
+    /// <param name="logger">Logger instance.</param>
+    /// <returns>The resolved <see cref="IUser"/>, or <c>null</c> when a configured mapping could not be found.</returns>
+    public static IUser? ResolveTargetShokoUser(
+        IUserService userService,
+        IUser defaultUser,
+        string? mappedUsername,
+        string plexUserName,
+        Dictionary<string, IUser?> shokoUserLookup,
+        ref PlexWatchedSyncResult result,
+        ILogger logger
+    )
+    {
+        if (string.IsNullOrWhiteSpace(mappedUsername))
+            return defaultUser;
+
+        if (!shokoUserLookup.TryGetValue(mappedUsername, out var resolved))
+            shokoUserLookup[mappedUsername] = resolved = userService.GetUserByUsername(mappedUsername);
+
+        if (resolved == null)
+        {
+            string message = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
+            logger.LogWarning("WatchedSyncService: {Message}", message);
+            result = RecordError(result, result.PerUser, plexUserName, message);
+        }
+        return resolved;
+    }
+
     /// <summary>Builds the active list of Plex users (with optional PINs and mapped Shoko usernames) according to the sync user mode.</summary>
     /// <param name="configProvider">Configuration provider.</param>
     /// <param name="userType">Active sync user mode.</param>
@@ -321,15 +374,15 @@ public static class SyncHelper
             string.Equals(name, "admin", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrWhiteSpace(adminUsername) && string.Equals(name, adminUsername, StringComparison.OrdinalIgnoreCase));
 
         string? adminShokoUser = null;
-        var advMap = new Dictionary<string, (string? Pin, string ShokoUser)>(StringComparer.OrdinalIgnoreCase);
-        var advOrder = new List<string>();
+        var advancedMap = new Dictionary<string, (string? Pin, string ShokoUser)>(StringComparer.OrdinalIgnoreCase);
+        var advancedOrder = new List<string>();
         foreach (var group in advancedEntries)
         foreach (var (plexUser, pin) in group.PlexUsers)
         {
             if (IsAdminAlias(plexUser))
                 adminShokoUser ??= group.ShokoUser;
-            else if (advMap.TryAdd(plexUser, (pin, group.ShokoUser)))
-                advOrder.Add(plexUser);
+            else if (advancedMap.TryAdd(plexUser, (pin, group.ShokoUser)))
+                advancedOrder.Add(plexUser);
         }
 
         bool includeAdmin = userType is SyncUserType.All or SyncUserType.Admin || (userType == SyncUserType.Advanced && adminShokoUser != null);
@@ -341,8 +394,8 @@ public static class SyncHelper
             {
                 if (IsAdminAlias(name) || !seen.Add(name))
                     continue;
-                var hasAdv = advMap.TryGetValue(name, out var adv);
-                extraUsers.Add((name, pin ?? (hasAdv ? adv.Pin : null), hasAdv ? adv.ShokoUser : null));
+                var hasAdvanced = advancedMap.TryGetValue(name, out var advancedEntry);
+                extraUsers.Add((name, pin ?? (hasAdvanced ? advancedEntry.Pin : null), hasAdvanced ? advancedEntry.ShokoUser : null));
             }
 
         if (userType is SyncUserType.All or SyncUserType.Advanced)
@@ -352,11 +405,11 @@ public static class SyncHelper
                 if (!extraPinLookup.TryGetValue(name, out var existingPin) || (existingPin == null && pin != null))
                     extraPinLookup[name] = pin;
 
-            foreach (var name in advOrder)
+            foreach (var name in advancedOrder)
             {
                 if (!seen.Add(name))
                     continue;
-                var (pin, shokoUser) = advMap[name];
+                var (pin, shokoUser) = advancedMap[name];
                 extraUsers.Add((name, pin ?? extraPinLookup.GetValueOrDefault(name), shokoUser));
             }
         }
@@ -414,35 +467,35 @@ public static class SyncHelper
                 {
                     logger?.LogDebug("WatchedSyncService: fetched transient token for Plex Home user '{User}' (id={Id}) not persisted", userName, matchedHome.Id);
                     string? serverAccessToken = null;
-                    var targetServerUrlNorm = string.IsNullOrWhiteSpace(target.ServerUrl) ? null : target.ServerUrl.TrimEnd('/');
+                    var normalizedTargetServerUrl = string.IsNullOrWhiteSpace(target.ServerUrl) ? null : target.ServerUrl.TrimEnd('/');
                     try
                     {
                         var clientIdentifier = configProvider.GetPlexClientIdentifier();
                         var (_, _, allDevices) = await plexAuth.GetPlexServerListAsync(switchedToken, clientIdentifier, cancellationToken).ConfigureAwait(false);
-                        foreach (var dev in allDevices ?? [])
+                        foreach (var device in allDevices ?? [])
                         {
-                            if (string.Equals(dev.ClientIdentifier, target.ServerId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(dev.AccessToken))
+                            if (string.Equals(device.ClientIdentifier, target.ServerId, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(device.AccessToken))
                             {
-                                serverAccessToken = dev.AccessToken;
+                                serverAccessToken = device.AccessToken;
                                 break;
                             }
-                            foreach (var conn in dev?.Connections ?? [])
+                            foreach (var connection in device?.Connections ?? [])
                             {
-                                if (string.IsNullOrWhiteSpace(conn?.Uri) || targetServerUrlNorm == null)
+                                if (string.IsNullOrWhiteSpace(connection?.Uri) || normalizedTargetServerUrl == null)
                                     continue;
                                 if (
-                                    Uri.TryCreate(conn.Uri.TrimEnd('/'), UriKind.Absolute, out var connUri)
-                                    && Uri.TryCreate(targetServerUrlNorm, UriKind.Absolute, out var tgtUri)
-                                    && string.Equals(connUri.Host, tgtUri.Host, StringComparison.OrdinalIgnoreCase)
-                                    && connUri.Port == tgtUri.Port
+                                    Uri.TryCreate(connection.Uri.TrimEnd('/'), UriKind.Absolute, out var connectionUri)
+                                    && Uri.TryCreate(normalizedTargetServerUrl, UriKind.Absolute, out var targetUri)
+                                    && string.Equals(connectionUri.Host, targetUri.Host, StringComparison.OrdinalIgnoreCase)
+                                    && connectionUri.Port == targetUri.Port
                                 )
                                 {
-                                    serverAccessToken = dev!.AccessToken;
+                                    serverAccessToken = device!.AccessToken;
                                     break;
                                 }
-                                if (string.Equals(conn.Uri.TrimEnd('/'), targetServerUrlNorm, StringComparison.OrdinalIgnoreCase))
+                                if (string.Equals(connection.Uri.TrimEnd('/'), normalizedTargetServerUrl, StringComparison.OrdinalIgnoreCase))
                                 {
-                                    serverAccessToken = dev!.AccessToken;
+                                    serverAccessToken = device!.AccessToken;
                                     break;
                                 }
                             }
@@ -473,11 +526,12 @@ public static class SyncHelper
             try
             {
                 tokenCache.AdminDevices ??= (await plexAuth.GetPlexServerListAsync(adminToken, configProvider.GetPlexClientIdentifier(), cancellationToken).ConfigureAwait(false)).Devices;
-                string normTarget = target.ServerUrl.TrimEnd('/');
+                string normalizedTarget = target.ServerUrl.TrimEnd('/');
                 var ownedServers = tokenCache.AdminDevices.Where(device => device.Owned && device.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true).ToList();
                 serverId = ownedServers
                     .FirstOrDefault(device =>
-                        device.Connections?.Any(conn => !string.IsNullOrWhiteSpace(conn.Uri) && string.Equals(conn.Uri.TrimEnd('/'), normTarget, StringComparison.OrdinalIgnoreCase)) == true
+                        device.Connections?.Any(connection => !string.IsNullOrWhiteSpace(connection.Uri) && string.Equals(connection.Uri.TrimEnd('/'), normalizedTarget, StringComparison.OrdinalIgnoreCase))
+                        == true
                     )
                     ?.ClientIdentifier
                     ?? (ownedServers.Count == 1 ? ownedServers[0].ClientIdentifier : null)

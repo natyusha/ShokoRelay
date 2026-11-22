@@ -47,7 +47,7 @@
   /** @type {Set<number>} Set of video IDs marked as favourite. */
   let favourites = new Set();
   /** @type {number|null} Reference to the active requestAnimationFrame for the progress bar. */
-  let progressRaf;
+  let progressFrameId;
   /** @type {boolean} Determines if the tree renders using original folder structures instead of metadata groups. */
   let useFolderView = localStorage.getItem("player-folder-view") === "true";
 
@@ -156,18 +156,6 @@
    * @returns {string} A decoded string.
    */
   const decodeUnicode = (stringValue) => (stringValue || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-
-  /**
-   * Cycles through an array of modes in a specific direction.
-   * @param {string} current - The currently active mode.
-   * @param {string[]} modes - The list of available modes.
-   * @param {number} [dir=1] - Direction to move (1 for next, -1 for previous).
-   * @returns {string} The newly selected mode.
-   */
-  const cycleMode = (current, modes, dir = 1) => {
-    const index = modes.indexOf(current);
-    return modes[(index + dir + modes.length) % modes.length];
-  };
 
   /**
    * Toggles the help modal visibility, safely managing event listeners via the close callback.
@@ -605,8 +593,8 @@
     playerVideo.onerror = async () => {
       playerVideo.onerror = null;
       try {
-        const verifyRes = await fetch(`${base}/auth/verify?player=true`);
-        if ((verifyRes.status === 401 || verifyRes.status === 403) && (await window._sr.ensureAuth?.({ dismissable: false })) && currentWebmPath === path) {
+        const verifyResponse = await fetch(`${base}/auth/verify?player=true`);
+        if ((verifyResponse.status === 401 || verifyResponse.status === 403) && (await window._sr.ensureAuth?.({ dismissable: false })) && currentWebmPath === path) {
           playerVideo.src = streamUrl;
           playerVideo.play().catch(() => {});
         }
@@ -730,20 +718,20 @@
   async function updateMode(direction = 1) {
     if (!playerModeBtn) return;
     const modes = ["loop", "shuffle", "next", "off"];
-    const next = cycleMode(playerModeBtn.getAttribute("data-mode") || "off", modes, direction);
-    playerModeBtn.setAttribute("data-mode", next);
+    const nextMode = window._sr.cycleMode(playerModeBtn.getAttribute("data-mode") || "off", modes, direction);
+    playerModeBtn.setAttribute("data-mode", nextMode);
     updatePlaybackTooltip(playerModeBtn);
     resetNavigationHistory();
 
     if (!canModifyServerState()) {
-      localStorage.setItem("player-playback-mode", next);
+      localStorage.setItem("player-playback-mode", nextMode);
       return;
     }
 
     const response = await fetchJson(configUrl);
     if (response.isOk) {
       const config = unwrapConfig(getData(response));
-      setValueByPath(config, "Playback.AnimeThemesWebmMode", next);
+      setValueByPath(config, "Playback.AnimeThemesWebmMode", nextMode);
       await saveSettings(config);
     }
   }
@@ -756,9 +744,9 @@
   }
 
   if (playerVideo) {
-    const savedVol = localStorage.getItem("player-volume");
+    const savedVolume = localStorage.getItem("player-volume");
     const savedMuted = localStorage.getItem("player-muted");
-    if (savedVol !== null) playerVideo.volume = parseFloat(savedVol);
+    if (savedVolume !== null) playerVideo.volume = parseFloat(savedVolume);
     if (savedMuted !== null) playerVideo.muted = savedMuted === "true";
 
     ["play", "pause", "ended", "loadstart"].forEach((event) => playerVideo.addEventListener(event, syncPlaybackUI));
@@ -769,7 +757,7 @@
      */
     const updateProgressLoop = () => {
       syncProgressUI();
-      if (!playerVideo.paused && !playerVideo.ended) progressRaf = requestAnimationFrame(updateProgressLoop);
+      if (!playerVideo.paused && !playerVideo.ended) progressFrameId = requestAnimationFrame(updateProgressLoop);
     };
 
     playerContainer.onmousemove = resetIdle;
@@ -780,18 +768,18 @@
 
     playerVideo.addEventListener("play", () => {
       playerTrack?.classList.remove("paused");
-      cancelAnimationFrame(progressRaf);
-      progressRaf = requestAnimationFrame(updateProgressLoop);
+      cancelAnimationFrame(progressFrameId);
+      progressFrameId = requestAnimationFrame(updateProgressLoop);
     });
 
     playerVideo.addEventListener("pause", () => {
       playerTrack?.classList.add("paused");
-      cancelAnimationFrame(progressRaf);
+      cancelAnimationFrame(progressFrameId);
     });
 
     playerVideo.addEventListener("ended", () => {
       playerTrack?.classList.add("paused");
-      cancelAnimationFrame(progressRaf);
+      cancelAnimationFrame(progressFrameId);
       const playbackMode = playerModeBtn?.getAttribute("data-mode");
       setTimeout(() => {
         if (playbackMode === "loop") {
@@ -985,7 +973,7 @@
         case "v": toggleVideo(); break;
         case "r": if (playerVideo.src) { playerVideo.currentTime = 0; playerVideo.play().catch(() => {}); } break;
         case "g": locateCurrentInTree(); break;
-        case "h": const favItem = webmTreeData.find((item) => item.path === currentWebmPath); if (favItem) toggleFavourite(favItem.videoId); break;
+        case "h": { const favItem = webmTreeData.find((item) => item.path === currentWebmPath); if (favItem) toggleFavourite(favItem.videoId); break; }
         case "?": toggleHelpModal(); break;
         case "q": playerCloseBtn?.click(); break;
       }
@@ -1013,10 +1001,10 @@
             if (left.group === MISSING_LABEL && right.group !== MISSING_LABEL) return -1;
             if (right.group === MISSING_LABEL && left.group !== MISSING_LABEL) return 1;
 
-            const groupComp = left.group.localeCompare(right.group);
-            if (groupComp !== 0) return groupComp;
-            const seriesComp = left.series.localeCompare(right.series);
-            if (seriesComp !== 0) return seriesComp;
+            const groupComparison = left.group.localeCompare(right.group);
+            if (groupComparison !== 0) return groupComparison;
+            const seriesComparison = left.series.localeCompare(right.series);
+            if (seriesComparison !== 0) return seriesComparison;
             return left.file.localeCompare(right.file);
           });
         renderTree(getFilteredItems());

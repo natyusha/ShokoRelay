@@ -45,15 +45,15 @@
       const isAutoRunning = activeTasks.includes(window._sr.tasks.plexAutomationRun);
       const isPlexLinked = !!window._sr.isPlexLinked;
 
-      MANAGED_TASK_IDS.forEach((id) => {
-        const button = element(id);
+      MANAGED_TASK_IDS.forEach((taskId) => {
+        const button = element(taskId);
         if (!button) return;
 
-        if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(id)) {
+        if (isAutoRunning && [window._sr.tasks.plexCollectionsBuild, window._sr.tasks.plexRatingsApply, window._sr.tasks.plexImagesSync].includes(taskId)) {
           setButtonLoading(button, false);
           button.disabled = true;
         } else {
-          setButtonLoading(button, activeTasks.includes(id) || button.classList.contains("clicking"));
+          setButtonLoading(button, activeTasks.includes(taskId) || button.classList.contains("clicking"));
           if (button.classList.contains("plex-auth") && !isPlexLinked) button.disabled = true;
         }
       });

@@ -37,18 +37,18 @@ public static partial class PlexHelper
             return null;
 
         var span = guid.AsSpan();
-        int slashIdx = span.LastIndexOf('/');
-        if (slashIdx < 0 || slashIdx >= span.Length - 2)
+        int slashIndex = span.LastIndexOf('/');
+        if (slashIndex < 0 || slashIndex >= span.Length - 2)
             return null;
 
-        var idPart = span[(slashIdx + 1)..];
+        var idPart = span[(slashIndex + 1)..];
         if (idPart[0] is not ('e' or 'm'))
             return null;
 
         var numSpan = idPart[1..];
-        int partIdx = numSpan.IndexOf('p');
-        if (partIdx >= 0)
-            numSpan = numSpan[..partIdx];
+        int partIndex = numSpan.IndexOf('p');
+        if (partIndex >= 0)
+            numSpan = numSpan[..partIndex];
 
         return int.TryParse(numSpan, out int id) ? id : null;
     }
@@ -67,13 +67,13 @@ public static partial class PlexHelper
 
     /// <summary>Extracts the corresponding Shoko Series ID from any valid Plex Rating Key.</summary>
     /// <remarks>
-    ///   **Supported RatingKey Formats:**
+    ///   <b>Supported RatingKey Formats:</b>
     ///   - <c>123</c>    (Shoko Series ID)       / <c>a123</c>    (AniDB Series ID)
     ///   - <c>123s4</c>  (Shoko Series Season 4) / <c>a123s4</c>  (AniDB Series Season 4)
     ///   - <c>e567</c>   (Shoko Episode ID)      / <c>ae567</c>   (AniDB Episode ID)
     ///   - <c>e567p2</c> (Shoko Episode Part 2)  / <c>ae567p2</c> (AniDB Episode Part 2)
     ///   - <c>m890</c>   (Shoko Episode ID mapped as a Movie)
-    ///   - _AniDB IDs resolve to Shoko IDs and must be known to Shoko_
+    ///   - <i>AniDB IDs resolve to Shoko IDs and must be known to Shoko</i>
     /// </remarks>
     /// <param name="ratingKey">Plex rating key representing a show, season, episode, or movie.</param>
     /// <param name="metadataService">The metadata service used to look up episodes/series.</param>
@@ -87,12 +87,12 @@ public static partial class PlexHelper
         if (isMovie || IsEpisodeKey(ratingKey))
         {
             bool isAniDb = !isMovie && ratingKey.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase);
-            int prefixLen = isMovie ? PlexConstants.MoviePrefix.Length : (isAniDb ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length);
-            var epIdPart = ratingKey[prefixLen..];
-            int partIdx = epIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
-            if (partIdx >= 0)
-                epIdPart = epIdPart[..partIdx];
-            return int.TryParse(epIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.LocalID ?? 0 : 0;
+            int prefixLength = isMovie ? PlexConstants.MoviePrefix.Length : (isAniDb ? PlexConstants.AniDbPrefix.Length + PlexConstants.EpisodePrefix.Length : PlexConstants.EpisodePrefix.Length);
+            var episodeIdPart = ratingKey[prefixLength..];
+            int partIndex = episodeIdPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
+            if (partIndex >= 0)
+                episodeIdPart = episodeIdPart[..partIndex];
+            return int.TryParse(episodeIdPart, out var id) ? (isAniDb ? metadataService.GetShokoEpisodeByAnidbID(id) : metadataService.GetShokoEpisodeByID(id))?.Series?.LocalID ?? 0 : 0;
         }
 
         // Isolate the show component (supports {ID}, a{AniDB}, {ID}s{Season}, or a{AniDB}s{Season})
@@ -243,18 +243,18 @@ public static partial class PlexHelper
         {
             var group = metadataService.GetShokoGroupByID(series.TopLevelGroupID);
             var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series;
-            var imgType =
+            var imageType =
                 suffix is "-logo" or "-clearlogo" ? ImageEntityType.Logo
                 : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
                 : ImageEntityType.Primary;
 
-            var img = ImageHelper.FilterImagesByLanguage((primarySeries as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false).FirstOrDefault()
+            var image = ImageHelper.FilterImagesByLanguage((primarySeries as IWithImages)?.GetAvailableImages(imageType) ?? [], Settings.TmdbImageLanguage, false).FirstOrDefault()
                 ?? ImageHelper
-                    .FilterImagesByLanguage((primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetAvailableImages(imgType) ?? [], Settings.TmdbImageLanguage, false)
+                    .FilterImagesByLanguage((primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetAvailableImages(imageType) ?? [], Settings.TmdbImageLanguage, false)
                     .FirstOrDefault();
 
-            if (img != null && !string.IsNullOrWhiteSpace(img.LocalPath))
-                return img.LocalPath;
+            if (image != null && !string.IsNullOrWhiteSpace(image.LocalPath))
+                return image.LocalPath;
         }
         return null;
     }

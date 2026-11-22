@@ -84,9 +84,9 @@ internal static class VfsShared
         string relative = location.RelativePath.TrimLeadingSlashes().Trim();
         if (!string.IsNullOrWhiteSpace(relative))
         {
-            string normalizedRel = NormalizeSeparators(relative);
-            if (normalizedPath.EndsWith(normalizedRel, PathComparison))
-                return TrimRoot(normalizedPath[..^normalizedRel.Length]);
+            string normalizedRelativePath = NormalizeSeparators(relative);
+            if (normalizedPath.EndsWith(normalizedRelativePath, PathComparison))
+                return TrimRoot(normalizedPath[..^normalizedRelativePath.Length]);
         }
         return TrimRoot(Path.GetDirectoryName(normalizedPath));
     }
@@ -124,7 +124,7 @@ internal static class VfsShared
         var (doStandard, doMovie) = MapHelper.GetGenerationModes(MapHelper.IsMovie(series), Settings.Advanced.MovieGenerationMode);
 
         var fileData = MapHelper.GetConsolidatedSeriesFileData(series, metadataService);
-        var mainEpIds = doMovie ? fileData.Mappings.Where(mapping => mapping.PrimaryEpisode.Type == EpisodeType.Episode).Select(mapping => mapping.PrimaryEpisode.ID.ID).Distinct().ToList() : [];
+        var mainEpisodeIds = doMovie ? fileData.Mappings.Where(mapping => mapping.PrimaryEpisode.Type == EpisodeType.Episode).Select(mapping => mapping.PrimaryEpisode.ID.ID).Distinct().ToList() : [];
 
         foreach (var mapping in fileData.Mappings)
         {
@@ -140,11 +140,49 @@ internal static class VfsShared
                 roots.Add(Path.Combine(importRoot, rootName, folderId.ToString()));
 
             if (doMovie)
-                foreach (var epId in mainEpIds)
-                    roots.Add(Path.Combine(importRoot, movieRootName, epId.ToString()));
+                foreach (var episodeId in mainEpisodeIds)
+                    roots.Add(Path.Combine(importRoot, movieRootName, episodeId.ToString()));
         }
 
         return roots;
+    }
+
+    /// <summary>Returns distinct, non-empty managed folder paths configured in Shoko.</summary>
+    /// <param name="videoService">Shoko video service.</param>
+    /// <param name="onlyVfsEnabled">When <c>true</c>, restricts results to folders eligible for VFS generation.</param>
+    /// <param name="requireExists">When <c>true</c>, filters out folders that do not currently exist on disk.</param>
+    /// <returns>A list of managed folder paths.</returns>
+    public static List<string> GetManagedFolderPaths(IVideoService videoService, bool onlyVfsEnabled = false, bool requireExists = false) =>
+        [
+            .. (videoService.GetAllManagedFolders() ?? [])
+                .Where(folder => !onlyVfsEnabled || IsVfsEnabledFolder(folder))
+                .Select(folder => folder.Path)
+                .Where(path => !string.IsNullOrWhiteSpace(path) && (!requireExists || Directory.Exists(path)))
+                .Distinct(PathComparer),
+        ];
+
+    /// <summary>Ensures the given directory path ends with the platform directory separator.</summary>
+    /// <param name="path">The directory path to normalize.</param>
+    /// <returns>The path guaranteed to end with a directory separator.</returns>
+    public static string EnsureTrailingSeparator(string path) => path.EndsWith(Path.DirectorySeparatorChar) || path.EndsWith(Path.AltDirectorySeparatorChar) ? path : path + Path.DirectorySeparatorChar;
+
+    /// <summary>Checks whether a candidate path resolves inside a base directory without escaping it via traversal.</summary>
+    /// <param name="candidatePath">The path to check.</param>
+    /// <param name="baseDirectory">The allowed root directory.</param>
+    /// <param name="allowEqual">When <c>true</c>, also permits the candidate path to match <paramref name="baseDirectory"/> itself.</param>
+    /// <returns><c>true</c> if the candidate path resides inside the base directory; otherwise, <c>false</c>.</returns>
+    public static bool IsPathUnderDirectory(string candidatePath, string baseDirectory, bool allowEqual = false)
+    {
+        if (string.IsNullOrWhiteSpace(candidatePath) || string.IsNullOrWhiteSpace(baseDirectory))
+            return false;
+
+        string fullBase = Path.GetFullPath(baseDirectory);
+        string fullCandidate = Path.GetFullPath(candidatePath);
+        string baseWithSep = EnsureTrailingSeparator(fullBase);
+        return allowEqual
+            ? string.Equals(fullCandidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), fullBase.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), PathComparison)
+                || fullCandidate.StartsWith(baseWithSep, PathComparison)
+            : fullCandidate.StartsWith(baseWithSep, PathComparison);
     }
 
     #endregion
@@ -336,15 +374,15 @@ internal static class VfsShared
             relative = string.Empty;
             try
             {
-                string rel = Path.GetRelativePath(rootPath, fullPath);
+                string relativePath = Path.GetRelativePath(rootPath, fullPath);
                 if (
-                    rel != ".."
-                    && !rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
-                    && !rel.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal)
-                    && !Path.IsPathRooted(rel)
+                    relativePath != ".."
+                    && !relativePath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    && !relativePath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal)
+                    && !Path.IsPathRooted(relativePath)
                 )
                 {
-                    relative = rel;
+                    relative = relativePath;
                     return true;
                 }
             }
@@ -355,8 +393,8 @@ internal static class VfsShared
         string originalPath = path;
         if (!string.IsNullOrEmpty(relativeTo))
         {
-            if (TryMakeRelative(relativeTo, path, out var rel))
-                path = rel;
+            if (TryMakeRelative(relativeTo, path, out var relativePath))
+                path = relativePath;
         }
         else if (Path.IsPathRooted(path))
         {
@@ -378,8 +416,8 @@ internal static class VfsShared
                     || normPath.StartsWith(folderPath.EndsWith(Path.DirectorySeparatorChar) ? folderPath : folderPath + Path.DirectorySeparatorChar, PathComparison)
                 );
 
-            if (matchedRoot != null && TryMakeRelative(matchedRoot, path, out var rel))
-                path = rel;
+            if (matchedRoot != null && TryMakeRelative(matchedRoot, path, out var relativePath))
+                path = relativePath;
         }
 
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;
@@ -407,13 +445,13 @@ internal static class VfsShared
         var multiSegments = GetIgnoredCache(settings).MultiSegments;
         if (multiSegments.Length > 0)
         {
-            string normRel = NormalizeSeparators(path).Trim(Path.DirectorySeparatorChar);
+            string normalizedRelativePath = NormalizeSeparators(path).Trim(Path.DirectorySeparatorChar);
             foreach (var multi in multiSegments)
                 if (
-                    normRel.Equals(multi, StringComparison.OrdinalIgnoreCase)
-                    || normRel.StartsWith(multi + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                    || normRel.EndsWith(Path.DirectorySeparatorChar + multi, StringComparison.OrdinalIgnoreCase)
-                    || normRel.Contains(Path.DirectorySeparatorChar + multi + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    normalizedRelativePath.Equals(multi, StringComparison.OrdinalIgnoreCase)
+                    || normalizedRelativePath.StartsWith(multi + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                    || normalizedRelativePath.EndsWith(Path.DirectorySeparatorChar + multi, StringComparison.OrdinalIgnoreCase)
+                    || normalizedRelativePath.Contains(Path.DirectorySeparatorChar + multi + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
                 )
                     return true;
         }
@@ -531,6 +569,30 @@ internal static class VfsShared
             Interlocked.Increment(ref s_blueprintVersion);
         }
         catch { }
+    }
+
+    /// <summary>Reads all text from a file using permissive file-sharing flags so concurrent readers/writers do not collide.</summary>
+    /// <param name="path">The file path to read.</param>
+    /// <returns>The full text content of the file.</returns>
+    public static string ReadAllTextShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    /// <summary>Reads non-empty trimmed lines from a file using permissive file-sharing flags.</summary>
+    /// <param name="path">The file path to read.</param>
+    /// <returns>A list of non-empty lines read from the file.</returns>
+    public static List<string> ReadLinesShared(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream);
+        var lines = new List<string>();
+        while (reader.ReadLine() is { } rawLine)
+            if (!string.IsNullOrWhiteSpace(rawLine))
+                lines.Add(rawLine);
+        return lines;
     }
 
     #endregion

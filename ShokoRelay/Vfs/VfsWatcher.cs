@@ -167,14 +167,7 @@ public class VfsWatcher(
         if (@event.Video?.Series == null || @event.Video.Series.Count == 0)
             return;
         logger.LogDebug("VFS: Video updated for '{FileName}'", Path.GetFileName(@event.Video.EarliestKnownName ?? "Unknown File"));
-
-        foreach (var series in @event.Video.Series)
-        {
-            int primaryId = series.GetPrimaryId(metadataService);
-            _pending[primaryId] = 1;
-        }
-
-        KickProcessLoop();
+        EnqueueSeries(@event.Video.Series.Select(series => series.GetPrimaryId(metadataService)));
     }
 
     /// <summary>Handles Shoko release matching events, queueing affected series for VFS updates when a video is assigned.</summary>
@@ -190,10 +183,9 @@ public class VfsWatcher(
         {
             int primaryId = series.GetPrimaryId(metadataService);
             logger.LogDebug("VFS: Adding series -> {Title} [{LocalId}] (Primary: {PrimaryId}) to pending queue due to release save", series.GetDisplayTitle(), series.LocalID, primaryId);
-            _pending[primaryId] = 1;
         }
 
-        KickProcessLoop();
+        EnqueueSeries(@event.Video.Series.Select(series => series.GetPrimaryId(metadataService)));
     }
 
     /// <summary>Handles Shoko release unlinking events, queueing affected series for VFS updates when a release is removed.</summary>
@@ -221,10 +213,7 @@ public class VfsWatcher(
             return;
 
         logger.LogDebug("VFS: Release deleted for video '{FileName}'", Path.GetFileName(@event.Video?.EarliestKnownName ?? "Unknown File"));
-        foreach (int primaryId in seriesIds)
-            _pending[primaryId] = 1;
-
-        KickProcessLoop();
+        EnqueueSeries(seriesIds);
     }
 
     /// <summary>Handles Shoko series deletion events, queueing the series for locked VFS pruning and cache invalidation.</summary>
@@ -237,14 +226,7 @@ public class VfsWatcher(
 
         int primaryId = series.GetPrimaryId(metadataService);
         logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Queueing VFS prune", series.GetDisplayTitle(), series.LocalID);
-        plexMetadata.InvalidateCache(primaryId);
-        _pending[primaryId] = 1;
-        if (primaryId != series.LocalID)
-        {
-            plexMetadata.InvalidateCache(series.LocalID);
-            _pending[series.LocalID] = 1;
-        }
-        KickProcessLoop();
+        EnqueueSeries(primaryId == series.LocalID ? [primaryId] : [primaryId, series.LocalID], invalidateMetadata: true);
     }
 
     /// <summary>Handles Shoko metadata link changes, queueing affected series for VFS updates and cache invalidation when TMDB links change.</summary>
@@ -276,13 +258,7 @@ public class VfsWatcher(
                 affectedIds.Add(memberId);
         }
 
-        foreach (int targetId in affectedIds)
-        {
-            plexMetadata.InvalidateCache(targetId);
-            _pending[targetId] = 1;
-        }
-
-        KickProcessLoop();
+        EnqueueSeries(affectedIds, invalidateMetadata: true);
     }
 
     /// <summary>Handles Shoko episode hidden state changes, queueing affected series for VFS updates and cache invalidation.</summary>
@@ -301,13 +277,7 @@ public class VfsWatcher(
             return;
 
         logger.LogDebug("VFS: Episode hidden state changed ({EpisodeId}, IsHidden={IsHidden}) -> Queueing VFS update", @event.EpisodeID, @event.IsHidden);
-        foreach (int primaryId in primaryIds)
-        {
-            plexMetadata.InvalidateCache(primaryId);
-            _pending[primaryId] = 1;
-        }
-
-        KickProcessLoop();
+        EnqueueSeries(primaryIds, invalidateMetadata: true);
     }
 
     /// <summary>Handles Shoko preferred ordering changes, clearing cached series metadata contexts and queueing affected series for VFS updates.</summary>
@@ -328,13 +298,7 @@ public class VfsWatcher(
             return;
 
         logger.LogDebug("VFS: TMDB preferred ordering changed ({SeriesId} -> {OrderingId}) -> Queueing VFS update", @event.SeriesID, @event.OrderingID?.ID ?? "default");
-        foreach (int primaryId in affectedIds)
-        {
-            plexMetadata.InvalidateCache(primaryId);
-            _pending[primaryId] = 1;
-        }
-
-        KickProcessLoop();
+        EnqueueSeries(affectedIds, invalidateMetadata: true);
     }
 
     /// <summary>Aggregates multiple video file events into the pending processing queue.</summary>
@@ -345,12 +309,7 @@ public class VfsWatcher(
         if (seriesList == null || !seriesList.Any())
             return;
 
-        foreach (var series in seriesList)
-        {
-            int primaryId = series.GetPrimaryId(metadataService);
-            _pending[primaryId] = 1;
-        }
-        KickProcessLoop();
+        EnqueueSeries(seriesList.Select(series => series.GetPrimaryId(metadataService)));
     }
 
     #endregion
@@ -738,6 +697,27 @@ public class VfsWatcher(
         {
             logger.LogError(exception, "VFS: Metadata fixup failed for series -> {Title} [{LocalId}]", metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? seriesId.ToString(), seriesId);
         }
+    }
+
+    #endregion
+
+    #region Internal Helpers
+
+    /// <summary>Queues primary series IDs for incremental VFS processing, optionally invalidating cached Plex metadata contexts.</summary>
+    /// <param name="primaryIds">The primary Shoko series IDs to enqueue.</param>
+    /// <param name="invalidateMetadata">When <c>true</c>, clears cached <see cref="PlexMetadata"/> contexts for each queued series.</param>
+    private void EnqueueSeries(IEnumerable<int> primaryIds, bool invalidateMetadata = false)
+    {
+        bool anyQueued = false;
+        foreach (int primaryId in primaryIds)
+        {
+            if (invalidateMetadata)
+                plexMetadata.InvalidateCache(primaryId);
+            _pending[primaryId] = 1;
+            anyQueued = true;
+        }
+        if (anyQueued)
+            KickProcessLoop();
     }
 
     #endregion

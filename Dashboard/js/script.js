@@ -66,8 +66,8 @@
 
   /**
    * Prompts the user for Shoko administrator credentials and creates an authenticated session cookie.
-   * @param {Object} [opts] - Modal behavior options.
-   * @param {boolean} [opts.dismissable=true] - Whether the modal can be dismissed via Cancel, Escape, or backdrop click.
+   * @param {Object} [options] - Modal behavior options.
+   * @param {boolean} [options.dismissable=true] - Whether the modal can be dismissed via Cancel, Escape, or backdrop click.
    * @returns {Promise<boolean>} True if authentication succeeded, or false if dismissed.
    */
   function ensureAuth({ dismissable = true } = {}) {
@@ -141,8 +141,8 @@
           if (check.ok) {
             finish(true);
           } else {
-            const errMsg = check.status === 403 ? "Administrator privileges required." : "Invalid username or password.";
-            showToast(errMsg, "error", TOAST_MS);
+            const errorMessage = check.status === 403 ? "Administrator privileges required." : "Invalid username or password.";
+            showToast(errorMessage, "error", TOAST_MS);
             passwordInput.focus();
           }
         } catch {
@@ -199,21 +199,21 @@
   /**
    * Fetch a URL and parse the response as JSON, returning a normalized result object.
    * @param {string} url - The URL to fetch.
-   * @param {RequestInit} [opts] - Optional fetch options.
+   * @param {RequestInit} [options] - Optional fetch options.
    * @param {boolean} [allowPrompt=true] - Whether to prompt for authentication on 401/403 responses.
    * @returns {Promise<{isOk: boolean, status: number, data: *}>} The normalized fetch response object.
    */
-  async function fetchJson(url, opts = {}, allowPrompt = true) {
+  async function fetchJson(url, options = {}, allowPrompt = true) {
     try {
-      const requestGen = authGeneration;
-      const response = await fetch(url, opts);
+      const requestGeneration = authGeneration;
+      const response = await fetch(url, options);
       if ((response.status === 401 || response.status === 403) && allowPrompt) {
-        if (authGeneration !== requestGen) return fetchJson(url, opts, false);
+        if (authGeneration !== requestGeneration) return fetchJson(url, options, false);
         setAuthLocked(true);
         const isOk = await ensureAuth({ dismissable: false });
         if (isOk) {
           setAuthLocked(false);
-          return fetchJson(url, opts, false);
+          return fetchJson(url, options, false);
         }
       }
       const text = await response.text();
@@ -245,13 +245,13 @@
    * @returns {{text: string, errorCount: number}} Summarized details.
    */
   function summarizeResult(response) {
-    const resData = getData(response);
-    if (!resData) return { text: "", errorCount: 0 };
-    if (resData.errors && typeof resData.errors === "object" && !Array.isArray(resData.errors)) {
-      const msgs = Object.values(resData.errors).flat();
+    const responseData = getData(response);
+    if (!responseData) return { text: "", errorCount: 0 };
+    if (responseData.errors && typeof responseData.errors === "object" && !Array.isArray(responseData.errors)) {
+      const msgs = Object.values(responseData.errors).flat();
       if (msgs.length > 0) return { text: msgs.join(", "), errorCount: msgs.length };
     }
-    if (response.isOk === false && resData.title && !resData.message) return { text: resData.title, errorCount: 1 };
+    if (response.isOk === false && responseData.title && !responseData.message) return { text: responseData.title, errorCount: 1 };
 
     const parts = [];
     const keys = {
@@ -265,14 +265,14 @@
     let errorCount = 0;
 
     Object.entries(keys).forEach(([label, aliases]) => {
-      const match = aliases.find((key) => resData[key] !== undefined && resData[key] !== null);
+      const match = aliases.find((key) => responseData[key] !== undefined && responseData[key] !== null);
       if (match === undefined) return;
-      const value = resData[match];
+      const value = responseData[match];
       const count = label === "errors" ? (Array.isArray(value) ? value.length : Number(value) || 0) : value;
       if (label === "errors") errorCount = count;
       if (label !== "errors" || count > 0) parts.push(`${label}: ${count}`);
     });
-    const text = parts.length ? parts.join(", ") : typeof resData === "string" ? (resData.length > 200 ? resData.substring(0, 200) + "..." : resData) : "";
+    const text = parts.length ? parts.join(", ") : typeof responseData === "string" ? (responseData.length > 200 ? responseData.substring(0, 200) + "..." : responseData) : "";
     return { text, errorCount };
   }
 
@@ -314,11 +314,11 @@
    * Show success/error toasts for HTTP responses with log-link injection and summary.
    * @param {Object} response - The normalized fetch response object.
    * @param {string} label - Identifies the operation.
-   * @param {Object} [opts] - Display options.
+   * @param {Object} [options] - Display options.
    * @returns {void}
    */
-  function toastOperation(response, label, opts = {}) {
-    const { summary, hideOnSucceed, type } = opts;
+  function toastOperation(response, label, options = {}) {
+    const { summary, hideOnSucceed, type } = options;
     const { text, errorCount } = summarizeResult(response);
     const logUrl = response.data?.logUrl || response.data?.LogUrl;
     const logLink = logUrl ? `[<a href="${esc(logUrl)}" target="_blank" rel="noopener noreferrer" class="log-link">view log</a>]` : "";
@@ -392,13 +392,13 @@
    */
   function saveSettings(config) {
     const run = pendingSettingsSave.then(async () => {
-      const cleanCfg = JSON.parse(JSON.stringify(config));
-      delete cleanCfg.PlexLibrary;
-      delete cleanCfg.PlexAuth;
+      const cleanConfig = JSON.parse(JSON.stringify(config));
+      delete cleanConfig.PlexLibrary;
+      delete cleanConfig.PlexAuth;
       const response = await fetchJson(configUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cleanCfg),
+        body: JSON.stringify(cleanConfig),
       });
       if (!response.isOk) toastOperation(response, "Settings Save");
       return response;
@@ -506,6 +506,26 @@
      */
     setIfNotEmpty: (params, key, value) => {
       if (value != null && String(value) !== "") params.set(key, String(value));
+    },
+    /**
+     * Cycles through an array of modes in a given direction.
+     * @param {string} current - The currently active mode.
+     * @param {string[]} modes - The ordered list of valid modes.
+     * @param {number} [direction=1] - Step direction (1 for forward, -1 for backward).
+     * @returns {string} The next mode in sequence.
+     */
+    cycleMode: (current, modes, direction = 1) => modes[(modes.indexOf(current) + direction + modes.length) % modes.length],
+    /**
+     * Attaches real-time input sanitization restricting a series filter field to IDs, 'a' AniDB prefixes, commas, and whitespace.
+     * @param {HTMLInputElement|string} target - The input element or its DOM id.
+     * @returns {void}
+     */
+    bindSeriesFilterSanitizer: (target) => {
+      const inputElement = typeof target === "string" ? element(target) : target;
+      if (inputElement)
+        inputElement.oninput = () => {
+          inputElement.value = inputElement.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
+        };
     },
   });
   // #endregion

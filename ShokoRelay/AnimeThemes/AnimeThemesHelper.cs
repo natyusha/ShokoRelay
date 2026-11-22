@@ -242,23 +242,23 @@ internal static partial class AnimeThemesHelper
         int maxRead = Math.Min(tagSize, 65536);
         byte[] tagBytes = new byte[maxRead];
         int bytesRead = fileStream.Read(tagBytes, 0, maxRead);
-        int pos = 0;
-        while (pos + 10 <= bytesRead)
+        int position = 0;
+        while (position + 10 <= bytesRead)
         {
-            string id = Encoding.ASCII.GetString(tagBytes, pos, 4);
+            string id = Encoding.ASCII.GetString(tagBytes, position, 4);
             if (id[0] == '\0')
                 break;
-            int frameSize = (tagBytes[pos + 4] << 24) | (tagBytes[pos + 5] << 16) | (tagBytes[pos + 6] << 8) | tagBytes[pos + 7];
-            if (frameSize <= 0 || pos + 10 + frameSize > bytesRead)
+            int frameSize = (tagBytes[position + 4] << 24) | (tagBytes[position + 5] << 16) | (tagBytes[position + 6] << 8) | tagBytes[position + 7];
+            if (frameSize <= 0 || position + 10 + frameSize > bytesRead)
                 break;
             if (id.StartsWith('T') && id != "TXXX" && frameSize > 1)
             {
-                string value = tagBytes[pos + 10] switch
+                string value = tagBytes[position + 10] switch
                 {
-                    1 => Encoding.Unicode.GetString(tagBytes, pos + 11, frameSize - 1),
-                    2 => Encoding.BigEndianUnicode.GetString(tagBytes, pos + 11, frameSize - 1),
-                    3 => Encoding.UTF8.GetString(tagBytes, pos + 11, frameSize - 1),
-                    _ => Encoding.Latin1.GetString(tagBytes, pos + 11, frameSize - 1),
+                    1 => Encoding.Unicode.GetString(tagBytes, position + 11, frameSize - 1),
+                    2 => Encoding.BigEndianUnicode.GetString(tagBytes, position + 11, frameSize - 1),
+                    3 => Encoding.UTF8.GetString(tagBytes, position + 11, frameSize - 1),
+                    _ => Encoding.Latin1.GetString(tagBytes, position + 11, frameSize - 1),
                 };
                 string tagKey = id switch
                 {
@@ -270,7 +270,7 @@ internal static partial class AnimeThemesHelper
                 };
                 tags[tagKey] = value.TrimEnd('\0').Replace("\uFEFF", "", StringComparison.Ordinal);
             }
-            pos += 10 + frameSize;
+            position += 10 + frameSize;
         }
         return tags;
     }

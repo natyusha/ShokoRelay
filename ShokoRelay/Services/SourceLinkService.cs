@@ -26,7 +26,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
     public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
     {
         var managedFolders = videoService.GetAllManagedFolders() ?? [];
-        var roots = managedFolders.Select(folder => folder.Path).Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path)).Distinct(VfsShared.PathComparer).ToList();
+        var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true);
         int count = 0;
         var details = new List<string>();
 
@@ -35,7 +35,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             // Use the centralized ignored folder set for purge safety
             var protectedFolders = VfsShared.GetIgnoredFolderNames(Settings);
             foreach (var root in roots)
-                count += PurgeDirectoryLinks(root!, protectedFolders, details, logger);
+                count += PurgeDirectoryLinks(root, protectedFolders, details, logger);
 
             logger.LogInformation("SourceLinkService: Finished purge operation -> {Count} links removed.", count);
             return new SourceLinkResult(count, true, details);
@@ -55,9 +55,8 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 continue;
 
             string fullRoot = Path.GetFullPath(root);
-            string fullRootWithSep = fullRoot.EndsWith(Path.DirectorySeparatorChar) ? fullRoot : fullRoot + Path.DirectorySeparatorChar;
             string fullTxtPath = Path.GetFullPath(Path.Combine(fullRoot, safeMapFile));
-            if (!fullTxtPath.StartsWith(fullRootWithSep, VfsShared.PathComparison) || !File.Exists(fullTxtPath))
+            if (!VfsShared.IsPathUnderDirectory(fullTxtPath, fullRoot) || !File.Exists(fullTxtPath))
                 continue;
 
             string mappingFileDir = Path.GetDirectoryName(fullTxtPath)!;
@@ -65,9 +64,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             bool modified = false;
             var dirsToScan = new HashSet<string>(VfsShared.PathComparer);
 
-            for (int lineIdx = 0; lineIdx < lines.Length; lineIdx++)
+            for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
             {
-                string line = lines[lineIdx].Trim();
+                string line = lines[lineIndex].Trim();
                 if (string.IsNullOrWhiteSpace(line) || line[0] == '#')
                     continue;
 
@@ -75,55 +74,55 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                 if (pipeParts.Length < 2)
                     continue;
 
-                var srcInfo = ExtractPathAndTags(pipeParts[0]);
-                var destInfo = ExtractPathAndTags(pipeParts[1]);
+                var sourceInfo = ExtractPathAndTags(pipeParts[0]);
+                var destinationInfo = ExtractPathAndTags(pipeParts[1]);
 
                 // Process a primary video file and all associated sidecar files/folders, renaming sidecars to match the destination naming convention
                 try
                 {
-                    string fullSrc = Path.GetFullPath(Path.Combine(mappingFileDir, srcInfo.Path));
-                    string fullDest = Path.GetFullPath(Path.Combine(fullRoot, destInfo.Path));
+                    string fullSource = Path.GetFullPath(Path.Combine(mappingFileDir, sourceInfo.Path));
+                    string fullDestination = Path.GetFullPath(Path.Combine(fullRoot, destinationInfo.Path));
 
-                    if (!fullDest.StartsWith(fullRootWithSep, VfsShared.PathComparison))
+                    if (!VfsShared.IsPathUnderDirectory(fullDestination, fullRoot))
                     {
-                        logger.LogWarning("SourceLinkService: Destination path escapes import root -> {Path}", fullDest);
+                        logger.LogWarning("SourceLinkService: Destination path escapes import root -> {Path}", fullDestination);
                         continue;
                     }
 
-                    if (!File.Exists(fullSrc))
+                    if (!File.Exists(fullSource))
                     {
-                        logger.LogWarning("SourceLinkService: Source file not found -> {Path}", fullSrc);
+                        logger.LogWarning("SourceLinkService: Source file not found -> {Path}", fullSource);
                         continue;
                     }
 
-                    string srcDir = Path.GetDirectoryName(fullSrc)!;
-                    string destDir = Path.GetDirectoryName(fullDest)!;
-                    string srcBase = Path.GetFileNameWithoutExtension(fullSrc);
-                    string destBase = Path.GetFileNameWithoutExtension(fullDest);
+                    string sourceDir = Path.GetDirectoryName(fullSource)!;
+                    string destinationDir = Path.GetDirectoryName(fullDestination)!;
+                    string sourceBase = Path.GetFileNameWithoutExtension(fullSource);
+                    string destinationBase = Path.GetFileNameWithoutExtension(fullDestination);
 
-                    string tagSuffix = srcInfo.Tags.Count > 0 ? " " + string.Join(" ", srcInfo.Tags.Select(tag => $"[{tag}]")) : string.Empty;
-                    string finalDestBase = destBase + tagSuffix;
+                    string tagSuffix = sourceInfo.Tags.Count > 0 ? " " + string.Join(" ", sourceInfo.Tags.Select(tag => $"[{tag}]")) : string.Empty;
+                    string finalDestinationBase = destinationBase + tagSuffix;
 
-                    if (!string.IsNullOrEmpty(destDir))
-                        Directory.CreateDirectory(destDir);
+                    if (!string.IsNullOrEmpty(destinationDir))
+                        Directory.CreateDirectory(destinationDir);
 
-                    var candidates = Directory.EnumerateFileSystemEntries(srcDir, "*").ToList();
+                    var candidates = Directory.EnumerateFileSystemEntries(sourceDir, "*").ToList();
                     bool mainLinked = false;
-                    var cmp = VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+                    var comparison = VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
                     foreach (var entry in candidates)
                     {
                         string name = Path.GetFileName(entry);
                         bool isDir = Directory.Exists(entry);
-                        bool isAttachDir = isDir && name.StartsWith(srcBase, cmp) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[srcBase.Length..]);
-                        bool isSidecarFile = !isDir && name.StartsWith(srcBase, cmp) && (name.Length == srcBase.Length || !char.IsLetterOrDigit(name[srcBase.Length]));
+                        bool isAttachDir = isDir && name.StartsWith(sourceBase, comparison) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[sourceBase.Length..]);
+                        bool isSidecarFile = !isDir && name.StartsWith(sourceBase, comparison) && (name.Length == sourceBase.Length || !char.IsLetterOrDigit(name[sourceBase.Length]));
 
                         // Logic: Filter for the primary video, any file starting with the base name (guarded against prefix collisions), or the designated attachments folder
-                        if (!name.Equals(Path.GetFileName(fullSrc), cmp) && !isSidecarFile && !isAttachDir)
+                        if (!name.Equals(Path.GetFileName(fullSource), comparison) && !isSidecarFile && !isAttachDir)
                             continue;
 
-                        string suffix = isDir ? "_attach" : name[srcBase.Length..];
-                        string targetPath = Path.Combine(destDir, finalDestBase + suffix);
+                        string suffix = isDir ? "_attach" : name[sourceBase.Length..];
+                        string targetPath = Path.Combine(destinationDir, finalDestinationBase + suffix);
 
                         if (isDir)
                         {
@@ -136,26 +135,26 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                         else if (VfsShared.TryCreateLink(entry, targetPath, logger, checkVfsDisabled: false))
                         {
                             if (videoService.IsAllowedVideoExtension(targetPath))
-                                dirsToScan.Add(destDir);
+                                dirsToScan.Add(destinationDir);
 
-                            if (name.Equals(Path.GetFileName(fullSrc), cmp))
+                            if (name.Equals(Path.GetFileName(fullSource), comparison))
                                 mainLinked = true;
                         }
                     }
 
                     if (mainLinked)
                     {
-                        lines[lineIdx] = "#" + lines[lineIdx];
+                        lines[lineIndex] = "#" + lines[lineIndex];
                         modified = true;
                         count++;
-                        string logMsg = $"{srcInfo.Path} -> {destInfo.Path}";
+                        string logMsg = $"{sourceInfo.Path} -> {destinationInfo.Path}";
                         details.Add(logMsg);
                         logger.LogDebug("SourceLinkService: Created link -> {Link}", logMsg);
                     }
                 }
                 catch (Exception exception)
                 {
-                    logger.LogError(exception, "SourceLinkService: SourceLink failed for source -> {Path}", srcInfo.Path);
+                    logger.LogError(exception, "SourceLinkService: SourceLink failed for source -> {Path}", sourceInfo.Path);
                 }
             }
 

@@ -3,7 +3,7 @@ using Shoko.Abstractions.ScheduledActions;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
 
-namespace ShokoRelay.Actions;
+namespace ShokoRelay.Actions.Scheduled;
 
 /// <summary>Scheduled action to automate Plex Collections, Critic Ratings, Image Sync, and Trash emptying.</summary>
 public class PlexAutomationAction(PlexAutomationService plexAutomationService, PlexClient plexClient, ConfigProvider configProvider, ILogger<PlexAutomationAction> logger) : IScheduledAction
@@ -27,27 +27,25 @@ public class PlexAutomationAction(PlexAutomationService plexAutomationService, P
     #region Execution
 
     /// <inheritdoc/>
-    public Task<ActionValidationResult?> Validate(CancellationToken token) =>
-        Task.FromResult<ActionValidationResult?>(!plexClient.IsEnabled ? new("Plex server configuration is missing or no library is selected.") : null);
+    public Task<ActionValidationResult?> Validate(CancellationToken token) => Task.FromResult(ActionScheduleHelper.ValidatePlexConfigured(plexClient));
 
     /// <inheritdoc/>
     public async Task Execute(IProgress<decimal> progress, CancellationToken token)
     {
         progress.Report(0);
-        await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
-        bool startedTask = TaskHelper.StartTask(ShokoRelayConstants.TaskPlexAutomationRun);
-        try
-        {
-            var result = await plexAutomationService.RunAutomationAsync(progress, token).ConfigureAwait(false);
-            string apiBase = $"{configProvider.ServerBaseUrl}{ShokoRelayConstants.BasePath}";
-            ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexAutomationRun}.report", result, (builder, report) => ReportHelper.BuildPlexAutomationReport(builder, report, apiBase), logger);
-        }
-        finally
-        {
-            if (startedTask)
-                TaskHelper.FinishTask(ShokoRelayConstants.TaskPlexAutomationRun);
-            SyncHelper.SyncLock.Release();
-        }
+        await ActionScheduleHelper
+            .RunWithTaskLockAsync(
+                ShokoRelayConstants.TaskPlexAutomationRun,
+                SyncHelper.SyncLock,
+                async () =>
+                {
+                    var result = await plexAutomationService.RunAutomationAsync(progress, token).ConfigureAwait(false);
+                    string apiBase = $"{configProvider.ServerBaseUrl}{ShokoRelayConstants.BasePath}";
+                    ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexAutomationRun}.report", result, (builder, report) => ReportHelper.BuildPlexAutomationReport(builder, report, apiBase), logger);
+                },
+                token
+            )
+            .ConfigureAwait(false);
     }
 
     #endregion

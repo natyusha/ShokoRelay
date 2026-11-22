@@ -62,12 +62,7 @@ public class SyncToShoko(
         if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault() is not { } defaultUser)
             return result;
 
-        string? adminUsername = configProvider.GetAdminUsername();
-        if (string.IsNullOrWhiteSpace(adminUsername) && configProvider.GetAdvancedUserMappingEntries().Count > 0)
-        {
-            await configProvider.RefreshAdminUsername(plexAuth, cancellationToken).ConfigureAwait(false);
-            adminUsername = configProvider.GetAdminUsername();
-        }
+        string? adminUsername = await SyncHelper.GetOrRefreshAdminUsernameAsync(configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
 
         var (includeAdmin, adminShokoUser, extraUsers) = SyncHelper.ResolveActiveSyncUsers(configProvider, userType, adminUsername);
         if (!includeAdmin && extraUsers.Count == 0)
@@ -109,7 +104,7 @@ public class SyncToShoko(
         // Session-level cache to prevent redundant database lookups and GUID parsing when the same episode exists in multiple libraries or is watched by multiple users.
         var episodeCache = new Dictionary<string, IShokoEpisode?>(StringComparer.OrdinalIgnoreCase);
         var userDataCache = new Dictionary<(int ShokoUserId, int EpisodeId), IEpisodeUserData?>();
-        var prefIdCache = new Dictionary<int, string?>();
+        var preferredOrderingIdCache = new Dictionary<int, string?>();
 
         IShokoEpisode? GetCachedEpisode(PlexMetadataItem item)
         {
@@ -128,9 +123,9 @@ public class SyncToShoko(
                         var videoFile = videoService.GetVideoFileByAbsolutePath(mapped);
                         if (videoFile == null)
                         {
-                            string normPath = VfsShared.NormalizeSeparators(filePath);
-                            string fileName = Path.GetFileName(normPath);
-                            string? parent = Path.GetFileName(Path.GetDirectoryName(normPath));
+                            string normalizedPath = VfsShared.NormalizeSeparators(filePath);
+                            string fileName = Path.GetFileName(normalizedPath);
+                            string? parent = Path.GetFileName(Path.GetDirectoryName(normalizedPath));
                             string suffix = !string.IsNullOrEmpty(parent) ? $"{Path.DirectorySeparatorChar}{parent}{Path.DirectorySeparatorChar}{fileName}" : $"{Path.DirectorySeparatorChar}{fileName}";
 
                             videoFile = videoService
@@ -153,27 +148,12 @@ public class SyncToShoko(
             return episode;
         }
 
-        IUser? ResolveTargetShokoUser(string? mappedUsername, string plexUserName)
-        {
-            if (string.IsNullOrWhiteSpace(mappedUsername))
-                return defaultUser;
-            if (!shokoUserLookup.TryGetValue(mappedUsername, out var resolved))
-                shokoUserLookup[mappedUsername] = resolved = userService.GetUserByUsername(mappedUsername);
-            if (resolved == null)
-            {
-                string message = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
-                logger.LogWarning("WatchedSyncService: {Message}", message);
-                result = SyncHelper.RecordError(result, result.PerUser, plexUserName, message);
-            }
-            return resolved;
-        }
-
         IEpisodeUserData? GetCachedUserData(IShokoEpisode episode, IUser targetShokoUser)
         {
             var key = (targetShokoUser.LocalID, episode.LocalID);
-            if (!userDataCache.TryGetValue(key, out var epUserData))
-                userDataCache[key] = epUserData = userDataService.GetEpisodeUserData(episode, targetShokoUser);
-            return epUserData;
+            if (!userDataCache.TryGetValue(key, out var episodeUserData))
+                userDataCache[key] = episodeUserData = userDataService.GetEpisodeUserData(episode, targetShokoUser);
+            return episodeUserData;
         }
 
         foreach (var target in targets)
@@ -227,7 +207,7 @@ public class SyncToShoko(
             {
                 string userName = bucket.Name;
                 var items = bucket.Items;
-                if (ResolveTargetShokoUser(bucket.ShokoUsername, userName) is not { } targetShokoUser)
+                if (SyncHelper.ResolveTargetShokoUser(userService, defaultUser, bucket.ShokoUsername, userName, shokoUserLookup, ref result, logger) is not { } targetShokoUser)
                     continue;
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
@@ -268,11 +248,9 @@ public class SyncToShoko(
 
                     DateTime? watchedAt = SyncHelper.UnixSecondsToDateTime(item.LastViewedAt);
 
-                    string? prefId = null;
-                    if (episode.Series != null && !prefIdCache.TryGetValue(episode.ShokoSeriesID, out prefId))
-                        prefIdCache[episode.ShokoSeriesID] = prefId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+                    string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
 
-                    var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
+                    var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
                     string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
 
                     if (wouldMark)

@@ -59,12 +59,7 @@ public class SyncToPlex(
         if (targets.Count == 0)
             return result;
 
-        string? adminUsername = configProvider.GetAdminUsername();
-        if (string.IsNullOrWhiteSpace(adminUsername) && configProvider.GetAdvancedUserMappingEntries().Count > 0)
-        {
-            await configProvider.RefreshAdminUsername(plexAuth, cancellationToken).ConfigureAwait(false);
-            adminUsername = configProvider.GetAdminUsername();
-        }
+        string? adminUsername = await SyncHelper.GetOrRefreshAdminUsernameAsync(configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
 
         var (includeAdmin, adminShokoUser, extraUsers) = SyncHelper.ResolveActiveSyncUsers(configProvider, userType, adminUsername);
         if (!includeAdmin && extraUsers.Count == 0)
@@ -75,21 +70,6 @@ public class SyncToPlex(
         var shokoWatchedByUser = new Dictionary<int, List<(IEpisodeUserData UserData, IShokoEpisode Episode)>>();
         var shokoUserLookup = new Dictionary<string, IUser?>(StringComparer.OrdinalIgnoreCase);
         var tokenCache = new SyncHelper.PlexUserTokenCache();
-
-        IUser? ResolveTargetShokoUser(string? mappedUsername, string plexUserName)
-        {
-            if (string.IsNullOrWhiteSpace(mappedUsername))
-                return defaultUser;
-            if (!shokoUserLookup.TryGetValue(mappedUsername, out var resolved))
-                shokoUserLookup[mappedUsername] = resolved = userService.GetUserByUsername(mappedUsername);
-            if (resolved == null)
-            {
-                string message = $"Mapped Shoko user '{mappedUsername}' not found for Plex user '{plexUserName}'";
-                logger.LogWarning("WatchedSyncService: {Message}", message);
-                result = SyncHelper.RecordError(result, result.PerUser, plexUserName, message);
-            }
-            return resolved;
-        }
 
         List<(IEpisodeUserData UserData, IShokoEpisode Episode)> GetShokoWatchedForUser(IUser shokoUser)
         {
@@ -150,7 +130,7 @@ public class SyncToPlex(
                 var items = bucket.Items;
                 string? userToken = bucket.Token;
 
-                if (ResolveTargetShokoUser(bucket.ShokoUsername, userName) is not { } targetShokoUser)
+                if (SyncHelper.ResolveTargetShokoUser(userService, defaultUser, bucket.ShokoUsername, userName, shokoUserLookup, ref result, logger) is not { } targetShokoUser)
                     continue;
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
@@ -166,11 +146,11 @@ public class SyncToPlex(
                     if (string.IsNullOrEmpty(item.RatingKey))
                         continue;
 
-                    var plexEpId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-                    if (plexEpId.HasValue)
+                    var plexEpisodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+                    if (plexEpisodeId.HasValue)
                     {
-                        if (!plexMap.TryGetValue(plexEpId.Value, out var list))
-                            plexMap[plexEpId.Value] = list = [];
+                        if (!plexMap.TryGetValue(plexEpisodeId.Value, out var list))
+                            plexMap[plexEpisodeId.Value] = list = [];
                         list.Add(item);
                     }
                 }
@@ -203,9 +183,7 @@ public class SyncToPlex(
                             scrobbled = true;
                         }
 
-                        string? preferredOrderingId = null;
-                        if (episode!.Series != null && !preferredOrderingIdCache.TryGetValue(episode.ShokoSeriesID, out preferredOrderingId))
-                            preferredOrderingIdCache[episode.ShokoSeriesID] = preferredOrderingId = MapHelper.GetPreferredTmdbOrderingId(episode.Series);
+                        string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
 
                         var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
                         string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
@@ -259,18 +237,18 @@ public class SyncToPlex(
                                 bool rateFailed = false;
                                 if (!dryRun)
                                 {
-                                    using var rateReq = plexClient.CreateRequest(
+                                    using var rateRequest = plexClient.CreateRequest(
                                         HttpMethod.Get,
                                         $"/:/rate?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}&rating={userData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
                                         target.ServerUrl,
                                         userToken
                                     );
-                                    using var rateResp = await plexClient.SendAsync(rateReq, cancellationToken).ConfigureAwait(false);
-                                    if (!rateResp.IsSuccessStatusCode)
+                                    using var rateResponse = await plexClient.SendAsync(rateRequest, cancellationToken).ConfigureAwait(false);
+                                    if (!rateResponse.IsSuccessStatusCode)
                                     {
                                         rateFailed = true;
-                                        if (bucket.IsSharedFriend && rateResp.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                                            logger.LogDebug("WatchedSyncService: Plex shared server token for '{User}' cannot apply personal ratings (HTTP {Status})", userName, rateResp.StatusCode);
+                                        if (bucket.IsSharedFriend && rateResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                                            logger.LogDebug("WatchedSyncService: Plex shared server token for '{User}' cannot apply personal ratings (HTTP {Status})", userName, rateResponse.StatusCode);
                                         else
                                             result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to rate RatingKey {plexItem.RatingKey} on {target.ServerName}");
                                     }

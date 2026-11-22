@@ -12,9 +12,12 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
     #region Import Logic
 
     /// <summary>Trigger import scans for every managed folder to find new or unrecognized files.</summary>
+    /// <param name="cancellationToken">Optional cancellation token checked before queuing scans.</param>
+    /// <param name="throwOnError">When <c>true</c>, propagates scheduling failures instead of logging and returning.</param>
     /// <returns>A read-only list of folder names that were scheduled for scanning.</returns>
-    public async Task<IReadOnlyList<string>> TriggerImportAsync()
+    public async Task<IReadOnlyList<string>> TriggerImportAsync(CancellationToken cancellationToken = default, bool throwOnError = false)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         List<string> folders = [];
         try
         {
@@ -32,6 +35,9 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
         }
         catch (Exception exception)
         {
+            if (throwOnError)
+                throw;
+
             logger.LogWarning(exception, "ShokoImportService: failed to schedule folder scan");
         }
 

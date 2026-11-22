@@ -16,14 +16,17 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <summary>Build or clean VFS for a single series ID.</summary>
     /// <param name="seriesId">Optional single series ID to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
-    public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true) => BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, cleanRoot);
+    public VfsBuildResult Build(int? seriesId = null, bool cleanRoot = true, CancellationToken cancellationToken = default) =>
+        BuildInternal(seriesId.HasValue ? [seriesId.Value] : null, cleanRoot, cancellationToken);
 
     /// <summary>Build or clean VFS for multiple series IDs.</summary>
     /// <param name="seriesIds">Collection of series IDs to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
-    public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true) => BuildInternal(seriesIds, cleanRoot);
+    public VfsBuildResult Build(IReadOnlyCollection<int> seriesIds, bool cleanRoot = true, CancellationToken cancellationToken = default) => BuildInternal(seriesIds, cleanRoot, cancellationToken);
 
     #endregion
 
@@ -32,8 +35,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <summary>Internal core logic for orchestrating a VFS build or clean run.</summary>
     /// <param name="seriesIds">Optional collection of series IDs to process.</param>
     /// <param name="cleanRoot">Whether to delete existing VFS folders before building.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A result object containing statistics and details for the log report.</returns>
-    private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot)
+    private VfsBuildResult BuildInternal(IReadOnlyCollection<int>? seriesIds, bool cleanRoot, CancellationToken cancellationToken = default)
     {
         var rootName = VfsShared.ResolveRootFolderName();
         var overlapping = videoService.GetAllManagedFolders()?.Select(folder => folder.Path).FirstOrDefault(path => !string.IsNullOrEmpty(path) && VfsHelper.IsInVfsRoot(path, out _));
@@ -62,7 +66,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (isCleanBuild)
         {
             logger.LogInformation("VFS: Performing global root cleanup...");
-            var allRoots = videoService.GetAllManagedFolders()?.Select(folder => folder.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer) ?? [];
+            var allRoots = VfsShared.GetManagedFolderPaths(videoService);
             foreach (var root in allRoots)
             {
                 CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails, logger);
@@ -120,8 +124,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         }
 
         // Process series in parallel
-        Parallel.ForEach(seriesList, DefaultParallelOptions(), series =>
+        Parallel.ForEach(seriesList, DefaultParallelOptions(cancellationToken), series =>
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 var seriesStopwatch = Stopwatch.StartNew();
@@ -345,15 +350,15 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 {
                     foreach (var theme in themes)
                     {
-                        if (VfsHelper.GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string srcPath)
+                        if (VfsHelper.GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string sourcePath)
                         {
-                            string destFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
-                            state.ExpectedFiles.Add(destFilePath);
+                            string destinationFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
+                            state.ExpectedFiles.Add(destinationFilePath);
 
                             string seasonArg = isMoviePath ? $"Movie ❯ {folderName}" : "Shorts";
                             string fileArg = isMoviePath ? $"Shorts/{theme.FinalName}" : theme.FinalName;
 
-                            onLink?.Invoke(vfsRootDir, seasonArg, fileArg, srcPath);
+                            onLink?.Invoke(vfsRootDir, seasonArg, fileArg, sourcePath);
                         }
                     }
                 }
@@ -372,87 +377,87 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <summary>Resolves the physical source location for a mapping and validates that it is not ignored by exclusions.</summary>
     /// <param name="state">The active series build state.</param>
     /// <param name="mapping">The file mapping to resolve.</param>
-    /// <param name="locInfoValue">Outputs the resolved import root and physical source path.</param>
+    /// <param name="locationInfo">Outputs the resolved import root and physical source path.</param>
     /// <returns>True if the physical file exists and is eligible for linking; otherwise, false.</returns>
-    private bool TryResolveAndValidate(SeriesBuildState state, MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locInfoValue)
+    private bool TryResolveAndValidate(SeriesBuildState state, MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locationInfo)
     {
-        (string ImportRoot, string Src)? loc = null;
+        (string ImportRoot, string Src)? resolvedLocation = null;
         foreach (var file in mapping.Video.Files ?? [])
         {
             if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
                 continue;
             var importRoot = VfsShared.ResolveImportRootPath(file);
-            if (importRoot != null && VfsShared.ResolveSourcePath(file, importRoot) is { } src)
+            if (importRoot != null && VfsShared.ResolveSourcePath(file, importRoot) is { } sourcePath)
             {
-                loc = (importRoot, src);
+                resolvedLocation = (importRoot, sourcePath);
                 break;
             }
         }
 
-        if (loc == null)
+        if (resolvedLocation == null)
         {
             state.Skipped++;
             state.SkippedDetails.Add($"[Missing/Source-Only] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-            locInfoValue = default;
+            locationInfo = default;
             return false;
         }
-        if (VfsShared.IsPathIgnored(loc.Value.Src, videoService, Settings, state.IgnoredFolders, relativeTo: loc.Value.ImportRoot))
+        if (VfsShared.IsPathIgnored(resolvedLocation.Value.Src, videoService, Settings, state.IgnoredFolders, relativeTo: resolvedLocation.Value.ImportRoot))
         {
             state.Skipped++;
             state.SkippedDetails.Add($"[Excluded Path] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
-            locInfoValue = default;
+            locationInfo = default;
             return false;
         }
-        locInfoValue = loc.Value;
+        locationInfo = resolvedLocation.Value;
         return true;
     }
 
     /// <summary>Queues series-level metadata directories (including season-subfolder parents) and links episode-level sidecar metadata for a newly created video symlink.</summary>
     /// <param name="state">The active series build state.</param>
-    /// <param name="srcPath">Absolute path to the physical source video file.</param>
-    /// <param name="destSeriesDir">Target VFS series or movie root folder.</param>
-    /// <param name="destEpDir">Target VFS season or movie folder for episode sidecars.</param>
-    /// <param name="destFilePath">Target VFS video symlink path.</param>
+    /// <param name="sourcePath">Absolute path to the physical source video file.</param>
+    /// <param name="destinationSeriesDir">Target VFS series or movie root folder.</param>
+    /// <param name="destinationEpisodeDir">Target VFS season or movie folder for episode sidecars.</param>
+    /// <param name="destinationFilePath">Target VFS video symlink path.</param>
     /// <param name="importRoot">The physical import root path.</param>
     /// <param name="physicalImportRoot">The physical managed folder root used to guard parent-folder traversal.</param>
     /// <param name="seriesSeasonLabel">Blueprint season label for series-level metadata.</param>
-    /// <param name="epSeasonLabel">Blueprint season label for episode-level sidecars.</param>
+    /// <param name="episodeSeasonLabel">Blueprint season label for episode-level sidecars.</param>
     /// <param name="isPrimary">Whether this file belongs to the primary series in the override group.</param>
     private void LinkLocalMetadataForFile(
         SeriesBuildState state,
-        string srcPath,
-        string destSeriesDir,
-        string destEpDir,
-        string destFilePath,
+        string sourcePath,
+        string destinationSeriesDir,
+        string destinationEpisodeDir,
+        string destinationFilePath,
         string importRoot,
         string physicalImportRoot,
         string seriesSeasonLabel,
-        string epSeasonLabel,
+        string episodeSeasonLabel,
         bool isPrimary
     )
     {
-        string srcDir = Path.GetDirectoryName(srcPath)!;
-        if (state.LinkedSeriesMetaDirs.Add($"{srcDir}\0{destSeriesDir}"))
-            state.PendingSeriesMetaDirs.Add((srcDir, destSeriesDir, importRoot, seriesSeasonLabel, isPrimary));
+        string sourceDir = Path.GetDirectoryName(sourcePath)!;
+        if (state.LinkedSeriesMetaDirs.Add($"{sourceDir}\0{destinationSeriesDir}"))
+            state.PendingSeriesMetaDirs.Add((sourceDir, destinationSeriesDir, importRoot, seriesSeasonLabel, isPrimary));
 
         // When episodes sit inside a Season/Specials subfolder, also queue the series root folder one level above
         if (
-            VfsHelper.IsSeasonSubfolder(Path.GetFileName(srcDir))
-            && Path.GetDirectoryName(srcDir) is { Length: > 0 } parentDir
+            VfsHelper.IsSeasonSubfolder(Path.GetFileName(sourceDir))
+            && Path.GetDirectoryName(sourceDir) is { Length: > 0 } parentDir
             && !string.Equals(
                 parentDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                 physicalImportRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
                 VfsShared.PathComparison
             )
-            && state.LinkedSeriesMetaDirs.Add($"{parentDir}\0{destSeriesDir}")
+            && state.LinkedSeriesMetaDirs.Add($"{parentDir}\0{destinationSeriesDir}")
         )
-            state.PendingSeriesMetaDirs.Add((parentDir, destSeriesDir, importRoot, seriesSeasonLabel, isPrimary));
+            state.PendingSeriesMetaDirs.Add((parentDir, destinationSeriesDir, importRoot, seriesSeasonLabel, isPrimary));
 
         assetLinker.LinkEpisodeMetadata(
-            srcPath,
-            srcDir,
-            Path.GetFileNameWithoutExtension(destFilePath),
-            destEpDir,
+            sourcePath,
+            sourceDir,
+            Path.GetFileNameWithoutExtension(destinationFilePath),
+            destinationEpisodeDir,
             state.Session.SubtitleFileCache,
             state.Session.AttachmentDirCache,
             ref state.Planned,
@@ -461,8 +466,8 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             ref state.Created,
             (name, source) =>
             {
-                state.ExpectedFiles.Add(Path.Combine(destEpDir, name));
-                state.OnLink?.Invoke(importRoot, epSeasonLabel, name, source);
+                state.ExpectedFiles.Add(Path.Combine(destinationEpisodeDir, name));
+                state.OnLink?.Invoke(importRoot, episodeSeasonLabel, name, source);
             },
             state.SkipCheck
         );
@@ -472,11 +477,11 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="state">The active series build state.</param>
     private void FlushSeriesMetadataLinks(SeriesBuildState state)
     {
-        foreach (var (srcDir, destSeriesDir, importRoot, seriesSeasonLabel, _) in state.PendingSeriesMetaDirs.OrderByDescending(item => item.IsPrimary))
+        foreach (var (sourceDir, destinationSeriesDir, importRoot, seriesSeasonLabel, _) in state.PendingSeriesMetaDirs.OrderByDescending(item => item.IsPrimary))
         {
             assetLinker.LinkSeriesMetadata(
-                srcDir,
-                destSeriesDir,
+                sourceDir,
+                destinationSeriesDir,
                 state.VideoBaseNames,
                 state.Session.MetadataFileCache,
                 ref state.Planned,
@@ -484,7 +489,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 state.ExpectedFiles,
                 (name, source) =>
                 {
-                    state.ExpectedFiles.Add(Path.Combine(destSeriesDir, name));
+                    state.ExpectedFiles.Add(Path.Combine(destinationSeriesDir, name));
                     state.OnLink?.Invoke(importRoot, seriesSeasonLabel, name, source);
                 },
                 state.SkipCheck
@@ -570,22 +575,22 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="rootFolderName">The name of the VFS root folder.</param>
     /// <param name="folderId">The folder ID representation of the series to prune.</param>
     /// <param name="onError">Callback to invoke if an exception occurs during pruning.</param>
-    /// <param name="extraMovieEpIds">Optional pre-resolved movie episode IDs (e.g. from the blueprint cache when the series is already deleted).</param>
+    /// <param name="extraMovieEpisodeIds">Optional pre-resolved movie episode IDs (e.g. from the blueprint cache when the series is already deleted).</param>
     /// <param name="pruneStandard">Whether to remove the standard TV VFS folder for this series.</param>
     /// <param name="pruneMovies">Whether to remove standalone Movie VFS folders for this series.</param>
-    private void PruneSeries(string rootFolderName, int folderId, Action<string> onError, HashSet<int>? extraMovieEpIds = null, bool pruneStandard = true, bool pruneMovies = true)
+    private void PruneSeries(string rootFolderName, int folderId, Action<string> onError, HashSet<int>? extraMovieEpisodeIds = null, bool pruneStandard = true, bool pruneMovies = true)
     {
         if (Settings.Advanced.DisableVfsGeneration)
             return;
 
-        List<string> roots = [.. (videoService.GetAllManagedFolders() ?? []).Select(folder => folder.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct(VfsShared.PathComparer)];
+        List<string> roots = VfsShared.GetManagedFolderPaths(videoService);
         string movieRoot = VfsShared.ResolveMovieRootFolderName();
-        var movieEpIds = new HashSet<int>(extraMovieEpIds ?? []);
+        var movieEpisodeIds = new HashSet<int>(extraMovieEpisodeIds ?? []);
         if (pruneMovies)
             foreach (int groupSeriesId in OverrideHelper.GetGroup(folderId, metadataService))
                 if (metadataService.GetShokoSeriesByID(groupSeriesId) is { Episodes: { } episodes })
                     foreach (var episode in episodes.Where(episode => episode.Type == EpisodeType.Episode))
-                        movieEpIds.Add(episode.LocalID);
+                        movieEpisodeIds.Add(episode.LocalID);
 
         foreach (var root in roots)
         {
@@ -610,7 +615,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             if (!pruneMovies)
                 continue;
 
-            foreach (var episodeId in movieEpIds)
+            foreach (var episodeId in movieEpisodeIds)
             {
                 string moviePath = Path.Combine(root, movieRoot, episodeId.ToString());
                 try
@@ -628,6 +633,50 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 }
             }
         }
+    }
+
+    /// <summary>Computes the collision version index and peer flag for a file mapping within its coordinate/variation bucket.</summary>
+    /// <param name="state">The active series build state.</param>
+    /// <param name="versionCounters">Mutable version counter dictionary keyed by coordinate and variation state.</param>
+    /// <param name="mapping">The file mapping being evaluated.</param>
+    /// <param name="hasPeer">Outputs <c>true</c> if multiple mappings share the same coordinate and variation bucket.</param>
+    /// <returns>The 1-based duplicate version index, or <c>null</c> if not applicable.</returns>
+    private static int? GetNextVersionIndex(SeriesBuildState state, Dictionary<(int Season, int Episode, bool IsVariation), int> versionCounters, MapHelper.FileMapping mapping, out bool hasPeer)
+    {
+        var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
+        hasPeer = state.CoordCounts.TryGetValue(key, out var count) && count > 1;
+        return (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var version)) ? (versionCounters[key] = version + 1) - 1 : null;
+    }
+
+    /// <summary>Validates destination uniqueness, creates the VFS symlink, and updates build counters and blueprint callbacks.</summary>
+    /// <param name="state">The active series build state.</param>
+    /// <param name="sourcePath">Physical source video path.</param>
+    /// <param name="destinationFilePath">Target VFS symlink path.</param>
+    /// <param name="rootPath">The VFS root path for blueprint registration.</param>
+    /// <param name="seasonLabel">The blueprint season label.</param>
+    /// <param name="fileName">The symlink filename.</param>
+    /// <returns><c>true</c> if the link exists or was created successfully; otherwise, <c>false</c>.</returns>
+    private bool TryCreateMappedVideoLink(SeriesBuildState state, string sourcePath, string destinationFilePath, string rootPath, string seasonLabel, string fileName)
+    {
+        if (state.ExpectedFiles.Contains(destinationFilePath))
+        {
+            state.Skipped++;
+            state.SkippedDetails.Add($"[Duplicate Destination] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] -> {destinationFilePath}");
+            return false;
+        }
+
+        if (VfsShared.TryCreateLink(sourcePath, destinationFilePath, logger, skipExistenceCheck: state.SkipCheck))
+        {
+            state.Created++;
+            state.Planned++;
+            state.ExpectedFiles.Add(destinationFilePath);
+            state.OnLink?.Invoke(rootPath, seasonLabel, fileName, sourcePath);
+            return true;
+        }
+
+        state.Skipped++;
+        state.Errors.Add($"Link failed: {sourcePath} -> {destinationFilePath}");
+        return false;
     }
 
     #endregion

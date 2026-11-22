@@ -85,9 +85,9 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             var tmdbSeries = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
             var tmdbMovie = primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.Episodes.FirstOrDefault()?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
             var fileData = MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService);
-            var prefId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
+            var preferredOrderingId = MapHelper.GetPreferredTmdbOrderingId(primarySeries);
             var (rating, isAdult) = ContentRatingHelper.GetContentRatingAndAdult(primarySeries, tmdbMovie ?? (tmdbSeries as IWithContentRatings));
-            return new SeriesContext(primarySeries, tmdbSeries, tmdbMovie, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, prefId);
+            return new SeriesContext(primarySeries, tmdbSeries, tmdbMovie, TextHelper.ResolveFullSeriesTitles(primarySeries), rating ?? "", isAdult, fileData, preferredOrderingId);
         }
 
         var globalSettings = configProvider.GetSettings();
@@ -100,9 +100,9 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
         // Purge stale cache entries to prevent unbounded growth during extended uptime
         if (_contextCache.Count > 50)
-            foreach (var kvp in _contextCache)
-                if (!ReferenceEquals(kvp.Value.Config, globalSettings) || kvp.Value.ExpirationTicks < now)
-                    _contextCache.TryRemove(kvp.Key, out _);
+            foreach (var entry in _contextCache)
+                if (!ReferenceEquals(entry.Value.Config, globalSettings) || entry.Value.ExpirationTicks < now)
+                    _contextCache.TryRemove(entry.Key, out _);
 
         var cached = _contextCache.GetOrAdd(primaryId, _ => new ContextCacheEntry(globalSettings, CreateSeriesContext));
 
@@ -130,28 +130,22 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     /// <param name="group">The Shoko group.</param>
     /// <param name="primarySeries">The series providing the artwork.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
-    {
-        var tmdbSeries = (primarySeries as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? primarySeries.AsTmdb();
-        var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
-        var tmdbDesc = tmdbSeries?.PreferredOverview?.Value;
-        var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries) =>
         // csharpier-ignore
-        return new()
+        new()
         {
-            ["ratingKey"]             = group.GetPlexRatingKey(),
-            ["guid"]                  = group.GetPlexGuid(),
-            ["key"]                   = $"/collection/{group.LocalID}",
-            ["type"]                  = "collection",
-            ["subtype"]               = "show",
-            ["title"]                 = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}",
-            ["thumb"]                 = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["art"]                   = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
-            ["titleSort"]             = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}",
-            ["summary"]               = summary,
+            ["ratingKey"] = group.GetPlexRatingKey(),
+            ["guid"] = group.GetPlexGuid(),
+            ["key"] = $"/collection/{group.LocalID}",
+            ["type"] = "collection",
+            ["subtype"] = "show",
+            ["title"] = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}",
+            ["thumb"] = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"] = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["titleSort"] = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}",
+            ["summary"] = TextHelper.GetSanitizedDescription(primarySeries),
             //["Image"]               = Likely an image array will be used here
         };
-    }
 
     /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
     /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
@@ -189,8 +183,6 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var images = (IWithImages)series;
         var tmdbSeries = context.TmdbSeries;
         var tmdbMovie = context.TmdbMovie;
-        var description = TextHelper.GetDescriptionByLanguage(series, Settings.DescriptionLanguage);
-        var tmdbDescription = tmdbSeries?.PreferredOverview?.Value ?? tmdbMovie?.PreferredOverview?.Value;
         var duration = series.Episodes is { Count: > 0 } episodes
             ? (int?)Math.Min(int.MaxValue, episodes.Sum(episode => episode.Runtime.TotalMilliseconds))
             : (tmdbMovie?.Runtime.HasValue == true ? (int?)Math.Min(int.MaxValue, tmdbMovie.Runtime.Value.TotalMilliseconds) : null);
@@ -215,7 +207,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["originalTitle"]         = context.Titles.OriginalTitle,
             ["titleSort"]             = context.Titles.SortTitle,
             ["year"]                  = series.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year,
-            ["summary"]               = TextHelper.SanitizeSummaryWithFallback(description, tmdbDescription, Settings.SummaryMode),
+            ["summary"]               = TextHelper.GetSanitizedDescription(series),
             ["isAdult"]               = context.IsAdult,
             ["duration"]              = duration,
             //["tagline"]             = TMDB has this but it is not exposed
@@ -343,16 +335,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
         // When using VFS overrides find a Shoko series in the group which contains the TMDB metadata for the requisite season number.
         bool ignoreTmdb = !string.IsNullOrEmpty(context.PreferredOrderingId);
-        ISeason? tmdbSeason = null;
-        if (!ignoreTmdb)
-        {
-            var groupIds = OverrideHelper.GetGroup(series.LocalID, metadataService);
-            tmdbSeason = groupIds
-                .Select(metadataService.GetShokoSeriesByID)
-                .OfType<IShokoSeries>()
-                .SelectMany(groupSeries => groupSeries.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
-                .FirstOrDefault(seasonItem => seasonItem.SeasonNumber == seasonNumber);
-        }
+        ISeason? tmdbSeason = !ignoreTmdb ? FindTmdbSeason(series, seasonNumber) : null;
 
         if (tmdbSeason != null)
         {
@@ -448,17 +431,10 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 ? movieOverview
                 : TextHelper.GetDescriptionByLanguage(actualSeries, Settings.DescriptionLanguage);
 
-        string? parentThumb = null;
-        if (Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(context.PreferredOrderingId))
-        {
-            var groupIds = OverrideHelper.GetGroup(series.LocalID, metadataService);
-            parentThumb = groupIds
-                .Select(metadataService.GetShokoSeriesByID)
-                .OfType<IShokoSeries>()
-                .SelectMany(groupSeries => groupSeries.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
-                .FirstOrDefault(tmdbSeason => tmdbSeason.SeasonNumber == mapped.Season)
-                ?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage);
-        }
+        string? parentThumb =
+            Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(context.PreferredOrderingId)
+                ? FindTmdbSeason(series, mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
+                : null;
 
         string? thumb = Settings.TmdbThumbnails
             ? (images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage))
@@ -705,12 +681,24 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         if (Settings.AnidbAsRottenTomatoes && anidbRating > 0)
             ratings.Add(CreateRating("rottentomatoes://image.rating.upright", anidbRating.Value));
 
-        double? tmdbVal = tmdbRating > 0 ? tmdbRating : (!Settings.AnidbAsRottenTomatoes ? anidbRating : null);
-        if (tmdbVal > 0)
-            ratings.Add(CreateRating("themoviedb://image.rating", tmdbVal.Value));
+        double? tmdbValue = tmdbRating > 0 ? tmdbRating : (!Settings.AnidbAsRottenTomatoes ? anidbRating : null);
+        if (tmdbValue > 0)
+            ratings.Add(CreateRating("themoviedb://image.rating", tmdbValue.Value));
 
         return ratings.Count > 0 ? [.. ratings] : null;
     }
+
+    /// <summary>Finds the first linked TMDB season matching the specified season number across the series' override group.</summary>
+    /// <param name="series">The primary Shoko series.</param>
+    /// <param name="seasonNumber">The target season number.</param>
+    /// <returns>The matching TMDB <see cref="ISeason"/>, or <c>null</c> if none exists.</returns>
+    private ISeason? FindTmdbSeason(IShokoSeries series, int seasonNumber) =>
+        OverrideHelper
+            .GetGroup(series.LocalID, metadataService)
+            .Select(metadataService.GetShokoSeriesByID)
+            .OfType<IShokoSeries>()
+            .SelectMany(groupSeries => groupSeries.GetLinkedSeasons(MetadataSource.TMDB) ?? [])
+            .FirstOrDefault(tmdbSeason => tmdbSeason.SeasonNumber == seasonNumber);
 
     #endregion
 }

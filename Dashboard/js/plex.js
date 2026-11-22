@@ -29,7 +29,7 @@
   function setPlexStartAction() {
     stopPlexPolling();
     const authAction = element("plex-auth-action");
-    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((elem) => (elem.hidden = elem.tagName !== "BUTTON"));
+    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((authElement) => (authElement.hidden = authElement.tagName !== "BUTTON"));
     element("plex-login")?.remove();
     withButtonAction("plex-start", startPlexAuth);
   }
@@ -50,7 +50,7 @@
     const authAction = element("plex-auth-action");
     if (authAction) {
       // Hide the initial buttons while the login link is active
-      authAction.querySelectorAll(".plex-auth-state").forEach((elem) => (elem.hidden = true));
+      authAction.querySelectorAll(".plex-auth-state").forEach((authElement) => (authElement.hidden = true));
 
       // Create or update the login link
       let loginLink = element("plex-login");
@@ -102,7 +102,7 @@
     bindField("plex-scrobble", "Automation.AutoScrobble", "check");
 
     const authAction = element("plex-auth-action");
-    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((elem) => (elem.hidden = !(isLinked ? elem.tagName === "DIV" : elem.tagName === "BUTTON")));
+    if (authAction) authAction.querySelectorAll(".plex-auth-state").forEach((authElement) => (authElement.hidden = !(isLinked ? authElement.tagName === "DIV" : authElement.tagName === "BUTTON")));
 
     if (!isLinked) {
       withButtonAction("plex-start", startPlexAuth);
@@ -112,13 +112,13 @@
       if (unlinkBtn) unlinkBtn.onclick = unlinkPlex;
     }
 
-    const libStatus = element("plex-libraries-status");
-    if (libStatus) {
+    const libraryStatus = element("plex-libraries-status");
+    if (libraryStatus) {
       const count = (plex.DiscoveredLibraries || []).length;
       let text = "(No Libraries Detected)";
       if (count === 1) text = "(1 Library)";
       else if (count > 1) text = `(${count} Libraries)`;
-      libStatus.textContent = text;
+      libraryStatus.textContent = text;
     }
 
     // Resolve the Plex Web App link dynamically from discovered targets

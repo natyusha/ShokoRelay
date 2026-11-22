@@ -62,7 +62,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
             );
             using var findResponse = await httpClient.SendAsync(findRequest, cancellationToken).ConfigureAwait(false);
             var findContainer = await PlexApi.ReadContainerAsync(findResponse, cancellationToken).ConfigureAwait(false);
-            var existingMeta = findContainer?.Metadata?.FirstOrDefault(col => string.Equals(col.Title, collectionName, StringComparison.OrdinalIgnoreCase));
+            var existingMeta = findContainer?.Metadata?.FirstOrDefault(collection => string.Equals(collection.Title, collectionName, StringComparison.OrdinalIgnoreCase));
             if (int.TryParse(existingMeta?.RatingKey, out int existingId))
                 return existingId;
 
@@ -84,7 +84,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
                 return null;
             }
             var createdContainer = await PlexApi.ReadContainerAsync(createResponse, cancellationToken).ConfigureAwait(false);
-            var createdMeta = createdContainer?.Metadata?.FirstOrDefault(col => string.Equals(col.Title, collectionName, StringComparison.OrdinalIgnoreCase));
+            var createdMeta = createdContainer?.Metadata?.FirstOrDefault(collection => string.Equals(collection.Title, collectionName, StringComparison.OrdinalIgnoreCase));
             return int.TryParse(createdMeta?.RatingKey, out int createdId) ? createdId : null;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)

@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.Metadata.Image.Options;
 using Shoko.Abstractions.ScheduledActions.Services;
 using Shoko.Abstractions.Video.Services;
-using ShokoRelay.Actions;
+using ShokoRelay.Actions.Scheduled;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
 using ShokoRelay.Sync;
@@ -128,9 +128,7 @@ public class ShokoController(
     [HttpGet("vfs/tree")]
     public async Task<IActionResult> GetVfsTree([FromQuery] bool refresh = false)
     {
-        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-        Response.Headers["Pragma"] = "no-cache";
-        Response.Headers["Expires"] = "0";
+        SetNoCacheHeaders();
 
         IActionResult EmptyTree() =>
             Content( /*lang=json,strict*/
@@ -187,7 +185,7 @@ public class ShokoController(
                 ?? [];
 
             using var stream = new FileStream(VfsShared.BlueprintFilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
-            var data = await JsonSerializer.DeserializeAsync<Dictionary<string, Dictionary<string, VfsBlueprintSeries>>>(stream);
+            var data = await JsonSerializer.DeserializeAsync<Dictionary<string, Dictionary<string, VfsBlueprintSeries>>>(stream, cancellationToken: HttpContext.RequestAborted).ConfigureAwait(false);
             if (data == null)
                 return EmptyTree();
 
@@ -293,13 +291,13 @@ public class ShokoController(
 
                 var plexRemoved = new List<string>();
                 var plexMessages = new List<string>();
-                int effThreshold = threshold ?? Settings.Advanced.EmptyPlexTrashThreshold;
+                int effectiveThreshold = threshold ?? Settings.Advanced.EmptyPlexTrashThreshold;
 
-                if (effThreshold > 0 && PlexLibrary.IsEnabled)
+                if (effectiveThreshold > 0 && PlexLibrary.IsEnabled)
                 {
                     foreach (var target in PlexLibrary.GetConfiguredTargets())
                     {
-                        var (_, trashed, message) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, effThreshold, dryRun).ConfigureAwait(false);
+                        var (_, trashed, message) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, effectiveThreshold, dryRun).ConfigureAwait(false);
                         plexMessages.Add($"[{target.Title}] {message}");
                         if (trashed.Count > 0)
                             plexRemoved.AddRange(trashed.Select(item => $"[{target.Title}] {item}"));

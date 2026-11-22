@@ -41,12 +41,7 @@
    * @returns {void}
    */
   function initShokoSanitizers() {
-    const vfsFilter = element("vfs-filter");
-    if (vfsFilter) {
-      vfsFilter.oninput = () => {
-        vfsFilter.value = vfsFilter.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
-      };
-    }
+    window._sr.bindSeriesFilterSanitizer("vfs-filter");
   }
   // #endregion
 
@@ -80,8 +75,8 @@
 
       // Load current overrides content from server config.
       try {
-        const cfgRes = await fetchJson(configUrl);
-        if (cfgRes.isOk) overridesText.value = cfgRes.data?.overrides || "";
+        const configResponse = await fetchJson(configUrl);
+        if (configResponse.isOk) overridesText.value = configResponse.data?.overrides || "";
       } catch {}
       const close = openModal(modal);
       element("overrides-cancel").onclick = close;
@@ -165,12 +160,12 @@
           progress: element("sync-progress").checked,
         });
 
-        const usersVal = element("sync-users").value;
+        const usersValue = element("sync-users").value;
         const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "advanced", 4: "none" };
-        queryParams.set("users", usersMap[usersVal] || "none");
+        queryParams.set("users", usersMap[usersValue] || "none");
 
-        const libName = element("sync-library")?.value.trim();
-        if (libName) queryParams.set("libraryName", libName);
+        const libraryName = element("sync-library")?.value.trim();
+        if (libraryName) queryParams.set("libraryName", libraryName);
         if (dirImport) queryParams.set("import", "true");
 
         const response = await fetchJson(`${base}/sync-watched?${queryParams}`);

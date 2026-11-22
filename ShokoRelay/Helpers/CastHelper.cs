@@ -86,19 +86,6 @@ public static class CastHelper
         return (new HashSet<string>(StringComparer.OrdinalIgnoreCase), new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), new HashSet<string>(StringComparer.OrdinalIgnoreCase));
     }
 
-    /// <summary>Thread-local accumulation state used during parallel credit cache warming.</summary>
-    private sealed class WarmThreadState
-    {
-        /// <summary>Memoized normalization results per raw credit name.</summary>
-        public readonly Dictionary<string, (string Trimmed, string NormKey, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
-
-        /// <summary>Observed series counts per credit variant tuple.</summary>
-        public readonly Dictionary<(bool IsPerson, bool IsAnidb, string NormKey, string Trimmed), int> Counts = [];
-
-        /// <summary>Deduplication set ensuring each normalized credit is counted once per series.</summary>
-        public readonly HashSet<(bool IsPerson, bool IsAnidb, string NormKey)> SeenInSeries = [];
-    }
-
     /// <summary>Pre-warms the global credit, cast, crew, and studio display name cache across all series in Shoko.</summary>
     /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
@@ -302,19 +289,19 @@ public static class CastHelper
                 if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (roleName ?? string.Empty).Trim().ToUpperInvariant())))
                     continue;
 
-                var thumbImg = creator.PrimaryImage;
+                var thumbImage = creator.PrimaryImage;
                 if (index?.FindMatch(creator, creator.Title) is { } match)
                 {
                     matchedTmdb!.Add(match);
                     if (Settings.TmdbCastImages && getCreator(match)?.PrimaryImage != null)
-                        thumbImg = getCreator(match)!.PrimaryImage;
+                        thumbImage = getCreator(match)!.PrimaryImage;
                 }
 
                 string? thumb = null;
                 if (Settings.TmdbCastImages && !isPerson && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
                     thumb = cachedLogo;
-                else if (thumbImg != null)
-                    thumb = ImageHelper.GetImageUrl(thumbImg, forceRemote: true);
+                else if (thumbImage != null)
+                    thumb = ImageHelper.GetImageUrl(thumbImage, forceRemote: true);
 
                 finalRoles.Add(
                     new
@@ -353,7 +340,7 @@ public static class CastHelper
                         order = order++,
                         tag,
                         role = roleName,
-                        thumb = creator.PrimaryImage is { } img ? ImageHelper.GetImageUrl(img, forceRemote: true) : null,
+                        thumb = creator.PrimaryImage is { } image ? ImageHelper.GetImageUrl(image, forceRemote: true) : null,
                     }
                 );
             }
@@ -516,6 +503,19 @@ public static class CastHelper
 
     #region Internal Helpers
 
+    /// <summary>Thread-local accumulation state used during parallel credit cache warming.</summary>
+    private sealed class WarmThreadState
+    {
+        /// <summary>Memoized normalization results per raw credit name.</summary>
+        public readonly Dictionary<string, (string Trimmed, string NormKey, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+
+        /// <summary>Observed series counts per credit variant tuple.</summary>
+        public readonly Dictionary<(bool IsPerson, bool IsAnidb, string NormKey, string Trimmed), int> Counts = [];
+
+        /// <summary>Deduplication set ensuring each normalized credit is counted once per series.</summary>
+        public readonly HashSet<(bool IsPerson, bool IsAnidb, string NormKey)> SeenInSeries = [];
+    }
+
     /// <summary>Flips a two-part name (Given Family to Family Given) with zero allocations using memory spans.</summary>
     /// <param name="name">The raw name string.</param>
     /// <returns>The flipped name or null if unparseable.</returns>
@@ -523,8 +523,8 @@ public static class CastHelper
     {
         if (string.IsNullOrWhiteSpace(name))
             return null;
-        int spaceIdx = name.IndexOf(' ');
-        return (spaceIdx <= 0 || spaceIdx != name.LastIndexOf(' ')) ? null : string.Concat(name.AsSpan(spaceIdx + 1), " ", name.AsSpan(0, spaceIdx));
+        int spaceIndex = name.IndexOf(' ');
+        return (spaceIndex <= 0 || spaceIndex != name.LastIndexOf(' ')) ? null : string.Concat(name.AsSpan(spaceIndex + 1), " ", name.AsSpan(0, spaceIndex));
     }
 
     /// <summary>Strips department category prefixes from TMDB crew role names.</summary>
@@ -532,7 +532,7 @@ public static class CastHelper
     /// <returns>The cleaned role string.</returns>
     private static string CleanCrewRole(string? role) =>
         string.IsNullOrWhiteSpace(role) ? ""
-        : role.IndexOf(',') is var commaIdx && commaIdx > 0 && s_tmdbDepartments.Contains(role[..commaIdx].Trim()) ? role[(commaIdx + 1)..].Trim()
+        : role.IndexOf(',') is var commaIndex && commaIndex > 0 && s_tmdbDepartments.Contains(role[..commaIndex].Trim()) ? role[(commaIndex + 1)..].Trim()
         : role.Trim();
 
     /// <summary>Filters the crew by a specific predicate and returns a formatted array of tags.</summary>
@@ -626,9 +626,9 @@ public static class CastHelper
                 string? name = creator?.Title ?? getName(item);
 
                 // Index Original Title without spaces
-                string? orig = creator?.OriginalTitle?.Value;
-                if (!string.IsNullOrEmpty(orig))
-                    _exactOriginal.TryAdd(orig.Contains(' ') ? orig.Replace(" ", "", StringComparison.Ordinal) : orig, item);
+                string? originalTitle = creator?.OriginalTitle?.Value;
+                if (!string.IsNullOrEmpty(originalTitle))
+                    _exactOriginal.TryAdd(originalTitle.Contains(' ') ? originalTitle.Replace(" ", "", StringComparison.Ordinal) : originalTitle, item);
 
                 // Index Primary and Flipped Names
                 if (!string.IsNullOrEmpty(name))
@@ -664,17 +664,17 @@ public static class CastHelper
         /// <returns>The matching TMDB entry, or null if no match is found.</returns>
         public T? FindMatch(ICreator? anidbCreator, string anidbName)
         {
-            string? orig = anidbCreator?.OriginalTitle?.Value;
-            string? origNoSpace = (!string.IsNullOrEmpty(orig) && orig.Contains(' ')) ? orig.Replace(" ", "", StringComparison.Ordinal) : orig;
+            string? originalName = anidbCreator?.OriginalTitle?.Value;
+            string? originalNoSpace = (!string.IsNullOrEmpty(originalName) && originalName.Contains(' ')) ? originalName.Replace(" ", "", StringComparison.Ordinal) : originalName;
             string name = anidbCreator?.Title ?? anidbName;
             string? flippedName = GetFlippedName(name);
 
             // OriginalName matches OriginalName (whitespace stripped)
-            if (!string.IsNullOrEmpty(origNoSpace) && _exactOriginal.TryGetValue(origNoSpace, out var exactOriginalMatch))
+            if (!string.IsNullOrEmpty(originalNoSpace) && _exactOriginal.TryGetValue(originalNoSpace, out var exactOriginalMatch))
                 return exactOriginalMatch;
 
             // OriginalName matches TMDB AlternativeNames (whitespace stripped)
-            if (!string.IsNullOrEmpty(origNoSpace) && _altOriginal.TryGetValue(origNoSpace, out var altOriginalMatch))
+            if (!string.IsNullOrEmpty(originalNoSpace) && _altOriginal.TryGetValue(originalNoSpace, out var altOriginalMatch))
                 return altOriginalMatch;
 
             // Name matches Name (romanised)

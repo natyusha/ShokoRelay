@@ -169,11 +169,11 @@ public static partial class TagHelper
             var activeMerges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var defaultEntry in s_defaultTagMerges)
             {
-                var normKey = NormalizeTagKey(defaultEntry.Key);
-                var normVal = NormalizeTagKey(defaultEntry.Value);
+                var normalizedKey = NormalizeTagKey(defaultEntry.Key);
+                var normalizedValue = NormalizeTagKey(defaultEntry.Value);
                 // If a default source or target is mentioned on a user merge line, drop the default rule entirely to allow the user to redefine it
-                if (!userMergeMentioned.Contains(normKey) && !userMergeMentioned.Contains(normVal))
-                    activeMerges[normKey] = defaultEntry.Value;
+                if (!userMergeMentioned.Contains(normalizedKey) && !userMergeMentioned.Contains(normalizedValue))
+                    activeMerges[normalizedKey] = defaultEntry.Value;
             }
 
             foreach (var (normSource, target) in userMerges)
@@ -397,9 +397,9 @@ public static partial class TagHelper
         if (word.Contains('-'))
         {
             var parts = word.Split('-');
-            for (int partIdx = 1; partIdx < parts.Length; partIdx++)
-                if (!string.IsNullOrEmpty(parts[partIdx]) && s_forceSpecial.TryGetValue("-" + parts[partIdx], out var hyphenSpecial))
-                    parts[partIdx] = hyphenSpecial.TrimStart('-');
+            for (int partIndex = 1; partIndex < parts.Length; partIndex++)
+                if (!string.IsNullOrEmpty(parts[partIndex]) && s_forceSpecial.TryGetValue("-" + parts[partIndex], out var hyphenSpecial))
+                    parts[partIndex] = hyphenSpecial.TrimStart('-');
 
             return string.Join('-', parts);
         }

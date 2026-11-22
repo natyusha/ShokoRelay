@@ -25,19 +25,24 @@
   let displayRoots = [];
   /** @type {string} The name of the currently selected VFS root tab. */
   let activeTabName = localStorage.getItem(TABS_KEY) || "All";
+  const initialQuery = new URLSearchParams(window.location.search);
+  /** @type {number|null} Optional Shoko Series ID requested via query string to auto-expand and scroll to on initial load. */
+  let pendingJumpSeriesId = Number.parseInt(initialQuery.get("seriesId") || "", 10) || null;
+  /** @type {number|null} Optional AniDB ID requested via query string to auto-expand and scroll to on initial load. */
+  let pendingJumpAnidbId = Number.parseInt(initialQuery.get("anidbId") || "", 10) || null;
 
   // #region Helpers
   /**
    * Refreshes the VFS for a specific series and displays the result toast.
-   * @param {number} id - The Shoko Series ID to rebuild.
+   * @param {number} seriesId - The Shoko Series ID to rebuild.
    * @returns {Promise<void>}
    */
-  async function refreshSeries(id) {
-    const label = `VFS [${id}]`;
+  async function refreshSeries(seriesId) {
+    const label = `VFS [${seriesId}]`;
     const taskName = window._sr.tasks.vfsBuild;
 
     showToast(`${label}: Refreshing...`, "info", TOAST_MS);
-    const response = await fetchJson(`${base}/vfs?run=true&clean=false&filter=${id}`);
+    const response = await fetchJson(`${base}/vfs?run=true&clean=false&filter=${seriesId}`);
 
     // Immediately clear the task result on the server. This prevents syncActiveTasks in script.js from showing a redundant fallback toast for this operation.
     if (taskName) await fetchJson(`${base}/tasks/clear/${taskName}`, { method: "POST" }, false);
@@ -159,17 +164,17 @@
     rootTabs.innerHTML = "";
 
     displayRoots.forEach((root) => {
-      const btn = document.createElement("button");
-      btn.className = `tab-btn ${root.name === activeTabName ? "active" : ""}`;
-      btn.textContent = root.name;
-      btn.onclick = () => {
+      const button = document.createElement("button");
+      button.className = `tab-btn ${root.name === activeTabName ? "active" : ""}`;
+      button.textContent = root.name;
+      button.onclick = () => {
         activeTabName = root.name;
         localStorage.setItem(TABS_KEY, root.name);
         renderTabs();
         showLoadingSpinner();
         setTimeout(renderActiveRoot, 300);
       };
-      rootTabs.appendChild(btn);
+      rootTabs.appendChild(button);
     });
   }
 
@@ -183,11 +188,11 @@
     if (showLoading) showLoadingSpinner();
 
     const treeEndpoint = refresh ? `${base}/vfs/tree?refresh=true` : `${base}/vfs/tree`;
-    const [treeRes, mp3Res] = await Promise.all([fetchJson(treeEndpoint), fetchJson(`${base}/animethemes/mp3/cache`)]);
+    const [treeResponse, mp3Response] = await Promise.all([fetchJson(treeEndpoint), fetchJson(`${base}/animethemes/mp3/cache`)]);
 
     window._sr.mp3Cache = {};
-    if (mp3Res.isOk) {
-      const data = getData(mp3Res) || {};
+    if (mp3Response.isOk) {
+      const data = getData(mp3Response) || {};
       for (const [key, value] of Object.entries(data)) {
         const parts = (value || "").split("|");
         window._sr.mp3Cache[key.replace(/\\/g, "/").toLowerCase()] = {
@@ -197,8 +202,8 @@
       }
     }
 
-    if (treeRes.isOk) {
-      const roots = getData(treeRes)?.roots || [];
+    if (treeResponse.isOk) {
+      const roots = getData(treeResponse)?.roots || [];
       if (roots.length > 1) {
         const allRoot = buildAllTab(roots);
         displayRoots = [allRoot, ...roots];
@@ -210,6 +215,13 @@
       }
       renderTabs();
       renderActiveRoot();
+      if (pendingJumpSeriesId || pendingJumpAnidbId) {
+        const targetSeriesId = pendingJumpSeriesId;
+        const targetAnidbId = pendingJumpAnidbId;
+        pendingJumpSeriesId = null;
+        pendingJumpAnidbId = null;
+        locateSeriesInTree(targetSeriesId, targetAnidbId);
+      }
     } else if (vfsTree) {
       vfsTree.innerHTML = '<div class="placeholder">Failed to load VFS blueprint.</div>';
     }
@@ -217,6 +229,49 @@
   // #endregion
 
   // #region Tree & Navigation
+  /**
+   * Switches tabs if needed, clears blocking filters, expands the target series node, and scrolls it smoothly into view.
+   * @param {number|null} targetSeriesId - The Shoko Series ID to locate.
+   * @param {number|null} targetAnidbId - The fallback AniDB ID to locate.
+   * @returns {void}
+   */
+  function locateSeriesInTree(targetSeriesId, targetAnidbId) {
+    if (!vfsTree || (!targetSeriesId && !targetAnidbId)) return;
+
+    const matchesTarget = (series) => (targetSeriesId && series.id === targetSeriesId) || (targetAnidbId && series.anidbId === targetAnidbId);
+    const activeRoot = displayRoots.find((rootItem) => rootItem.name === activeTabName);
+    if (!activeRoot || !activeRoot.series.some(matchesTarget)) {
+      const targetRoot = displayRoots.find((rootItem) => rootItem.series.some(matchesTarget));
+      if (!targetRoot) {
+        showToast("VFS Browser: Series not found in current VFS blueprint.", "warning", TOAST_MS);
+        return;
+      }
+      activeTabName = targetRoot.name;
+      localStorage.setItem(TABS_KEY, activeTabName);
+      renderTabs();
+      renderActiveRoot();
+    }
+
+    if (uiFilter && uiFilter.value) {
+      uiFilter.value = "";
+      if (uiFilterClear) uiFilterClear.hidden = true;
+      renderActiveRoot();
+    }
+
+    const selector = targetSeriesId ? `details[data-series-id="${targetSeriesId}"]` : `details[data-anidb-id="${targetAnidbId}"]`;
+    const details = vfsTree.querySelector(selector);
+    if (!details) {
+      showToast("VFS Browser: Series not found in current VFS blueprint.", "warning", TOAST_MS);
+      return;
+    }
+
+    vfsTree.querySelectorAll("details").forEach((other) => {
+      if (other !== details) other.open = false;
+    });
+    details.open = true;
+    if (!details.dataset.rendered) details.dispatchEvent(new Event("toggle"));
+    details.querySelector("summary")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
   /**
    * Helper to construct a file leaf node with source path tooltip.
    * @param {Object} file - The file metadata object.
@@ -460,6 +515,8 @@
         anidbLink +
         `<a href="${base}/metadata/${series.id}?includeChildren=1" class="vfs-link small" target="_blank" rel="noopener noreferrer">[m${series.id}]</a>`;
 
+      details.dataset.seriesId = String(series.id);
+      if (series.anidbId) details.dataset.anidbId = String(series.anidbId);
       summary.appendChild(refresh);
       summary.appendChild(theme);
       summary.insertAdjacentHTML("beforeend", titleHtml);

@@ -88,7 +88,7 @@ public class CollectionService(
 
             var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-            List<string> globalRoots = [.. (videoService.GetAllManagedFolders() ?? []).Select(folder => folder.Path).Where(path => !string.IsNullOrEmpty(path)).Distinct()];
+            List<string> globalRoots = VfsShared.GetManagedFolderPaths(videoService);
 
             string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
             var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -192,12 +192,12 @@ public class CollectionService(
                 var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
 
                 // Map collection rating keys to metadata items to inspect existing poster state
-                var collectionRatingKeyMap = collections.Where(col => !string.IsNullOrEmpty(col.RatingKey)).ToDictionary(col => col.RatingKey!, StringComparer.OrdinalIgnoreCase);
+                var collectionRatingKeyMap = collections.Where(collection => !string.IsNullOrEmpty(collection.RatingKey)).ToDictionary(collection => collection.RatingKey!, StringComparer.OrdinalIgnoreCase);
 
                 // Map collection names to their Plex RatingKeys (IDs)
                 var collectionIdMap = collections
-                    .Where(col => !string.IsNullOrEmpty(col.Title) && int.TryParse(col.RatingKey, out _))
-                    .GroupBy(col => col.Title!, StringComparer.OrdinalIgnoreCase)
+                    .Where(collection => !string.IsNullOrEmpty(collection.Title) && int.TryParse(collection.RatingKey, out _))
+                    .GroupBy(collection => collection.Title!, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(group => group.Key, group => int.Parse(group.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
 
                 // Prune cache keys for collections that no longer exist in this target (e.g. library deleted and rebuilt)
@@ -246,8 +246,10 @@ public class CollectionService(
                     // Skip standard metadata assignment if only refreshing poster assets
                     if (applyAssignment)
                     {
-                        var currentPlexCollections = item.Collection?.Select(colTag => colTag.Tag).Where(tag => !string.IsNullOrEmpty(tag)).ToList() ?? [];
-                        bool alreadyHasCorrect = !string.IsNullOrEmpty(collectionName) && currentPlexCollections.Any(colName => string.Equals(colName, collectionName, StringComparison.OrdinalIgnoreCase));
+                        var currentPlexCollections = item.Collection?.Select(collectionTag => collectionTag.Tag).Where(tag => !string.IsNullOrEmpty(tag)).ToList() ?? [];
+                        bool alreadyHasCorrect =
+                            !string.IsNullOrEmpty(collectionName)
+                            && currentPlexCollections.Any(existingCollectionName => string.Equals(existingCollectionName, collectionName, StringComparison.OrdinalIgnoreCase));
 
                         foreach (var staleName in currentPlexCollections)
                         {
@@ -300,10 +302,7 @@ public class CollectionService(
                             {
                                 var group = metadataService.GetShokoGroupByID(series!.TopLevelGroupID);
                                 var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault() ?? series!;
-                                var desc = TextHelper.GetDescriptionByLanguage(primarySeries, Settings.DescriptionLanguage);
-                                var tmdbDesc = primarySeries.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value
-                                    ?? primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()?.PreferredOverview?.Value;
-                                var summary = TextHelper.SanitizeSummaryWithFallback(desc, tmdbDesc, Settings.SummaryMode);
+                                var summary = TextHelper.GetSanitizedDescription(primarySeries);
                                 await plexCollections.UpdateCollectionMetadataAsync(collectionId, collectionName, summary, target, cancellationToken).ConfigureAwait(false);
                             }
 
@@ -321,7 +320,7 @@ public class CollectionService(
                                             ticks = new FileInfo(imagePath).LastWriteTimeUtc.Ticks;
                                         }
                                         catch { }
-                                        string cacheVal = $"{imagePath}?t={ticks}";
+                                        string cacheValue = $"{imagePath}?t={ticks}";
                                         string cacheKey = $"{target.SectionId}|{collectionId}|{prefix}";
 
                                         // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
@@ -333,7 +332,7 @@ public class CollectionService(
                                                 && !plexCollection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
                                             );
 
-                                        if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
+                                        if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastValue) && string.Equals(lastValue, cacheValue, StringComparison.Ordinal))
                                         {
                                             alreadyUploaded++;
                                             continue;
@@ -341,7 +340,7 @@ public class CollectionService(
 
                                         if (await plexCollections.UploadCollectionImageAsync(collectionId, imagePath, prefix, target, cancellationToken).ConfigureAwait(false))
                                         {
-                                            cache[cacheKey] = cacheVal;
+                                            cache[cacheKey] = cacheValue;
                                             cacheModified = true;
                                             uploaded++;
                                             uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, collectionId));
@@ -369,12 +368,12 @@ public class CollectionService(
                                 }
                                 catch { }
 
-                                string cacheVal = $"{posterPath}?t={ticks}";
+                                string cacheValue = $"{posterPath}?t={ticks}";
                                 string cacheKey = $"{target.SectionId}|sc{collectionId}|{prefix}";
 
                                 bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
 
-                                if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastVal) && string.Equals(lastVal, cacheVal, StringComparison.Ordinal))
+                                if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastValue) && string.Equals(lastValue, cacheValue, StringComparison.Ordinal))
                                 {
                                     alreadyUploaded++;
                                     continue;
@@ -382,7 +381,7 @@ public class CollectionService(
 
                                 if (await plexCollections.UploadCollectionImageAsync(collectionId, posterPath, prefix, target, cancellationToken).ConfigureAwait(false))
                                 {
-                                    cache[cacheKey] = cacheVal;
+                                    cache[cacheKey] = cacheValue;
                                     cacheModified = true;
                                     uploaded++;
                                     uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", collection.Title, collectionId));

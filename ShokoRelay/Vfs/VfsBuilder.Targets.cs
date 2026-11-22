@@ -27,9 +27,7 @@ public partial class VfsBuilder
                 string seasonPath = Path.Combine(seriesPath, VfsHelper.SanitizeName(seasonName));
                 EnsureDirectory(seasonPath, state.Session);
 
-                var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
-                bool hasPeer = state.CoordCounts.TryGetValue(key, out var count) && count > 1;
-                int? versionIndex = (hasPeer && !mapping.PartIndex.HasValue && versionCounters.TryGetValue(key, out var version)) ? (versionCounters[key] = version + 1) - 1 : null;
+                int? versionIndex = GetNextVersionIndex(state, versionCounters, mapping, out bool hasPeer);
 
                 (string Folder, string Subtype) extraSeason = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extraMatch) ? extraMatch : ("Featurettes", "featurette");
 
@@ -59,22 +57,10 @@ public partial class VfsBuilder
                         )
                     );
 
-                var destFilePath = Path.Combine(seasonPath, fileName);
+                var destinationFilePath = Path.Combine(seasonPath, fileName);
 
-                if (state.ExpectedFiles.Contains(destFilePath))
+                if (TryCreateMappedVideoLink(state, sourceInfo.Src, destinationFilePath, rootPath, seasonName, fileName))
                 {
-                    state.Skipped++;
-                    state.SkippedDetails.Add($"[Duplicate Destination] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] -> {destFilePath}");
-                    continue;
-                }
-
-                if (VfsShared.TryCreateLink(sourceInfo.Src, destFilePath, logger, skipExistenceCheck: state.SkipCheck))
-                {
-                    state.Created++;
-                    state.Planned++;
-                    state.ExpectedFiles.Add(destFilePath);
-                    state.OnLink?.Invoke(rootPath, seasonName, fileName, sourceInfo.Src);
-
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     bool isCrossover =
                         mapping.Video?.CrossReferences is { Count: > 1 } xrefs
@@ -83,13 +69,8 @@ public partial class VfsBuilder
                     if (!isCrossover)
                     {
                         bool isPrimary = (mapping.PrimaryEpisode as IShokoEpisode)?.ShokoSeriesID == state.FolderId;
-                        LinkLocalMetadataForFile(state, sourceInfo.Src, seriesPath, seasonPath, destFilePath, rootPath, sourceInfo.ImportRoot, "", seasonName, isPrimary);
+                        LinkLocalMetadataForFile(state, sourceInfo.Src, seriesPath, seasonPath, destinationFilePath, rootPath, sourceInfo.ImportRoot, "", seasonName, isPrimary);
                     }
-                }
-                else
-                {
-                    state.Skipped++;
-                    state.Errors.Add($"Link failed: {sourceInfo.Src} -> {destFilePath}");
                 }
             }
             catch (Exception exception)
@@ -148,9 +129,7 @@ public partial class VfsBuilder
             EnsureDirectory(rootPath, state.Session, true);
             EnsureDirectory(moviePath, state.Session);
 
-            var key = (mapping.Coords.Season, mapping.Coords.Episode, mapping.IsVariation);
-            bool hasPeer = state.CoordCounts.TryGetValue(key, out var count) && count > 1;
-            int? versionIndex = (hasPeer && !mapping.PartIndex.HasValue && movieVersionCounters.TryGetValue(key, out var version)) ? (movieVersionCounters[key] = version + 1) - 1 : null;
+            int? versionIndex = GetNextVersionIndex(state, movieVersionCounters, mapping, out bool hasPeer);
 
             string fileName = VfsHelper.SanitizeName(
                 VfsHelper.BuildMovieFileName(
@@ -164,29 +143,12 @@ public partial class VfsBuilder
                     mapping.IsVariation
                 )
             );
-            string destFilePath = Path.Combine(moviePath, fileName);
+            string destinationFilePath = Path.Combine(moviePath, fileName);
 
-            if (state.ExpectedFiles.Contains(destFilePath))
+            if (TryCreateMappedVideoLink(state, sourceInfo.Src, destinationFilePath, rootPath, $"Movie ❯ {folderName}", fileName))
             {
-                state.Skipped++;
-                state.SkippedDetails.Add($"[Duplicate Destination] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] -> {destFilePath}");
-                continue;
-            }
-
-            if (VfsShared.TryCreateLink(sourceInfo.Src, destFilePath, logger, skipExistenceCheck: state.SkipCheck))
-            {
-                state.Created++;
-                state.Planned++;
-                state.ExpectedFiles.Add(destFilePath);
-                state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", fileName, sourceInfo.Src);
-
                 bool isPrimary = (mapping.PrimaryEpisode as IShokoEpisode)?.ShokoSeriesID == state.FolderId;
-                LinkLocalMetadataForFile(state, sourceInfo.Src, moviePath, moviePath, destFilePath, rootPath, sourceInfo.ImportRoot, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}", isPrimary);
-            }
-            else
-            {
-                state.Skipped++;
-                state.Errors.Add($"Link failed: {sourceInfo.Src} -> {destFilePath}");
+                LinkLocalMetadataForFile(state, sourceInfo.Src, moviePath, moviePath, destinationFilePath, rootPath, sourceInfo.ImportRoot, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}", isPrimary);
             }
         }
 
@@ -216,16 +178,16 @@ public partial class VfsBuilder
                     string extraPath = Path.Combine(moviePath, extraSeason.Folder);
                     if (!Settings.Advanced.DisableVfsGeneration)
                         Directory.CreateDirectory(extraPath);
-                    string destFilePath = Path.Combine(extraPath, fileName);
+                    string destinationFilePath = Path.Combine(extraPath, fileName);
 
-                    if (state.ExpectedFiles.Contains(destFilePath))
+                    if (state.ExpectedFiles.Contains(destinationFilePath))
                         continue;
 
-                    if (VfsShared.TryCreateLink(sourceInfo.Src, destFilePath, logger, skipExistenceCheck: state.SkipCheck))
+                    if (VfsShared.TryCreateLink(sourceInfo.Src, destinationFilePath, logger, skipExistenceCheck: state.SkipCheck))
                     {
                         state.Created++;
                         state.Planned++;
-                        state.ExpectedFiles.Add(destFilePath);
+                        state.ExpectedFiles.Add(destinationFilePath);
                         state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", $"{extraSeason.Folder}/{fileName}", sourceInfo.Src);
                     }
                 }

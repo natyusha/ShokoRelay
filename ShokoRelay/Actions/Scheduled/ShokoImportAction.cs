@@ -2,7 +2,7 @@ using Shoko.Abstractions.Actions;
 using Shoko.Abstractions.ScheduledActions;
 using ShokoRelay.Services;
 
-namespace ShokoRelay.Actions;
+namespace ShokoRelay.Actions.Scheduled;
 
 /// <summary>Scheduled action to trigger Shoko to scan managed folders for new or unrecognized files.</summary>
 public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<ShokoImportAction> logger) : IScheduledAction
@@ -31,7 +31,7 @@ public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<Sh
         token.ThrowIfCancellationRequested();
         progress.Report(0);
         progress.Report(10);
-        await shokoImportService.TriggerImportAsync().ConfigureAwait(false);
+        await shokoImportService.TriggerImportAsync(token, throwOnError: true).ConfigureAwait(false);
         progress.Report(100);
         logger.LogInformation("Scheduled auto import completed.");
     }

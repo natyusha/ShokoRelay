@@ -168,11 +168,7 @@ public class AnimeThemesMp3Generator(
         var excluded = VfsShared.GetIgnoredFolderNames(Settings);
         try
         {
-            var roots = (videoService.GetAllManagedFolders() ?? [])
-                .Select(folder => folder.Path?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(path))
-                .Distinct(VfsShared.PathComparer)
-                .ToList();
+            var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true).Select(path => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).ToList();
 
             var newCache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
 
@@ -263,14 +259,11 @@ public class AnimeThemesMp3Generator(
         var (results, processed, skipped, errors) = (new List<ThemeMp3OperationResult>(), 0, 0, 0);
 
         // Scan recursively for directories that hold videos directly (or via immediate Season/Specials subfolders), pruning ignored/VFS paths before descending
-        string? managedRoot = (videoService.GetAllManagedFolders() ?? [])
-            .Select(folder => folder.Path)
-            .Where(path => !string.IsNullOrWhiteSpace(path))
+        string? managedRoot = VfsShared
+            .GetManagedFolderPaths(videoService)
             .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
             .OrderByDescending(path => path.Length)
-            .FirstOrDefault(path =>
-                string.Equals(root, path, VfsShared.PathComparison) || root.StartsWith(path.EndsWith(Path.DirectorySeparatorChar) ? path : path + Path.DirectorySeparatorChar, VfsShared.PathComparison)
-            );
+            .FirstOrDefault(path => string.Equals(root, path, VfsShared.PathComparison) || VfsShared.IsPathUnderDirectory(root, path));
         string ignoreBaseRoot = managedRoot ?? root;
 
         var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
@@ -302,13 +295,15 @@ public class AnimeThemesMp3Generator(
 
                 bool hasDirectVideo = Directory
                     .EnumerateFiles(dir, "*", SearchOption.TopDirectoryOnly)
-                    .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+                    .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot));
                 return hasDirectVideo
                     || Directory
                         .EnumerateDirectories(dir, "*", SearchOption.TopDirectoryOnly)
-                        .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true))
+                        .Where(subDir =>
+                            VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true)
+                        )
                         .SelectMany(subDir => Directory.EnumerateFiles(subDir, "*", SearchOption.TopDirectoryOnly))
-                        .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+                        .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot));
             })
             .ToList();
 
@@ -492,7 +487,7 @@ public class AnimeThemesMp3Generator(
                         slugDisplay = $"{(basePart.StartsWith("OP", StringComparison.OrdinalIgnoreCase) ? "Opening" : "Ending")} {basePart[2..]}".Trim() + AnimeThemesHelper.FormatSlugTag(suffixPart);
                         songTitle = themeDetail.Song?.Title?.Romaji ?? "";
 
-                        var artists = themeDetail.Song?.Performances?.Select(perf => perf.Artist).ToList();
+                        var artists = themeDetail.Song?.Performances?.Select(performance => performance.Artist).ToList();
                         artist =
                             artists?.Count > 1 ? string.Join("; ", artists.Select(artistItem => artistItem?.Name?.Main).Where(name => !string.IsNullOrEmpty(name))) : artists?.FirstOrDefault()?.Name?.Main ?? "";
 
@@ -611,7 +606,7 @@ public class AnimeThemesMp3Generator(
         var overriddenOps = new ConcurrentBag<string>();
         var overriddenEds = new ConcurrentBag<string>();
         var errors = new ConcurrentBag<string>();
-        var (processed, fixes) = (0, 0);
+        var (processed, fixedCount) = (0, 0);
         int cacheUpdated = 0;
 
         var cache = GetCachedThemeMp3s();
@@ -645,7 +640,7 @@ public class AnimeThemesMp3Generator(
                     {
                         slug = AnimeThemesHelper.StandardizeSlug(rawSlug);
                         SetCacheEntry(folder, $"{slug}|{upgrade}");
-                        Interlocked.Increment(ref fixes);
+                        Interlocked.Increment(ref fixedCount);
                         Interlocked.Exchange(ref cacheUpdated, 1);
                     }
                 }
@@ -659,7 +654,7 @@ public class AnimeThemesMp3Generator(
                 bool isOp1 = AnimeThemesHelper.IsOp1(slug);
                 bool isEd = AnimeThemesHelper.IsEd(slug);
                 bool isEd1 = AnimeThemesHelper.IsEd1(slug);
-                int currentSlugNum = AnimeThemesHelper.ExtractSlugNumber(slug);
+                int currentSlugNumber = AnimeThemesHelper.ExtractSlugNumber(slug);
 
                 if (isOp && !isOp1)
                     overriddenOps.Add($"{folder} | {slug}");
@@ -691,8 +686,8 @@ public class AnimeThemesMp3Generator(
                         int? firstOpNumber = firstOpTheme?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(firstOpTheme.Slug) : null;
                         int? firstEdNumber = firstEdTheme?.Slug != null ? AnimeThemesHelper.ExtractSlugNumber(firstEdTheme.Slug) : null;
 
-                        bool hasOpUpgrade = firstOpTheme != null && (isEd || (isOp && firstOpNumber.HasValue && firstOpNumber.Value < currentSlugNum));
-                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && firstOpTheme == null && firstEdTheme != null && firstEdNumber.HasValue && firstEdNumber.Value < currentSlugNum;
+                        bool hasOpUpgrade = firstOpTheme != null && (isEd || (isOp && firstOpNumber.HasValue && firstOpNumber.Value < currentSlugNumber));
+                        bool hasEdUpgrade = !isOp && isEd && !isEd1 && firstOpTheme == null && firstEdTheme != null && firstEdNumber.HasValue && firstEdNumber.Value < currentSlugNumber;
 
                         if (hasOpUpgrade || hasEdUpgrade)
                         {
@@ -725,8 +720,8 @@ public class AnimeThemesMp3Generator(
             lock (_cacheLock)
                 SaveCacheToFile();
 
-        logger.LogInformation("AnimeThemes MP3: Audit complete -> {Processed} non-default themes checked, {Upgrades} upgrades found, {Fixes} missing slugs fixed", processed, upgrades.Count, fixes);
-        return new ThemeMp3AuditResult(processed, upgrades.Count, fixes, [.. upgrades], [.. overriddenOps], [.. overriddenEds], [.. errors]);
+        logger.LogInformation("AnimeThemes MP3: Audit complete -> {Processed} non-default themes checked, {Upgrades} upgrades found, {Fixes} missing slugs fixed", processed, upgrades.Count, fixedCount);
+        return new ThemeMp3AuditResult(processed, upgrades.Count, fixedCount, [.. upgrades], [.. overriddenOps], [.. overriddenEds], [.. errors]);
     }
 
     #endregion

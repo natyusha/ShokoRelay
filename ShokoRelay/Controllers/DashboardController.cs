@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Frozen;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
@@ -32,7 +33,7 @@ namespace ShokoRelay.Controllers;
 [RelayAdminAuthorize]
 [Route(ShokoRelayConstants.BasePath)]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
-public class DashboardController(
+public partial class DashboardController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
     PlexClient plexLibrary,
@@ -47,6 +48,14 @@ public class DashboardController(
     #region Setup
 
     private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
+
+    private static readonly FrozenDictionary<string, string> s_templateConstants = typeof(ShokoRelayConstants)
+        .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+        .Where(field => field.IsLiteral && !field.IsInitOnly)
+        .ToFrozenDictionary(field => field.Name, field => field.GetValue(null)?.ToString() ?? string.Empty, StringComparer.Ordinal);
+
+    [GeneratedRegex(@"\{\{\s?(?<name>[A-Za-z0-9_]+)\s?\}\}")]
+    private static partial Regex TemplatePlaceholderRegex();
 
     #endregion
 
@@ -161,12 +170,10 @@ public class DashboardController(
             return NotFound();
 
         string dashboardDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "dashboard"));
-        string dashboardDirWithSep = dashboardDir.EndsWith(Path.DirectorySeparatorChar) ? dashboardDir : dashboardDir + Path.DirectorySeparatorChar;
-        string safePath = VfsShared.NormalizeSeparators(path);
-        string requested = Path.GetFullPath(Path.Combine(dashboardDir, safePath));
+        string requested = Path.GetFullPath(Path.Combine(dashboardDir, VfsShared.NormalizeSeparators(path)));
 
         // Resolve the MIME content type for a given file path, prioritizing .cshtml templates
-        return !requested.StartsWith(dashboardDirWithSep, VfsShared.PathComparison) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
+        return !VfsShared.IsPathUnderDirectory(requested, dashboardDir) || !IoFile.Exists(requested) || requested.EndsWith(".cshtml", StringComparison.OrdinalIgnoreCase)
             ? NotFound()
             : PhysicalFile(requested, s_contentTypeProvider.TryGetContentType(requested, out var contentType) ? contentType : "application/octet-stream");
     }
@@ -270,13 +277,13 @@ public class DashboardController(
         try
         {
             string cssContent = string.Empty;
-            if (webThemeService.GetTheme(themeId) is { } themeDef && (themeDef.Values.Count > 0 || !string.IsNullOrWhiteSpace(themeDef.CssContent)))
+            if (webThemeService.GetTheme(themeId) is { } themeDefinition && (themeDefinition.Values.Count > 0 || !string.IsNullOrWhiteSpace(themeDefinition.CssContent)))
             {
                 var valuesCss =
-                    themeDef.Values.Count > 0
-                        ? $":root {{\n{string.Join("\n", themeDef.Values.Select(variable => $"  --{(variable.Key.StartsWith("--", StringComparison.Ordinal) ? variable.Key[2..] : variable.Key)}: {variable.Value};"))}\n}}\n"
+                    themeDefinition.Values.Count > 0
+                        ? $":root {{\n{string.Join("\n", themeDefinition.Values.Select(variable => $"  --{(variable.Key.StartsWith("--", StringComparison.Ordinal) ? variable.Key[2..] : variable.Key)}: {variable.Value};"))}\n}}\n"
                         : string.Empty;
-                var rawCss = themeDef.CssContent?.Trim() ?? string.Empty;
+                var rawCss = themeDefinition.CssContent?.Trim() ?? string.Empty;
                 string wrappedCss = rawCss;
                 if (!string.IsNullOrEmpty(rawCss))
                 {
@@ -376,17 +383,13 @@ public class DashboardController(
             return BadRequest(new { status = "error", message = "fileName is required" });
 
         string logsDir = Path.GetFullPath(ConfigProvider.ReportsDirectory);
-        string logsDirWithSep = logsDir.EndsWith(Path.DirectorySeparatorChar) ? logsDir : logsDir + Path.DirectorySeparatorChar;
         string safeFileName = Path.GetFileName(fileName);
         string requested = Path.GetFullPath(Path.Combine(logsDir, safeFileName));
 
-        if (!requested.StartsWith(logsDirWithSep, VfsShared.PathComparison) || !safeFileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
+        if (!VfsShared.IsPathUnderDirectory(requested, logsDir) || !safeFileName.EndsWith(".report", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(requested))
             return NotFound(new { status = "error", message = "log not found" });
 
-        Response.Headers["Cache-Control"] = "no-cache, no-store, must-revalidate";
-        Response.Headers["Pragma"] = "no-cache";
-        Response.Headers["Expires"] = "0";
-
+        SetNoCacheHeaders();
         return PhysicalFile(requested, "text/plain; charset=utf-8");
     }
 
@@ -400,18 +403,13 @@ public class DashboardController(
     private IActionResult ServePage(string fileName)
     {
         string dashboardDir = Path.GetFullPath(Path.Combine(ConfigProvider.PluginDirectory, "dashboard"));
-        string dashboardDirWithSep = dashboardDir.EndsWith(Path.DirectorySeparatorChar) ? dashboardDir : dashboardDir + Path.DirectorySeparatorChar;
         string requested = Path.GetFullPath(Path.Combine(dashboardDir, fileName));
 
-        if (!requested.StartsWith(dashboardDirWithSep, VfsShared.PathComparison) || !IoFile.Exists(requested))
+        if (!VfsShared.IsPathUnderDirectory(requested, dashboardDir) || !IoFile.Exists(requested))
             return NotFound();
 
-        var html = IoFile.ReadAllText(requested);
-
         // Replace {{ConstantName}} placeholders with values from ShokoRelayConstants
-        var fields = typeof(ShokoRelayConstants).GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy).Where(field => field.IsLiteral && !field.IsInitOnly);
-        foreach (var field in fields)
-            html = Regex.Replace(html, $@"\{{\{{\s?{field.Name}\s?\}}}}", field.GetValue(null)?.ToString() ?? "");
+        var html = TemplatePlaceholderRegex().Replace(IoFile.ReadAllText(requested), match => s_templateConstants.TryGetValue(match.Groups["name"].Value, out var constantValue) ? constantValue : match.Value);
 
         if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
             html = html.Replace("<head>", $"<head>\n    <base href=\"{WebUtility.HtmlEncode($"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/")}\">", StringComparison.OrdinalIgnoreCase);

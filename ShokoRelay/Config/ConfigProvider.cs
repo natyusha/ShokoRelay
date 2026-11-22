@@ -96,29 +96,6 @@ public partial class ConfigProvider : IDisposable
         }
     }
 
-    /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
-    /// <remarks>
-    ///   Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart.
-    ///   Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response.
-    /// </remarks>
-    /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
-    private string? DetectRequestBaseUrl()
-    {
-        if (_httpContextAccessor?.HttpContext is not { } httpContext)
-            return null;
-
-        var request = httpContext.Request;
-
-        // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
-        var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
-        if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
-            scheme = request.IsHttps ? "https" : request.Scheme;
-
-        var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
-        var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
-        return $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
-    }
-
     /// <summary>Creates a new ConfigProvider using the specified paths provided by the host application.</summary>
     /// <param name="applicationPaths">Shoko application paths.</param>
     /// <param name="pluginPaths">Optional plugin-specific paths resolved by Shoko Server.</param>
@@ -155,7 +132,7 @@ public partial class ConfigProvider : IDisposable
     private static FileSystemWatcher SetupWatcher(string path, Func<bool> shouldHandle, Action onChanged)
     {
         var watcher = new FileSystemWatcher(Path.GetDirectoryName(path)!, Path.GetFileName(path)) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime };
-        void HandleEvent(object _, FileSystemEventArgs __)
+        void HandleEvent(object sender, FileSystemEventArgs eventArgs)
         {
             if (shouldHandle())
                 onChanged();
@@ -222,8 +199,8 @@ public partial class ConfigProvider : IDisposable
         element.ValueKind switch
         {
             JsonValueKind.String => element.GetString()!,
-            JsonValueKind.Number => element.TryGetInt32(out var intVal) ? intVal
-            : element.TryGetInt64(out var longVal) ? longVal
+            JsonValueKind.Number => element.TryGetInt32(out var intValue) ? intValue
+            : element.TryGetInt64(out var longValue) ? longValue
             : element.GetDouble(),
             JsonValueKind.True => true,
             JsonValueKind.False => false,
@@ -236,24 +213,6 @@ public partial class ConfigProvider : IDisposable
 
     #region Settings Management
 
-    /// <summary>Reads a file with a brief retry mechanism to bypass transient file sharing locks.</summary>
-    /// <param name="path">The file path to read.</param>
-    /// <returns>The file contents.</returns>
-    private static string ReadFileWithRetry(string path)
-    {
-        for (int attempt = 0; attempt < 3; attempt++)
-            try
-            {
-                return File.ReadAllText(path);
-            }
-            catch (IOException)
-            {
-                if (attempt == 2)
-                    throw;
-                Thread.Sleep(50);
-            }
-        return string.Empty;
-    }
 
     /// <summary>Return the current settings, loading from disk if not already cached.</summary>
     /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
@@ -404,285 +363,6 @@ public partial class ConfigProvider : IDisposable
 
     #endregion
 
-    #region Plex Secrets & Tokens
-
-    /// <summary>Data structure representing saved Plex tokens and server discovery details on disk.</summary>
-    private sealed class TokenFile
-    {
-        /// <summary>The saved Plex authentication token.</summary>
-        public string? Token { get; set; }
-
-        /// <summary>The unique client identifier for this installation.</summary>
-        public string? ClientIdentifier { get; set; }
-
-        /// <summary>The cached username of the Plex account admin.</summary>
-        public string? AdminUsername { get; set; }
-
-        /// <summary>List of discovered Plex servers.</summary>
-        public List<PlexAvailableServer>? Servers { get; set; }
-
-        /// <summary>List of discovered Plex libraries.</summary>
-        public List<PlexAvailableLibrary>? Libraries { get; set; }
-
-        /// <summary>The auto-detected base URL of the Shoko server.</summary>
-        public string? AutoShokoServerUrl { get; set; }
-    }
-
-    /// <summary>Deletes the Plex token/secrets file from disk.</summary>
-    public void DeleteTokenFile()
-    {
-        try
-        {
-            lock (_settingsLock)
-            {
-                Volatile.Write(ref _suppressTokenWatcherUntil, Environment.TickCount64 + 500);
-                if (File.Exists(_tokenPath))
-                    File.Delete(_tokenPath);
-                _cachedTokenFile = null;
-                _cachedServers = null;
-                _cachedAdminUsername = null;
-            }
-        }
-        catch (Exception exception)
-        {
-            _logger?.LogWarning(exception, "Config: Failed to delete token file");
-        }
-    }
-
-    /// <summary>Reads and deserializes the Plex token secrets file from disk.</summary>
-    /// <returns>A populated <see cref="TokenFile"/> instance or a new empty structure on failure.</returns>
-    private TokenFile ReadTokenFile()
-    {
-        lock (_settingsLock)
-        {
-            if (_cachedTokenFile != null)
-                return _cachedTokenFile;
-            try
-            {
-                return _cachedTokenFile = File.Exists(_tokenPath)
-                    ? JsonSerializer.Deserialize<TokenFile>(ReadFileWithRetry(_tokenPath), new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new()
-                    : new();
-            }
-            catch
-            {
-                return new();
-            }
-        }
-    }
-
-    /// <summary>Serializes and writes updated Plex token and discovery details to disk.</summary>
-    /// <param name="token">Plex token.</param>
-    /// <param name="clientIdentifier">Client identifier.</param>
-    /// <param name="adminUsername">Admin username.</param>
-    /// <param name="servers">Discovered servers list.</param>
-    /// <param name="libraries">Discovered libraries list.</param>
-    /// <param name="autoUrl">Auto-detected Shoko Server URL.</param>
-    private void WriteTokenFile(string? token, string? clientIdentifier, string? adminUsername, List<PlexAvailableServer>? servers = null, List<PlexAvailableLibrary>? libraries = null, string? autoUrl = null)
-    {
-        var tokenFile = new TokenFile
-        {
-            Token = token ?? "",
-            ClientIdentifier = clientIdentifier ?? "",
-            AdminUsername = adminUsername ?? "",
-            Servers = servers ?? [],
-            Libraries = libraries ?? [],
-            AutoShokoServerUrl = autoUrl ?? "",
-        };
-        lock (_settingsLock)
-        {
-            Volatile.Write(ref _suppressTokenWatcherUntil, Environment.TickCount64 + 500);
-            VfsShared.WriteTextAtomic(_tokenPath, JsonSerializer.Serialize(tokenFile, s_options));
-            _cachedTokenFile = tokenFile;
-            _cachedServers = tokenFile.Servers;
-            _cachedAdminUsername = tokenFile.AdminUsername;
-        }
-    }
-
-    /// <summary>Retrieves the saved Plex authentication token.</summary>
-    /// <returns>The Plex authentication token string.</returns>
-    public string GetPlexToken() => ReadTokenFile().Token ?? "";
-
-    /// <summary>Retrieves or generates the unique Plex client identifier.</summary>
-    /// <returns>The Plex client identifier string.</returns>
-    public string GetPlexClientIdentifier()
-    {
-        lock (_settingsLock)
-        {
-            var tokenFile = ReadTokenFile();
-            if (string.IsNullOrWhiteSpace(tokenFile.ClientIdentifier))
-            {
-                tokenFile.ClientIdentifier = Guid.NewGuid().ToString("N");
-                WriteTokenFile(tokenFile.Token, tokenFile.ClientIdentifier, tokenFile.AdminUsername, tokenFile.Servers, tokenFile.Libraries, tokenFile.AutoShokoServerUrl);
-            }
-            return tokenFile.ClientIdentifier;
-        }
-    }
-
-    /// <summary>Retrieves the list of discovered Plex servers from the token file.</summary>
-    /// <returns>A list of <see cref="PlexAvailableServer"/> instances.</returns>
-    public List<PlexAvailableServer> GetPlexDiscoveredServers()
-    {
-        lock (_settingsLock)
-            return _cachedServers ??= ReadTokenFile().Servers ?? [];
-    }
-
-    /// <summary>Retrieves the list of discovered Plex libraries from the token file.</summary>
-    /// <returns>A list of <see cref="PlexAvailableLibrary"/> instances.</returns>
-    public List<PlexAvailableLibrary> GetPlexDiscoveredLibraries() => ReadTokenFile().Libraries ?? [];
-
-    /// <summary>Retrieves the cached Plex admin username.</summary>
-    /// <returns>The admin username, or null if not yet discovered.</returns>
-    public string? GetAdminUsername()
-    {
-        lock (_settingsLock)
-            return _cachedAdminUsername ??= ReadTokenFile().AdminUsername;
-    }
-
-    /// <summary>Refreshes the admin username from the Plex API and updates the local storage.</summary>
-    /// <param name="auth">Plex authentication service.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the refresh operation.</returns>
-    public async Task RefreshAdminUsername(PlexAuth auth, CancellationToken cancellationToken)
-    {
-        if (await auth.GetAccountInfoAsync(GetPlexToken(), cancellationToken) is { } info)
-        {
-            _cachedAdminUsername = info.Title ?? info.Username;
-            UpdatePlexTokenInfo(adminName: _cachedAdminUsername);
-        }
-    }
-
-    /// <summary>Updates specific fields in the Plex token/secrets file.</summary>
-    /// <param name="token">Optional new Plex token.</param>
-    /// <param name="clientIdentifier">Optional new client identifier.</param>
-    /// <param name="adminName">Optional new admin username.</param>
-    /// <param name="servers">Optional list of discovered servers.</param>
-    /// <param name="libraries">Optional list of discovered libraries.</param>
-    /// <param name="autoUrl">Optional auto-detected Shoko Server URL.</param>
-    public void UpdatePlexTokenInfo(
-        string? token = null,
-        string? clientIdentifier = null,
-        string? adminName = null,
-        List<PlexAvailableServer>? servers = null,
-        List<PlexAvailableLibrary>? libraries = null,
-        string? autoUrl = null
-    )
-    {
-        lock (_settingsLock)
-        {
-            var existing = ReadTokenFile();
-            WriteTokenFile(
-                token ?? existing.Token,
-                clientIdentifier ?? existing.ClientIdentifier,
-                adminName ?? existing.AdminUsername,
-                servers ?? existing.Servers,
-                libraries ?? existing.Libraries,
-                autoUrl ?? existing.AutoShokoServerUrl
-            );
-        }
-    }
-
-    /// <summary>Checks if the provided server UUID matches a managed server known to the provider.</summary>
-    /// <param name="uuid">The server UUID to check.</param>
-    /// <returns>True if the server is in the discovered list.</returns>
-    public bool IsManagedServer(string? uuid) => !string.IsNullOrWhiteSpace(uuid) && GetPlexDiscoveredServers().Any(server => string.Equals(server.Id, uuid, StringComparison.OrdinalIgnoreCase));
-
-    #endregion
-
-    #region User Management
-
-    /// <summary>Represents a configured mapping between a Shoko username and one or more Plex users.</summary>
-    /// <param name="ShokoUser">The target Shoko username.</param>
-    /// <param name="PlexUsers">The Plex usernames and optional 4-digit PINs assigned to this Shoko user.</param>
-    public sealed record AdvancedUserMappingEntry(string ShokoUser, List<(string PlexUser, string? Pin)> PlexUsers);
-
-    /// <summary>Parse a comma-separated string of Plex user entries, optionally containing 4-digit PINs.</summary>
-    /// <param name="raw">The raw configuration string to parse.</param>
-    /// <returns>A list of tuples containing the username and optional PIN.</returns>
-    public static List<(string Name, string? Pin)> ParseExtraPlexUsers(string? raw) =>
-        [
-            .. (raw ?? "")
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(userEntry => userEntry.Split(';', 2))
-                .Where(parts => parts.Length > 0 && !string.IsNullOrWhiteSpace(parts[0]))
-                .Select(parts => (Name: parts[0].Trim(), Pin: (parts.Length > 1 && parts[1].Trim().Length == 4 && parts[1].Trim().All(char.IsDigit)) ? parts[1].Trim() : null)),
-        ];
-
-    /// <summary>Parses a pipe-delimited string of Shoko-to-Plex user mappings (<c>ShokoUser,PlexUser1;PIN,PlexUser2|ShokoUser2,PlexUser3</c>).</summary>
-    /// <param name="raw">The raw configuration string to parse.</param>
-    /// <returns>A list of parsed <see cref="AdvancedUserMappingEntry"/> records.</returns>
-    public static List<AdvancedUserMappingEntry> ParseAdvancedUserMappings(string? raw)
-    {
-        var entries = new List<AdvancedUserMappingEntry>();
-        var seenPlex = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var segment in (raw ?? "").Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            var tokens = segment.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            if (tokens.Length < 2 || string.IsNullOrWhiteSpace(tokens[0]))
-                continue;
-
-            string shokoUser = tokens[0].Trim();
-            var plexUsers = new List<(string PlexUser, string? Pin)>();
-            for (int tokenIdx = 1; tokenIdx < tokens.Length; tokenIdx++)
-            {
-                var parts = tokens[tokenIdx].Split(';', 2);
-                string plexUser = parts[0].Trim();
-                if (string.IsNullOrWhiteSpace(plexUser) || !seenPlex.Add(plexUser))
-                    continue;
-
-                string? pin = (parts.Length > 1 && parts[1].Trim().Length == 4 && parts[1].Trim().All(char.IsDigit)) ? parts[1].Trim() : null;
-                plexUsers.Add((plexUser, pin));
-            }
-
-            if (plexUsers.Count > 0)
-                entries.Add(new AdvancedUserMappingEntry(shokoUser, plexUsers));
-        }
-
-        return entries;
-    }
-
-    /// <summary>Returns the parsed and cached list of extra Plex users configured in settings.</summary>
-    /// <returns>A list of extra user name and PIN tuples.</returns>
-    public List<(string Name, string? Pin)> GetExtraPlexUserEntries()
-    {
-        lock (_settingsLock)
-            return _cachedExtraUsers ??= ParseExtraPlexUsers(GetSettings().Automation.ExtraPlexUsers);
-    }
-
-    /// <summary>Returns the parsed and cached list of Shoko-to-Plex user mappings configured in settings.</summary>
-    /// <returns>A list of <see cref="AdvancedUserMappingEntry"/> records.</returns>
-    public List<AdvancedUserMappingEntry> GetAdvancedUserMappingEntries()
-    {
-        lock (_settingsLock)
-            return _cachedAdvancedUserMappings ??= ParseAdvancedUserMappings(GetSettings().Automation.AdvancedUserMappings);
-    }
-
-    /// <summary>Resolves the mapped Shoko username for a given Plex user, checking both literal names and the Plex admin alias.</summary>
-    /// <param name="plexUser">The Plex username or <c>admin</c>.</param>
-    /// <param name="adminUsername">Optional resolved Plex admin username.</param>
-    /// <param name="isOwner">Whether the caller represents the Plex server owner/admin.</param>
-    /// <returns>The mapped Shoko username, or <c>null</c> if unmapped.</returns>
-    public string? ResolveMappedShokoUsername(string plexUser, string? adminUsername = null, bool isOwner = false)
-    {
-        foreach (var group in GetAdvancedUserMappingEntries())
-        foreach (var (mappedPlex, _) in group.PlexUsers)
-        {
-            if ((isOwner || !string.Equals(mappedPlex, "admin", StringComparison.OrdinalIgnoreCase)) && string.Equals(mappedPlex, plexUser, StringComparison.OrdinalIgnoreCase))
-                return group.ShokoUser;
-            if (
-                isOwner
-                && (
-                    string.Equals(mappedPlex, "admin", StringComparison.OrdinalIgnoreCase)
-                    || (!string.IsNullOrWhiteSpace(adminUsername) && string.Equals(mappedPlex, adminUsername, StringComparison.OrdinalIgnoreCase))
-                )
-            )
-                return group.ShokoUser;
-        }
-        return null;
-    }
-
-    #endregion
-
     #region Normalize & Validate
 
     /// <summary>Ensures the standard VFS root and the Movie VFS root do not collide.</summary>
@@ -744,10 +424,10 @@ public partial class ConfigProvider : IDisposable
     /// <param name="settings">The relay configuration instance to normalize.</param>
     private static void NormalizeCsvFields(RelayConfig settings)
     {
-        static string Norm(string? raw, char separator) =>
-            string.Join(separator + " ", (raw ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
+        static string NormalizeDelimitedList(string? rawInput, char separator) =>
+            string.Join(separator + " ", (rawInput ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
 
-        settings.Automation.ExtraPlexUsers = Norm(settings.Automation.ExtraPlexUsers, ',');
+        settings.Automation.ExtraPlexUsers = NormalizeDelimitedList(settings.Automation.ExtraPlexUsers, ',');
         settings.Automation.AdvancedUserMappings = string.Join(
             "|",
             ParseAdvancedUserMappings(settings.Automation.AdvancedUserMappings)
@@ -787,8 +467,8 @@ public partial class ConfigProvider : IDisposable
         {
             if (prop.PropertyType == typeof(string) && string.IsNullOrWhiteSpace(prop.GetValue(objectValue) as string) && prop.GetCustomAttribute<DefaultValueAttribute>() is { } defaultAttr)
                 prop.SetValue(objectValue, defaultAttr.Value);
-            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && prop.GetValue(objectValue) is { } nestedObj)
-                ApplyDefaultValues(nestedObj);
+            else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IDictionary).IsAssignableFrom(prop.PropertyType) && prop.GetValue(objectValue) is { } nestedObject)
+                ApplyDefaultValues(nestedObject);
         }
     }
 
@@ -811,25 +491,71 @@ public partial class ConfigProvider : IDisposable
             var range = prop.GetCustomAttribute<RangeAttribute>();
             if (range != null && prop.PropertyType == typeof(int))
             {
-                int currentVal = (int)prop.GetValue(objectValue)!;
+                int currentValue = (int)prop.GetValue(objectValue)!;
                 int min = Convert.ToInt32(range.Minimum);
                 int max = Convert.ToInt32(range.Maximum);
 
-                int clampedVal = Math.Clamp(currentVal, min, max);
-                if (currentVal != clampedVal)
+                int clampedValue = Math.Clamp(currentValue, min, max);
+                if (currentValue != clampedValue)
                 {
-                    prop.SetValue(objectValue, clampedVal);
-                    logger?.LogTrace("Config: Clamped {Property} from {Original} to {Clamped}", prop.Name, currentVal, clampedVal);
+                    prop.SetValue(objectValue, clampedValue);
+                    logger?.LogTrace("Config: Clamped {Property} from {Original} to {Clamped}", prop.Name, currentValue, clampedValue);
                 }
             }
             // Recurse into nested config classes (AutomationConfig, AdvancedConfig, etc.)
             else if (prop.PropertyType.IsClass && prop.PropertyType != typeof(string) && !typeof(IEnumerable).IsAssignableFrom(prop.PropertyType))
             {
-                var subObj = prop.GetValue(objectValue);
-                if (subObj != null)
-                    NormalizeSettings(subObj, logger);
+                var nestedObject = prop.GetValue(objectValue);
+                if (nestedObject != null)
+                    NormalizeSettings(nestedObject, logger);
             }
         }
+    }
+
+    #endregion
+
+    #region Internal Helpers
+
+    /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
+    /// <remarks>
+    ///   Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart.
+    ///   Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response.
+    /// </remarks>
+    /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
+    public string? DetectRequestBaseUrl()
+    {
+        if (_httpContextAccessor?.HttpContext is not { } httpContext)
+            return null;
+
+        var request = httpContext.Request;
+
+        // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
+        var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
+        if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+            scheme = request.IsHttps ? "https" : request.Scheme;
+
+        var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
+        var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
+        return $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
+    }
+
+    /// <summary>Reads a file with a brief retry mechanism to bypass transient file sharing locks.</summary>
+    /// <param name="path">The file path to read.</param>
+    /// <returns>The file contents.</returns>
+    private static string ReadFileWithRetry(string path)
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+            try
+            {
+                return File.ReadAllText(path);
+            }
+            catch (IOException)
+            {
+                if (attempt == 2)
+                    throw;
+                Thread.Sleep(50);
+            }
+        return string.Empty;
     }
 
     #endregion

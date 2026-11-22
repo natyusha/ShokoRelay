@@ -66,7 +66,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             logger.LogInformation("ImageSyncService: Starting image synchronization (local collection/series artwork{Details})...", syncDetails);
 
-            var prefIdCache = new ConcurrentDictionary<int, string?>();
+            var preferredOrderingIdCache = new ConcurrentDictionary<int, string?>();
             var errorsBag = new ConcurrentBag<string>();
             var uploadedBag = new ConcurrentBag<string>();
             var (processed, uploaded, skipped, errors) = (0, 0, 0, 0);
@@ -85,7 +85,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
             // Sync Episode Thumbnails (Local & Plex)
             if (targets.Count > 0)
-                await SyncEpisodeThumbnailsAsync(targets, allowedSet, prefIdCache, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
+                await SyncEpisodeThumbnailsAsync(targets, allowedSet, preferredOrderingIdCache, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
 
             // Sync Collection Posters
             await SyncCollectionPostersAsync(allSeries, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
@@ -122,7 +122,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 foreach (var xref in xrefs)
                 {
                     imageManager.RemoveImageCrossReference(xref);
-                    if (imageManager.GetImageByID(xref.ImageID) is { } oldImg && oldImg.GetCrossReferences().Count == 0 && await imageManager.PurgeImage(oldImg).ConfigureAwait(false))
+                    if (imageManager.GetImageByID(xref.ImageID) is { } oldImage && oldImage.GetCrossReferences().Count == 0 && await imageManager.PurgeImage(oldImage).ConfigureAwait(false))
                         purgedCount++;
                 }
 
@@ -146,7 +146,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <summary>Scans Plex sections to locate, upload, and prefer episode or movie thumbnails.</summary>
     /// <param name="targets">Configured Plex library targets.</param>
     /// <param name="allowedSet">Optional filtered series IDs.</param>
-    /// <param name="prefIdCache">Cache dictionary for preferred TMDB ordering IDs.</param>
+    /// <param name="preferredOrderingIdCache">Cache dictionary for preferred TMDB ordering IDs.</param>
     /// <param name="errorsBag">Bag to collect error messages and missing thumbnail diagnostics.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
@@ -154,7 +154,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     private async Task SyncEpisodeThumbnailsAsync(
         IReadOnlyList<PlexLibraryTarget> targets,
         HashSet<int>? allowedSet,
-        ConcurrentDictionary<int, string?> prefIdCache,
+        ConcurrentDictionary<int, string?> preferredOrderingIdCache,
         ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
@@ -203,8 +203,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         coords = mappedCoords.Value;
                     else
                     {
-                        string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
-                        coords = PlexMapping.GetPlexCoordinates(episode, prefId);
+                        string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
+                        coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId);
                     }
 
                     bool isMovie = target.LibraryType == PlexLibraryType.Movie;
@@ -247,9 +247,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             && EnforceTmdbNumbering
                             && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEpisodes
                             && episode.Series != null
-                            && prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) is var prefId
+                            && MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) is var preferredOrderingId
                             && tmdbEpisodes.Any(tmdbEpisode =>
-                                PlexMapping.GetOrderingCoords(tmdbEpisode, prefId) is var (tmdbSeason, tmdbEpNum) && tmdbSeason == item.ParentIndex.Value && tmdbEpNum == item.Index.Value
+                                PlexMapping.GetOrderingCoords(tmdbEpisode, preferredOrderingId) is var (tmdbSeason, tmdbEpisodeNumber)
+                                && tmdbSeason == item.ParentIndex.Value
+                                && tmdbEpisodeNumber == item.Index.Value
                             )
                         )
                             isMismatch = false;
@@ -384,16 +386,16 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 )
                 .ToList();
 
-            var orphanedEpIds = allEpisodeXrefs.Select(xref => int.TryParse(xref.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.ContainsKey(id)).Distinct().ToList();
+            var orphanedEpisodeIds = allEpisodeXrefs.Select(xref => int.TryParse(xref.EntityID.ID, out int id) ? id : 0).Where(id => id > 0 && !processedInRun.ContainsKey(id)).Distinct().ToList();
 
-            foreach (var episodeId in orphanedEpIds)
+            foreach (var episodeId in orphanedEpisodeIds)
             {
                 var episode = metadataService.GetShokoEpisodeByID(episodeId);
                 if (episode == null)
                     continue;
 
-                string? prefId = episode.Series != null ? prefIdCache.GetOrAdd(episode.ShokoSeriesID, _ => MapHelper.GetPreferredTmdbOrderingId(episode.Series)) : null;
-                var coords = PlexMapping.GetPlexCoordinates(episode, prefId, metadataService: metadataService);
+                string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
+                var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
                 string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
                 var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsStr}";
 
@@ -406,13 +408,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
     /// <summary>Scans local collection posters to upload and mark them as preferred in Shoko.</summary>
     /// <param name="allSeries">List of all Shoko series metadata.</param>
-    /// <param name="errsBag">Bag to collect error messages.</param>
+    /// <param name="errorsBag">Bag to collect error messages.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     private async Task SyncCollectionPostersAsync(
         List<IShokoSeries> allSeries,
-        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
         CancellationToken cancellationToken
@@ -435,7 +437,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     $"group {group.PreferredTitle?.Value} [{group.LocalID}]",
                     $"[Collection Poster] {group.PreferredTitle?.Value}",
                     uploadedBag,
-                    errsBag
+                    errorsBag
                 )
                 .ConfigureAwait(false);
 
@@ -445,13 +447,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
     /// <summary>Scans local series artwork (posters, backdrops, logos) to upload and mark them as preferred in Shoko.</summary>
     /// <param name="allSeries">List of all Shoko series metadata.</param>
-    /// <param name="errsBag">Bag to collect error messages.</param>
+    /// <param name="errorsBag">Bag to collect error messages.</param>
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     private async Task SyncLocalSeriesImagesAsync(
         List<IShokoSeries> allSeries,
-        ConcurrentBag<string> errsBag,
+        ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
         CancellationToken cancellationToken
@@ -496,7 +498,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             $"series {series.GetDisplayTitle()} [{series.LocalID}]",
                             $"[Local {config.Label}] {series.GetDisplayTitle()}",
                             uploadedBag,
-                            errsBag
+                            errorsBag
                         )
                         .ConfigureAwait(false);
 
@@ -583,20 +585,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                 // Upload a local file from disk to Shoko and establish explicit ownership using the RelaySource cross-reference
                 using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                var uploadedImage = imageManager.UploadImage(stream, null, ServiceRegistration.RelaySource);
-
-                var addedXref = imageManager.AddImageCrossReference(
-                    entity,
-                    uploadedImage,
-                    new ImageCrossReferenceData
-                    {
-                        ImageType = imageType,
-                        Source = ServiceRegistration.RelaySource,
-                        IsPreferred = true,
-                        IsDesired = true,
-                    }
-                );
-                imageManager.SetPreferredImageForEntity(addedXref);
+                UploadAndPreferImage(stream, entity, imageType, ServiceRegistration.RelaySource);
             }
             finally
             {
@@ -671,20 +660,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             try
             {
                 using var stream = new MemoryStream(bytes);
-                var uploadedImage = imageManager.UploadImage(stream, null, ServiceRegistration.RelayPlexSource);
-
-                var addedXref = imageManager.AddImageCrossReference(
-                    episode,
-                    uploadedImage,
-                    new ImageCrossReferenceData
-                    {
-                        ImageType = ImageEntityType.Backdrop,
-                        Source = ServiceRegistration.RelayPlexSource,
-                        IsPreferred = true,
-                        IsDesired = true,
-                    }
-                );
-                imageManager.SetPreferredImageForEntity(addedXref);
+                UploadAndPreferImage(stream, episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource);
             }
             finally
             {
@@ -712,6 +688,28 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     #endregion
 
     #region Internal Helpers
+
+    /// <summary>Uploads an image stream to Shoko under the specified source, links it to the entity, and marks it as preferred.</summary>
+    /// <param name="stream">Readable image content stream.</param>
+    /// <param name="entity">Target Shoko entity.</param>
+    /// <param name="imageType">Target image entity type.</param>
+    /// <param name="source">Owning metadata source.</param>
+    private void UploadAndPreferImage(Stream stream, IWithImages entity, ImageEntityType imageType, MetadataSource source)
+    {
+        var uploadedImage = imageManager.UploadImage(stream, null, source);
+        var addedXref = imageManager.AddImageCrossReference(
+            entity,
+            uploadedImage,
+            new ImageCrossReferenceData
+            {
+                ImageType = imageType,
+                Source = source,
+                IsPreferred = true,
+                IsDesired = true,
+            }
+        );
+        imageManager.SetPreferredImageForEntity(addedXref);
+    }
 
     /// <summary>Purges stale or demoted cross-referenced images for an entity for a specific metadata source.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
@@ -749,13 +747,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         try
         {
-            var filterOpts = new ImageCrossReferenceFilteringOptions
+            var filterOptions = new ImageCrossReferenceFilteringOptions
             {
                 ImageType = imageType,
                 XrefSource = xrefSource,
                 LinkedEntityImages = false,
             };
-            foreach (var xref in entity.GetImageCrossReferences(filterOpts).Where(predicate))
+            foreach (var xref in entity.GetImageCrossReferences(filterOptions).Where(predicate))
             {
                 imageManager.RemoveImageCrossReference(xref);
                 // Only purge the underlying image if no other entities are actively referencing it

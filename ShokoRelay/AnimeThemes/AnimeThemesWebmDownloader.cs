@@ -51,17 +51,17 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
     {
         var messages = new List<string>();
         var downloads = new List<string>();
-        var downloadedItems = new List<(string RelPath, string FileName)>();
+        var downloadedItems = new List<(string RelativePath, string FileName)>();
         var (downloaded, skipped, errors) = (0, 0, 0);
 
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
-        var managedFolders = videoService.GetAllManagedFolders()?.Where(VfsShared.IsVfsEnabledFolder).Select(folder => folder.Path).Where(path => !string.IsNullOrWhiteSpace(path)).ToList() ?? [];
+        var managedFolders = VfsShared.GetManagedFolderPaths(videoService, onlyVfsEnabled: true);
         string? targetRoot = null;
         if (!string.IsNullOrWhiteSpace(query.Destination))
         {
-            string normDest = Path.GetFullPath(VfsShared.NormalizeSeparators(query.Destination)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string normalizedDestination = Path.GetFullPath(VfsShared.NormalizeSeparators(query.Destination)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
             targetRoot = managedFolders.FirstOrDefault(folderPath =>
-                string.Equals(Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), normDest, VfsShared.PathComparison)
+                string.Equals(Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), normalizedDestination, VfsShared.PathComparison)
             );
             if (targetRoot == null)
             {
@@ -146,9 +146,9 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 continue;
 
                             string targetPath = Path.Combine(baseThemePath, yearFolder, seasonFolder, safeBasename);
-                            string relPath = $"/{yearFolder}/{seasonFolder}/{safeBasename}";
+                            string relativePath = $"/{yearFolder}/{seasonFolder}/{safeBasename}";
 
-                            if (!query.Force && existingFiles.TryGetValue(safeBasename, out var existingRelPath))
+                            if (!query.Force && existingFiles.TryGetValue(safeBasename, out var existingRelativePath))
                             {
                                 if (mappedFilesWithAnidb.Contains(safeBasename))
                                 {
@@ -157,7 +157,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                     continue;
                                 }
 
-                                downloadedItems.Add((existingRelPath, safeBasename));
+                                downloadedItems.Add((existingRelativePath, safeBasename));
                                 logger.LogInformation("AnimeThemes WebM: Found unmapped local theme -> {Basename}, checking for AniDB ID...", safeBasename);
                                 continue;
                             }
@@ -165,66 +165,54 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                             Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
                             logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", safeBasename);
 
-                            try
+                            async Task TryDownloadVideoAsync()
                             {
-                                using var videoResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                                videoResp.EnsureSuccessStatusCode();
+                                using var videoResponse = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+                                videoResponse.EnsureSuccessStatusCode();
 
                                 await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                await videoResp.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
+                                await videoResponse.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(safeBasename);
-                                downloadedItems.Add((relPath, safeBasename));
-                                existingFiles[safeBasename] = relPath; // Add to cache so it isn't downloaded again if it appears in another anime
+                                downloadedItems.Add((relativePath, safeBasename));
+                                existingFiles[safeBasename] = relativePath; // Add to cache so it isn't downloaded again if it appears in another anime
                                 downloaded++;
+                            }
+
+                            static void DeletePartialFile(string path)
+                            {
+                                if (File.Exists(path))
+                                    try
+                                    {
+                                        File.Delete(path);
+                                    }
+                                    catch { }
+                            }
+
+                            try
+                            {
+                                await TryDownloadVideoAsync().ConfigureAwait(false);
                             }
                             catch (HttpRequestException exception) when (exception.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
                             {
-                                if (File.Exists(targetPath))
-                                    try
-                                    {
-                                        File.Delete(targetPath);
-                                    }
-                                    catch { }
-
+                                DeletePartialFile(targetPath);
                                 logger.LogWarning("AnimeThemes WebM: Rate limited (503/429) on theme ID -> {ThemeId}. Waiting 90 seconds before retrying...", theme.Id);
                                 await Task.Delay(TimeSpan.FromSeconds(90), cancellationToken).ConfigureAwait(false);
 
                                 try
                                 {
-                                    using var retryResp = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                                    retryResp.EnsureSuccessStatusCode();
-
-                                    await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                                    await retryResp.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
-
-                                    downloads.Add(safeBasename);
-                                    downloadedItems.Add((relPath, safeBasename));
-                                    existingFiles[safeBasename] = relPath;
-                                    downloaded++;
+                                    await TryDownloadVideoAsync().ConfigureAwait(false);
                                 }
-                                catch (Exception retryEx)
+                                catch (Exception retryException)
                                 {
-                                    if (File.Exists(targetPath))
-                                        try
-                                        {
-                                            File.Delete(targetPath);
-                                        }
-                                        catch { }
-
-                                    logger.LogWarning(retryEx, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
-                                    throw new RateLimitAbortException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryEx.Message}");
+                                    DeletePartialFile(targetPath);
+                                    logger.LogWarning(retryException, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);
+                                    throw new RateLimitAbortException($"Task aborted. Rate limit retry failed for theme ID {theme.Id}: {retryException.Message}");
                                 }
                             }
                             catch (Exception exception) when (exception is not RateLimitAbortException)
                             {
-                                if (File.Exists(targetPath))
-                                    try
-                                    {
-                                        File.Delete(targetPath);
-                                    }
-                                    catch { }
-
+                                DeletePartialFile(targetPath);
                                 errors++;
                                 messages.Add($"Failed to download theme ID {theme.Id}: {exception.Message}");
                                 logger.LogWarning(exception, "AnimeThemes WebM: Failed to download theme ID -> {ThemeId}", theme.Id);

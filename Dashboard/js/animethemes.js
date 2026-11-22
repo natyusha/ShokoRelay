@@ -47,11 +47,11 @@
 
       showToast(`${label}: Generating...`, "info", TOAST_MS);
       const response = await fetchJson(`${base}/animethemes/mp3?${queryParams}`);
-      const resData = getData(response);
+      const responseData = getData(response);
 
-      const status = resData?.Status || resData?.status;
-      const message = resData?.Message || resData?.message;
-      const folder = resData?.Folder || resData?.folder || queryParams.get("path");
+      const status = responseData?.Status || responseData?.status;
+      const message = responseData?.Message || responseData?.message;
+      const folder = responseData?.Folder || responseData?.folder || queryParams.get("path");
 
       let summary = summarizeResult(response).text;
       let isNoTheme = false;
@@ -79,10 +79,10 @@
 
         // Trigger playback side effect if a theme exists locally (or play first downloaded theme from a batch)
         if (!isBatch && (status === "ok" || (status === "skipped" && message === "Theme.mp3 already exists."))) {
-          const playPath = resData?.Folder || resData?.folder || queryParams.get("path");
+          const playPath = responseData?.Folder || responseData?.folder || queryParams.get("path");
           if (playPath) playThemeMp3(playPath);
         } else if (isBatch) {
-          const items = resData?.Items || resData?.items || [];
+          const items = responseData?.Items || responseData?.items || [];
           const playItem =
             items.find((item) => (item.Status || item.status) === "ok") ||
             (items.length === 1 && (items[0].Status || items[0].status) === "skipped" && (items[0].Message || items[0].message) === "Theme.mp3 already exists." ? items[0] : null);
@@ -94,16 +94,6 @@
       }
     },
   });
-  // #endregion
-
-  // #region Helpers
-  /**
-   * Generic helper to cycle through an array of modes.
-   * @param {string} current - The current mode value.
-   * @param {string[]} modes - Array of available modes.
-   * @returns {string} The next mode in the sequence.
-   */
-  const getNextMode = (current, modes) => modes[(modes.indexOf(current) + 1) % modes.length];
   // #endregion
 
   // #region MP3 - State and UI
@@ -140,12 +130,7 @@
       };
     }
 
-    const mapFilter = element("at-filter-map");
-    if (mapFilter) {
-      mapFilter.oninput = () => {
-        mapFilter.value = mapFilter.value.replace(/[^aA0-9,\s]/g, "").toLowerCase();
-      };
-    }
+    window._sr.bindSeriesFilterSanitizer("at-filter-map");
   }
 
   /**
@@ -269,7 +254,7 @@
      * @param {string} path - The dot-delimited property path.
      * @returns {*} The resolved property value.
      */
-    const getVal = (path) => window._sr.getValueByPath(config, path);
+    const getValue = (path) => window._sr.getValueByPath(config, path);
 
     if (playback) {
       /**
@@ -283,7 +268,7 @@
         syncPlaybackUI();
       };
 
-      const isEnabled = !!getVal("Playback.AnimeThemesMp3Playback");
+      const isEnabled = !!getValue("Playback.AnimeThemesMp3Playback");
       playback.setAttribute("aria-pressed", isEnabled);
       sync(isEnabled);
 
@@ -306,12 +291,12 @@
     }
 
     if (modeButton) {
-      const currentMode = getVal("Playback.AnimeThemesMp3Mode") || "loop";
+      const currentMode = getValue("Playback.AnimeThemesMp3Mode") || "loop";
       modeButton.setAttribute("data-mode", currentMode);
       updatePlaybackTooltip(modeButton);
 
       modeButton.onclick = async () => {
-        const nextMode = getNextMode(modeButton.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
+        const nextMode = window._sr.cycleMode(modeButton.getAttribute("data-mode"), ["loop", "shuffle", "off"]);
         modeButton.setAttribute("data-mode", nextMode);
         updatePlaybackTooltip(modeButton);
         if (atAudio) atAudio.loop = nextMode === "loop";
@@ -329,7 +314,7 @@
         } else {
           const response = await fetchJson(base + "/animethemes/mp3/random");
           const randomData = getData(response);
-          randomData?.path ? playThemeMp3(randomData.path) : showToast("No Theme.mp3 Files Found", "error", window._sr.TOAST_MS);
+          randomData?.path ? playThemeMp3(randomData.path) : showToast("No Theme.mp3 Files Found", "error", TOAST_MS);
         }
       };
     }

@@ -144,18 +144,22 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
             .Where(device => device.Owned && device.Provides?.Contains("server", StringComparison.OrdinalIgnoreCase) == true)
             .Select(device =>
             {
-                var validConnections = device.HttpsRequired ? device.Connections?.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : device.Connections;
+                var validConnections = device.HttpsRequired ? device.Connections?.Where(connection => connection.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : device.Connections;
 
-                var pref = validConnections
-                    ?.OrderByDescending(conn =>
-                        (conn.Local && !conn.Relay ? 100 : 0)
-                        + (!conn.Relay ? 1 : 0)
-                        + (conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true && (conn.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || device.HttpsRequired) ? 10 : 0)
+                var preferredUri = validConnections
+                    ?.OrderByDescending(connection =>
+                        (connection.Local && !connection.Relay ? 100 : 0)
+                        + (!connection.Relay ? 1 : 0)
+                        + (
+                            connection.Uri?.StartsWith("https", StringComparison.Ordinal) == true && (connection.Uri.Contains(".plex.direct", StringComparison.OrdinalIgnoreCase) || device.HttpsRequired)
+                                ? 10
+                                : 0
+                        )
                     )
                     .FirstOrDefault()
                     ?.Uri;
 
-                return new PlexServerInfo(device.ClientIdentifier ?? "", device.Name ?? "", pref, device.HttpsRequired);
+                return new PlexServerInfo(device.ClientIdentifier ?? "", device.Name ?? "", preferredUri, device.HttpsRequired);
             })
             .ToList();
 
@@ -180,7 +184,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 directory.Type ?? "",
                 directory.Agent ?? "",
                 directory.Uuid ?? "",
-                directory.Locations?.Select(loc => loc.Path).ToList() ?? []
+                directory.Locations?.Select(location => location.Path).ToList() ?? []
             ))
             .Where(library => library.Id > 0)
             .ToList()
@@ -207,11 +211,12 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 try
                 {
                     // Create a linked token source that cancels after 5 seconds to prevent offline servers from hanging discovery
-                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                    cts.CancelAfter(TimeSpan.FromSeconds(5));
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
 
-                    var libs = await GetPlexLibrariesAsync(token, clientIdentifier, uri, cts.Token).ConfigureAwait(false);
-                    var matched = libs.Where(library =>
+                    var libraries = await GetPlexLibrariesAsync(token, clientIdentifier, uri, timeoutCts.Token).ConfigureAwait(false);
+                    var matched = libraries
+                        .Where(library =>
                             string.Equals(library.Agent, ShokoRelayConstants.AgentScheme, StringComparison.OrdinalIgnoreCase)
                             || string.Equals(library.Agent, ShokoRelayConstants.MovieAgentScheme, StringComparison.OrdinalIgnoreCase)
                         )
@@ -251,7 +256,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 // Fallback: If preferred URI failed, try other endpoints
                 if (!isOk && devices.FirstOrDefault(device => string.Equals(device.ClientIdentifier, server.Id, StringComparison.OrdinalIgnoreCase)) is { } matchedDevice && matchedDevice.Connections != null)
                 {
-                    var connections = server.HttpsRequired ? matchedDevice.Connections.Where(conn => conn.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : matchedDevice.Connections;
+                    var connections = server.HttpsRequired ? matchedDevice.Connections.Where(connection => connection.Uri?.StartsWith("https", StringComparison.Ordinal) == true) : matchedDevice.Connections;
                     foreach (var connection in connections)
                     {
                         if (string.IsNullOrEmpty(connection.Uri) || string.Equals(connection.Uri, server.PreferredUri, StringComparison.OrdinalIgnoreCase))
@@ -617,7 +622,7 @@ public sealed class StringOrNumberConverter : JsonConverter<string?>
         reader.TokenType switch
         {
             JsonTokenType.String => reader.GetString(),
-            JsonTokenType.Number => reader.TryGetInt64(out long longVal) ? longVal.ToString() : reader.GetDouble().ToString(),
+            JsonTokenType.Number => reader.TryGetInt64(out long longValue) ? longValue.ToString() : reader.GetDouble().ToString(),
             _ => null,
         };
 
