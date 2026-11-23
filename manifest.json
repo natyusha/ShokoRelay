@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.23.0",
+      "tag": "v0.23.0",
+      "source_revision": "424f966105d36303f47dda50ce88e95d3b442b0f",
+      "released_at": "2026-11-23T14:42:44Z",
+      "channel": "Dev",
+      "release_notes": "This release is a lightly tested version of what was intended to be Shoko Relay's v1.0.0 RC1. Due to breaking Shoko.Abstractions changes in the past day, it has been released earlier than anticipated. So I would encourage users to try out all of the new (and old) features and report any issues that they find on Discord.\r\n\r\n**Notes:**\r\n- Force refreshing the dashboard (`Ctrl-F5`) is required for all of the front end changes to take effect\r\n- If you use the favourites feature in the AnimeThemes Player, `favs_animethemes.cache` in the configuration folder must be renamed to `favs_animethemes.csv`\r\n- All other `.cache` files have been moved to Shoko's dedicated plugin cache directory, any legacy `.cache` files left in your `configuration/` folder can be safely deleted.\r\n\r\n**Highlights:**\r\n- Optional dashboard authentication with an \"Allow Player Access\" mode for sharing the AnimeThemes Player without granting admin access\r\n- Multi-user watched-state, progress, and rating syncing (supporting both Plex Home users and shared server friends) mapped to individual Shoko users.\r\n- Shoko WebUI series links that navigate directly to the matching series branch in the VFS Browser\r\n- A new AnimeThemes Downloader modal for easily fetching recent or seasonal themes not yet in the torrent archive\r\n- Cross-root AnimeThemes `.webm` support for collections split across multiple managed folders or storage drives.\r\n\r\n---\r\n\r\n**Changes:**\r\n- Added opt-in administrator authentication (`Require Authentication`) using Shoko username/password login, including an `Allow Player Access` mode for sharing the standalone AnimeThemes Player\r\n- Added multi-user watched sync and webhook support for Plex Home users and shared server friends, plus `Advanced User Mappings` with optional PINs\r\n- Added the **AnimeThemes Downloader** modal on the dashboard for downloading themes by name filter (up to 10 themes), current season, or recently added releases\r\n- Added `AnimeThemes Transfer Mode` (`Hardlink (Copy Fallback)`, `Move`, `Do Nothing`) to automatically share or relocate `.webm` themes when series reside in a different managed folder\r\n- Added native Shoko executable actions (with progress reporting) for global VFS, AnimeThemes, and watched-sync tasks as well as per-series VFS rebuilds and Plex refreshes\r\n- Added `VFS Browser` external links directly on series in Shoko's WebUI with automatic deep-linking to the matching series in the browser tree\r\n- Added diagnostic CSV reports (`/reports/tags` and `/reports/credits`) to inspect how tags, genres, cast, crew, and studios are filtered and merged across your library\r\n- Added collapsible `Metadata`, `Language`, and `Advanced` sections in Provider Settings with persisted open/closed states\r\n- Added a title refresh button to the VFS Browser and scroll-wheel volume controls to the AnimeThemes Player\r\n- Improved Shoko title and description language priority handling and added automatic VFS updates when preferred TMDB orderings or hidden episode states change\r\n- Improved Windows long-path compatibility and reduced unnecessary Shoko file-watcher activity across VFS, AnimeThemes, and housekeeping operations\r\n- Moved rebuildable `.cache` and task `.report` files into Shoko's dedicated plugin cache directory, keeping the configuration folder clean\r\n- Improved reverse-proxy URL detection and Shoko WebUI theme variable mapping across dashboard pages\r\n- Improved partial progress, rating clear (`unrate`), and multi-library handling during Plex/Shoko watched syncing and webhooks\r\n- Preserved custom VFS override coordinates over TMDB episode groupings, cleaned up stale movie VFS folders automatically, and improved local artwork linking across override groups\r\n- Saved partial `Theme.mp3` caches and reports when batch generation is cancelled, and improved AnimeThemes API rate-limit handling and download cleanup\r\n- Fixed numerous edge cases across metadata matching, multi-episode movie handling, collection artwork uploads, VFS path exclusions, and dashboard UI controls\r\n- Updated to `Shoko.Abstractions` v6.0.0-alpha.141\r\n\r\n**Contributions:**\r\n* @revam in https://github.com/natyusha/ShokoRelay/pull/24",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.23.0/ShokoRelay-v0.23.0-dev_linux-arm64.zip",
+          "checksum": "sha256:69816b31b6e7b0127cfc53c7478f181d41bbfa7fbbbd47d5e7509a8751c97e84"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.23.0/ShokoRelay-v0.23.0-dev_linux-x64.zip",
+          "checksum": "sha256:da20713481f8de7fc0e9fd67754dc20ebb981b635b998e40e593eb2691461311"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.23.0/ShokoRelay-v0.23.0-dev_win-x64.zip",
+          "checksum": "sha256:c137ce8d55793c00c446dd59155abc2b68d346872e3c69ce2ff3c308e9e62686"
+        }
+      ]
+    },
+    {
       "version": "0.22.0",
       "tag": "v0.22.0",
       "source_revision": "500a4df76bedd733769f20f17a9a06d5d999acb5",
