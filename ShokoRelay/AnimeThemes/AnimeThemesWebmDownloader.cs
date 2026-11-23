@@ -1,4 +1,6 @@
 using System.Net;
+using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.AnimeThemes;
@@ -27,21 +29,29 @@ public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<s
 /// <param name="apiClient">AnimeThemes API client.</param>
 /// <param name="httpClient">HTTP client.</param>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="mappingService">AnimeThemes mapping service.</param>
 /// <param name="logger">Logger instance.</param>
-public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient httpClient, IVideoService videoService, AnimeThemesMapping mappingService, ILogger<AnimeThemesWebmDownloader> logger)
+public class AnimeThemesWebmDownloader(
+    AnimeThemesApi apiClient,
+    HttpClient httpClient,
+    IVideoService videoService,
+    IFileSystem fileSystem,
+    AnimeThemesMapping mappingService,
+    ILogger<AnimeThemesWebmDownloader> logger
+)
 {
     #region Setup
 
     private readonly AnimeThemesApi _apiClient = apiClient;
 
-    #endregion
-
-    #region Download Logic
-
     /// <summary>Signals an unrecoverable rate-limit failure that should abort the download loop.</summary>
     /// <param name="message">The failure reason.</param>
     private sealed class RateLimitAbortException(string message) : InvalidOperationException(message);
+
+    #endregion
+
+    #region Download Logic
 
     /// <summary>Downloads AnimeThemes WebM files based on specific filters and organizes them by Year/Season.</summary>
     /// <param name="query">The search filters.</param>
@@ -70,7 +80,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
             }
         }
 
-        targetRoot ??= managedFolders.FirstOrDefault(folderPath => Directory.Exists(Path.Combine(folderPath!, themeRootName))) ?? managedFolders.FirstOrDefault();
+        targetRoot ??= managedFolders.FirstOrDefault(folderPath => fileSystem.DirectoryExists(Path.Combine(folderPath!, themeRootName))) ?? managedFolders.FirstOrDefault();
 
         if (string.IsNullOrWhiteSpace(targetRoot))
         {
@@ -83,10 +93,10 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
 
         // Build a cache of existing files to prevent downloading duplicates already organized in different folders
         var existingFiles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (Directory.Exists(baseThemePath))
+        if (fileSystem.DirectoryExists(baseThemePath))
             try
             {
-                foreach (var file in Directory.EnumerateFiles(baseThemePath, "*.webm", SearchOption.AllDirectories))
+                foreach (var file in fileSystem.GetFilePaths(baseThemePath, new FileSystemListingOptions { Recursive = true, Extensions = [".webm"] }, cancellationToken))
                     existingFiles.TryAdd(Path.GetFileName(file), "/" + Path.GetRelativePath(baseThemePath, file).Replace('\\', '/'));
             }
             catch { }
@@ -162,7 +172,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 continue;
                             }
 
-                            Directory.CreateDirectory(Path.GetDirectoryName(targetPath)!);
+                            fileSystem.CreateDirectory(Path.GetDirectoryName(targetPath)!);
                             logger.LogDebug("AnimeThemes WebM: Downloading -> {Basename}...", safeBasename);
 
                             async Task TryDownloadVideoAsync()
@@ -170,7 +180,7 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 using var videoResponse = await httpClient.GetAsync(video.Link, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                                 videoResponse.EnsureSuccessStatusCode();
 
-                                await using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                                await using var fileStream = fileSystem.OpenFile(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
                                 await videoResponse.Content.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
 
                                 downloads.Add(safeBasename);
@@ -179,12 +189,12 @@ public class AnimeThemesWebmDownloader(AnimeThemesApi apiClient, HttpClient http
                                 downloaded++;
                             }
 
-                            static void DeletePartialFile(string path)
+                            void DeletePartialFile(string path)
                             {
-                                if (File.Exists(path))
+                                if (fileSystem.FileExists(path))
                                     try
                                     {
-                                        File.Delete(path);
+                                        fileSystem.DeleteFile(path);
                                     }
                                     catch { }
                             }

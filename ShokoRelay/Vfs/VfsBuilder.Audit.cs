@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Shoko.Abstractions.FileSystem;
 
 namespace ShokoRelay.Vfs;
 
@@ -35,7 +36,6 @@ public partial class VfsBuilder
         var mode = Settings.Advanced.MovieGenerationMode;
 
         if (allSeries != null)
-        {
             foreach (var series in allSeries)
             {
                 int folderId = series.GetPrimaryId(metadataService);
@@ -48,9 +48,9 @@ public partial class VfsBuilder
                     foreach (var episode in series.Episodes.Where(episode => episode.Type == EpisodeType.Episode))
                         validMovieFolders.Add(episode.LocalID);
             }
-        }
 
         var blueprint = VfsShared.LoadBlueprint();
+        var recursiveOptions = new FileSystemListingOptions { Recursive = true };
 
         void AuditRoot(string rootFolderName, HashSet<int> validIds)
         {
@@ -58,10 +58,10 @@ public partial class VfsBuilder
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string vfsRoot = Path.Combine(root, rootFolderName);
-                if (!Directory.Exists(vfsRoot))
+                if (!fileSystem.DirectoryExists(vfsRoot))
                     continue;
 
-                Parallel.ForEach(Directory.GetDirectories(vfsRoot), DefaultParallelOptions(cancellationToken), seriesFolder =>
+                Parallel.ForEach(fileSystem.GetDirectoryPaths(vfsRoot, cancellationToken: cancellationToken), DefaultParallelOptions(cancellationToken), seriesFolder =>
                 {
                     string folderName = Path.GetFileName(seriesFolder);
 
@@ -73,7 +73,7 @@ public partial class VfsBuilder
                     {
                         try
                         {
-                            Directory.Delete(seriesFolder, true);
+                            fileSystem.DeleteDirectory(seriesFolder, true);
                             Interlocked.Increment(ref orphanedFolders);
                             removed.Add($"[Orphaned Series] {seriesFolder}");
 
@@ -91,11 +91,10 @@ public partial class VfsBuilder
 
                     Interlocked.Increment(ref seriesChecked);
 
-                    var filesToAudit = new List<string>();
-
+                    IReadOnlyList<FileSystemEntry> filesToAudit;
                     try
                     {
-                        filesToAudit = [.. Directory.EnumerateFiles(seriesFolder, "*", SearchOption.AllDirectories)];
+                        filesToAudit = fileSystem.GetFileEntries(seriesFolder, recursiveOptions, cancellationToken);
                     }
                     catch (Exception exception)
                     {
@@ -103,30 +102,27 @@ public partial class VfsBuilder
                         return;
                     }
 
-                    foreach (var file in filesToAudit)
-                    {
+                    foreach (var entry in filesToAudit)
                         try
                         {
-                            var info = new FileInfo(file);
-                            if (info.LinkTarget != null && !info.Exists)
+                            if (entry.IsSymbolicLink && entry.Stat == null)
                             {
-                                File.Delete(file);
+                                fileSystem.DeleteFile(entry.Path);
                                 Interlocked.Increment(ref brokenLinks);
-                                removed.Add($"[Broken Link] {file}");
+                                removed.Add($"[Broken Link] {entry.Path}");
                             }
                         }
                         catch (Exception exception)
                         {
-                            errors.Add($"Failed to process file {file}: {exception.Message}");
+                            errors.Add($"Failed to process file {entry.Path}: {exception.Message}");
                         }
-                    }
 
-                    foreach (var subDir in Directory.EnumerateDirectories(seriesFolder, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length))
+                    foreach (var subDir in fileSystem.GetDirectoryPaths(seriesFolder, recursiveOptions, cancellationToken).OrderByDescending(dir => dir.Length))
                         try
                         {
-                            if (!Directory.EnumerateFileSystemEntries(subDir).Any())
+                            if (fileSystem.IsDirectoryEmpty(subDir))
                             {
-                                Directory.Delete(subDir, false);
+                                fileSystem.DeleteDirectory(subDir, false);
                                 Interlocked.Increment(ref orphanedFolders);
                                 removed.Add($"[Empty Folder] {subDir}");
                             }

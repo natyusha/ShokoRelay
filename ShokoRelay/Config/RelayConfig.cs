@@ -128,8 +128,24 @@ public enum SyncUserType
     None = 4,
 }
 
+/// <summary>Determines how AnimeThemes files are handled when a series resides in a different managed folder than the theme files.</summary>
+public enum AnimeThemesTransferMode
+{
+    /// <summary>Do not transfer AnimeThemes files across managed folders.</summary>
+    [Display(Name = "Do Nothing")]
+    Disabled = 0,
+
+    /// <summary>Create a hardlink if on the same volume, otherwise copy the file.</summary>
+    [Display(Name = "Hardlink (Copy Fallback)")]
+    HardlinkOrCopy = 1,
+
+    /// <summary>Move the AnimeThemes file to the target managed folder.</summary>
+    [Display(Name = "Move")]
+    Move = 2,
+}
+
 /// <summary>Levels of overlap allowed for AnimeThemes .webm files.</summary>
-public enum OverlapLevel
+public enum AnimeThemesOverlapLevel
 {
     /// <summary>Allow all overlaps.</summary>
     [Display(Name = "All Overlaps Allowed")]
@@ -508,11 +524,17 @@ public class AdvancedConfig
     [VfsRebuild]
     public MovieGenerationMode MovieGenerationMode { get; set; } = MovieGenerationMode.Disabled;
 
+    /// <summary>Behavior for transferring AnimeThemes files when a series resides in a different managed folder than the theme files.</summary>
+    [Display(Name = "AnimeThemes Transfer Mode", Description = "How to handle themes that are not on the same root")]
+    [DefaultValue(AnimeThemesTransferMode.HardlinkOrCopy)]
+    [VfsRebuild]
+    public AnimeThemesTransferMode AnimeThemesCrossRootMode { get; set; } = AnimeThemesTransferMode.HardlinkOrCopy;
+
     /// <summary>Minimum overlap level for AnimeThemes.</summary>
     [Display(Name = "AnimeThemes Overlap Level", Description = "The amount of overlap for themes to be included")]
-    [DefaultValue(OverlapLevel.All)]
+    [DefaultValue(AnimeThemesOverlapLevel.All)]
     [VfsRebuild]
-    public OverlapLevel AnimeThemesOverlapLevel { get; set; } = OverlapLevel.All;
+    public AnimeThemesOverlapLevel AnimeThemesOverlapLevel { get; set; } = AnimeThemesOverlapLevel.All;
 
     /// <summary>Folder name for the ShokoRelay VFS root.</summary>
     [Display(Name = "VFS Root Path", Description = "Per root location of the main virtual file system links")]

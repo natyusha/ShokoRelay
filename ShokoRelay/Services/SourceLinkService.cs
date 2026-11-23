@@ -1,3 +1,4 @@
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -14,8 +15,9 @@ public record SourceLinkResult(int Count, bool IsPurge, List<string> Details);
 
 /// <summary>Automates the creation of relative symlinks from source folders to library locations based on a mapping file provided via API.</summary>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
-public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkService> logger)
+public class SourceLinkService(IVideoService videoService, IFileSystem fileSystem, ILogger<SourceLinkService> logger)
 {
     #region Public API
 
@@ -26,7 +28,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
     public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
     {
         var managedFolders = videoService.GetAllManagedFolders() ?? [];
-        var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true);
+        var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true, fileSystem: fileSystem);
         int count = 0;
         var details = new List<string>();
 
@@ -35,7 +37,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
             // Use the centralized ignored folder set for purge safety
             var protectedFolders = VfsShared.GetIgnoredFolderNames(Settings);
             foreach (var root in roots)
-                count += PurgeDirectoryLinks(root, protectedFolders, details, logger);
+                count += PurgeDirectoryLinks(root, protectedFolders, details);
 
             logger.LogInformation("SourceLinkService: Finished purge operation -> {Count} links removed.", count);
             return new SourceLinkResult(count, true, details);
@@ -51,12 +53,12 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
         foreach (var managedFolder in managedFolders)
         {
             string root = managedFolder.Path;
-            if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
+            if (string.IsNullOrWhiteSpace(root) || !fileSystem.DirectoryExists(root))
                 continue;
 
             string fullRoot = Path.GetFullPath(root);
             string fullTxtPath = Path.GetFullPath(Path.Combine(fullRoot, safeMapFile));
-            if (!VfsShared.IsPathUnderDirectory(fullTxtPath, fullRoot) || !File.Exists(fullTxtPath))
+            if (!VfsShared.IsPathUnderDirectory(fullTxtPath, fullRoot) || !fileSystem.FileExists(fullTxtPath))
                 continue;
 
             string mappingFileDir = Path.GetDirectoryName(fullTxtPath)!;
@@ -89,7 +91,7 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                         continue;
                     }
 
-                    if (!File.Exists(fullSource))
+                    if (!fileSystem.FileExists(fullSource))
                     {
                         logger.LogWarning("SourceLinkService: Source file not found -> {Path}", fullSource);
                         continue;
@@ -104,21 +106,20 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                     string finalDestinationBase = destinationBase + tagSuffix;
 
                     if (!string.IsNullOrEmpty(destinationDir))
-                        Directory.CreateDirectory(destinationDir);
+                        fileSystem.CreateDirectory(destinationDir);
 
-                    var candidates = Directory.EnumerateFileSystemEntries(sourceDir, "*").ToList();
                     bool mainLinked = false;
                     var comparison = VfsShared.PathComparer == StringComparer.OrdinalIgnoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
 
-                    foreach (var entry in candidates)
+                    foreach (var entry in fileSystem.GetFileSystemEntries(sourceDir))
                     {
-                        string name = Path.GetFileName(entry);
-                        bool isDir = Directory.Exists(entry);
-                        bool isAttachDir = isDir && name.StartsWith(sourceBase, comparison) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[sourceBase.Length..]);
+                        string name = entry.Name;
+                        bool isDir = entry.IsDirectory;
+                        bool isAttachmentDir = isDir && name.StartsWith(sourceBase, comparison) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[sourceBase.Length..]);
                         bool isSidecarFile = !isDir && name.StartsWith(sourceBase, comparison) && (name.Length == sourceBase.Length || !char.IsLetterOrDigit(name[sourceBase.Length]));
 
                         // Logic: Filter for the primary video, any file starting with the base name (guarded against prefix collisions), or the designated attachments folder
-                        if (!name.Equals(Path.GetFileName(fullSource), comparison) && !isSidecarFile && !isAttachDir)
+                        if (!name.Equals(Path.GetFileName(fullSource), comparison) && !isSidecarFile && !isAttachmentDir)
                             continue;
 
                         string suffix = isDir ? "_attach" : name[sourceBase.Length..];
@@ -126,13 +127,13 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
 
                         if (isDir)
                         {
-                            if (File.Exists(targetPath))
-                                File.Delete(targetPath);
-                            Directory.CreateDirectory(targetPath);
-                            foreach (var subFile in Directory.EnumerateFiles(entry))
-                                VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), logger, checkVfsDisabled: false);
+                            if (fileSystem.FileExists(targetPath))
+                                fileSystem.DeleteFile(targetPath);
+                            fileSystem.CreateDirectory(targetPath);
+                            foreach (var subFile in fileSystem.GetFilePaths(entry.Path))
+                                VfsShared.TryCreateLink(subFile, Path.Combine(targetPath, Path.GetFileName(subFile)), logger, fileSystem, checkVfsDisabled: false);
                         }
-                        else if (VfsShared.TryCreateLink(entry, targetPath, logger, checkVfsDisabled: false))
+                        else if (VfsShared.TryCreateLink(entry.Path, targetPath, logger, fileSystem, checkVfsDisabled: false))
                         {
                             if (videoService.IsAllowedVideoExtension(targetPath))
                                 dirsToScan.Add(destinationDir);
@@ -147,9 +148,9 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
                         lines[lineIndex] = "#" + lines[lineIndex];
                         modified = true;
                         count++;
-                        string logMsg = $"{sourceInfo.Path} -> {destinationInfo.Path}";
-                        details.Add(logMsg);
-                        logger.LogDebug("SourceLinkService: Created link -> {Link}", logMsg);
+                        string logMessage = $"{sourceInfo.Path} -> {destinationInfo.Path}";
+                        details.Add(logMessage);
+                        logger.LogDebug("SourceLinkService: Created link -> {Link}", logMessage);
                     }
                 }
                 catch (Exception exception)
@@ -184,49 +185,46 @@ public class SourceLinkService(IVideoService videoService, ILogger<SourceLinkSer
     /// <param name="path">The directory path to scan.</param>
     /// <param name="protectedFolders">A set of folder names to exclude from the purge.</param>
     /// <param name="details">A list to record the paths of purged items.</param>
-    /// <param name="logger">Logger instance for tracing and warnings.</param>
     /// <returns>The number of items deleted.</returns>
-    private static int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders, List<string> details, ILogger logger)
+    private int PurgeDirectoryLinks(string path, HashSet<string> protectedFolders, List<string> details)
     {
         int deleted = 0;
         try
         {
-            foreach (var entry in Directory.EnumerateFileSystemEntries(path))
+            foreach (var entry in fileSystem.GetFileSystemEntries(path))
                 try
                 {
-                    var name = Path.GetFileName(entry);
-                    if (protectedFolders.Contains(name))
+                    if (protectedFolders.Contains(entry.Name))
                         continue;
 
-                    var attributes = File.GetAttributes(entry);
-                    if (attributes.HasFlag(FileAttributes.ReparsePoint))
+                    if (entry.IsSymbolicLink)
                     {
-                        if (Directory.Exists(entry))
-                            Directory.Delete(entry);
+                        if (entry.IsDirectory)
+                            fileSystem.DeleteDirectory(entry.Path, false);
                         else
-                            File.Delete(entry);
+                            fileSystem.DeleteFile(entry.Path);
 
-                        details.Add(entry);
-                        logger.LogDebug("SourceLinkService: Purged link -> {Entry}", entry);
+                        details.Add(entry.Path);
+                        logger.LogDebug("SourceLinkService: Purged link -> {Entry}", entry.Path);
                         deleted++;
                     }
-                    else if (Directory.Exists(entry))
+                    else if (entry.IsDirectory)
                     {
                         // Specifically target the sidecar attachment folders created by the plugin
-                        if (name.EndsWith("_attach", StringComparison.OrdinalIgnoreCase))
+                        if (entry.Name.EndsWith("_attach", StringComparison.OrdinalIgnoreCase))
                         {
-                            Directory.Delete(entry, true);
-                            details.Add(entry);
-                            logger.LogDebug("SourceLinkService: Purged attachment folder -> {Entry}", entry);
+                            fileSystem.DeleteDirectory(entry.Path, true);
+                            details.Add(entry.Path);
+                            logger.LogDebug("SourceLinkService: Purged attachment folder -> {Entry}", entry.Path);
                             deleted++;
                         }
                         else
-                            deleted += PurgeDirectoryLinks(entry, protectedFolders, details, logger);
+                            deleted += PurgeDirectoryLinks(entry.Path, protectedFolders, details);
                     }
                 }
                 catch (Exception exception)
                 {
-                    logger.LogWarning(exception, "SourceLinkService: Failed to purge entry -> {Entry}", entry);
+                    logger.LogWarning(exception, "SourceLinkService: Failed to purge entry -> {Entry}", entry.Path);
                 }
         }
         catch (Exception exception)

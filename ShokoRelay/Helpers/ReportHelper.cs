@@ -27,7 +27,7 @@ public static partial class ReportHelper
             builder(stringBuilder, data);
             string logsDir = ReportsDirectory;
             Directory.CreateDirectory(logsDir);
-            File.WriteAllText(Path.Combine(logsDir, fileName), stringBuilder.ToString(), Encoding.UTF8);
+            VfsShared.WriteTextAtomic(Path.Combine(logsDir, fileName), stringBuilder.ToString());
         }
         catch (Exception exception)
         {
@@ -407,25 +407,63 @@ public static partial class ReportHelper
         BuildReport(builder, "Sync Watched Report", stats, "Change Details:", items);
     }
 
+    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskMapSymlinks"/>.</summary>
+    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
+    /// <param name="result">Map result data.</param>
+    public static void BuildSourceLinkReport(StringBuilder builder, SourceLinkResult result)
+    {
+        var stats = new Dictionary<string, object> { ["Mode"] = result.IsPurge ? "Purge" : "Map", ["Operations Completed"] = result.Count };
+        BuildReport(builder, "Source Link Report", stats, result.IsPurge ? null : "Links Created:", result.Details.OrderBy(detail => detail));
+    }
+
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtVfsBuild"/>.</summary>
     /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
     /// <param name="result">Build result data.</param>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     public static void BuildAtVfsBuildReport(StringBuilder builder, AnimeThemesMappingApplyResult result, List<int> filter)
     {
+        var mode = Settings.Advanced.AnimeThemesCrossRootMode;
+        string modeName = typeof(AnimeThemesTransferMode).GetField(mode.ToString())?.GetCustomAttribute<DisplayAttribute>()?.Name ?? mode.ToString();
+
         var stats = new Dictionary<string, object>
         {
             ["Elapsed Time"] = $"{result.Elapsed.TotalSeconds:F2}s",
+            ["Cross-Root Mode"] = modeName,
             ["Series Matched"] = result.SeriesMatched,
             ["Links Created"] = result.LinksCreated,
         };
+        if (mode != AnimeThemesTransferMode.Disabled || result.Hardlinked > 0 || result.Copied > 0 || result.Moved > 0)
+        {
+            stats["Files Hardlinked"] = result.Hardlinked;
+            stats["Files Copied"] = result.Copied;
+            stats["Files Moved"] = result.Moved;
+        }
         if (filter.Count > 0)
             stats["Filter"] = string.Join(", ", filter);
 
-        var items = result.CacheEntries.OrderBy(entry => entry.VfsPath).Select(entry => $"{entry.VfsPath} (VideoID: {entry.VideoId})").ToList();
-        items.AddRange(result.Errors.OrderBy(error => error).Select(error => $"ERROR: {error}"));
+        var items = new List<string>();
+        if (result.TransferDetails.Count > 0)
+        {
+            items.Add("Cross-Root Transfers:");
+            items.AddRange(result.TransferDetails.OrderBy(detail => detail).Select(detail => $"  {detail}"));
+            items.Add("");
+        }
 
-        BuildReport(builder, "AnimeThemes: VFS Build Report", stats, "Planned Links & Errors:", items);
+        if (result.CacheEntries.Count > 0)
+        {
+            items.Add("Planned Links:");
+            items.AddRange(result.CacheEntries.OrderBy(entry => entry.VfsPath).Select(entry => $"  {entry.VfsPath} (VideoID: {entry.VideoId})"));
+        }
+
+        if (result.Errors.Count > 0)
+        {
+            if (items.Count > 0)
+                items.Add("");
+            items.Add("Errors:");
+            items.AddRange(result.Errors.OrderBy(error => error).Select(error => $"  ERROR: {error}"));
+        }
+
+        BuildReport(builder, "AnimeThemes: VFS Build Report", stats, "Details:", items);
     }
 
     /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskAtMapBuild"/>.</summary>
@@ -527,15 +565,6 @@ public static partial class ReportHelper
         var items = result.Downloads.OrderBy(download => download).Select(download => $"DOWNLOADED: {download}").ToList();
         items.AddRange(result.Messages.OrderBy(message => message).Select(message => $"MESSAGE: {message}"));
         BuildReport(builder, "AnimeThemes: WebM Download Report", stats, "Details:", items);
-    }
-
-    /// <summary>Build the report content for <see cref="ShokoRelayConstants.TaskMapSymlinks"/>.</summary>
-    /// <param name="builder"><inheritdoc cref="BuildReport" path="/param[@name='builder']" /></param>
-    /// <param name="result">Map result data.</param>
-    public static void BuildSourceLinkReport(StringBuilder builder, SourceLinkResult result)
-    {
-        var stats = new Dictionary<string, object> { ["Mode"] = result.IsPurge ? "Purge" : "Map", ["Operations Completed"] = result.Count };
-        BuildReport(builder, "Source Link Report", stats, result.IsPurge ? null : "Links Created:", result.Details.OrderBy(detail => detail));
     }
 
     #endregion

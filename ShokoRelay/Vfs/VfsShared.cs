@@ -2,6 +2,8 @@ using System.Buffers;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
@@ -69,9 +71,11 @@ internal static class VfsShared
         {
             if (string.IsNullOrWhiteSpace(path))
                 return null;
-            string norm = NormalizeSeparators(path);
-            string? pathRoot = Path.GetPathRoot(norm);
-            return !string.IsNullOrEmpty(pathRoot) && string.Equals(norm, pathRoot, PathComparison) ? norm : norm.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string normalizedInput = NormalizeSeparators(path);
+            string? pathRoot = Path.GetPathRoot(normalizedInput);
+            return !string.IsNullOrEmpty(pathRoot) && string.Equals(normalizedInput, pathRoot, PathComparison)
+                ? normalizedInput
+                : normalizedInput.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
         if (!string.IsNullOrWhiteSpace(location.ManagedFolder?.Path))
@@ -94,17 +98,19 @@ internal static class VfsShared
     /// <summary>Resolves the source file path.</summary>
     /// <param name="location">The video file location.</param>
     /// <param name="importRoot">The resolved import root path.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe file checks.</param>
     /// <returns>The existing physical file path, or <c>null</c> if not found.</returns>
-    public static string? ResolveSourcePath(IVideoFile location, string importRoot)
+    public static string? ResolveSourcePath(IVideoFile location, string importRoot, IFileSystem? fileSystem = null)
     {
+        bool FileExists(string candidate) => fileSystem?.FileExists(candidate) ?? File.Exists(candidate);
         string original = location.Path;
-        if (!string.IsNullOrWhiteSpace(original) && File.Exists(original))
+        if (!string.IsNullOrWhiteSpace(original) && FileExists(original))
             return original;
         string relative = location.RelativePath.TrimLeadingSlashes();
         if (!string.IsNullOrWhiteSpace(relative))
         {
             string candidate = Path.Combine(importRoot, NormalizeSeparators(relative));
-            if (File.Exists(candidate))
+            if (FileExists(candidate))
                 return candidate;
         }
         return null;
@@ -151,13 +157,14 @@ internal static class VfsShared
     /// <param name="videoService">Shoko video service.</param>
     /// <param name="onlyVfsEnabled">When <c>true</c>, restricts results to folders eligible for VFS generation.</param>
     /// <param name="requireExists">When <c>true</c>, filters out folders that do not currently exist on disk.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe directory checks.</param>
     /// <returns>A list of managed folder paths.</returns>
-    public static List<string> GetManagedFolderPaths(IVideoService videoService, bool onlyVfsEnabled = false, bool requireExists = false) =>
+    public static List<string> GetManagedFolderPaths(IVideoService videoService, bool onlyVfsEnabled = false, bool requireExists = false, IFileSystem? fileSystem = null) =>
         [
             .. (videoService.GetAllManagedFolders() ?? [])
                 .Where(folder => !onlyVfsEnabled || IsVfsEnabledFolder(folder))
                 .Select(folder => folder.Path)
-                .Where(path => !string.IsNullOrWhiteSpace(path) && (!requireExists || Directory.Exists(path)))
+                .Where(path => !string.IsNullOrWhiteSpace(path) && (!requireExists || (fileSystem?.DirectoryExists(path) ?? Directory.Exists(path))))
                 .Distinct(PathComparer),
         ];
 
@@ -178,11 +185,11 @@ internal static class VfsShared
 
         string fullBase = Path.GetFullPath(baseDirectory);
         string fullCandidate = Path.GetFullPath(candidatePath);
-        string baseWithSep = EnsureTrailingSeparator(fullBase);
+        string baseWithSeparator = EnsureTrailingSeparator(fullBase);
         return allowEqual
             ? string.Equals(fullCandidate.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), fullBase.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), PathComparison)
-                || fullCandidate.StartsWith(baseWithSep, PathComparison)
-            : fullCandidate.StartsWith(baseWithSep, PathComparison);
+                || fullCandidate.StartsWith(baseWithSeparator, PathComparison)
+            : fullCandidate.StartsWith(baseWithSeparator, PathComparison);
     }
 
     #endregion
@@ -238,8 +245,8 @@ internal static class VfsShared
 
         lock (s_ignoreLock)
         {
-            if (s_ignoreCache is { } recheck && ReferenceEquals(recheck.Settings, settings))
-                return recheck;
+            if (s_ignoreCache is { } rechecked && ReferenceEquals(rechecked.Settings, settings))
+                return rechecked;
 
             var ignored = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -272,21 +279,31 @@ internal static class VfsShared
 
     #region Symlink Operations
 
-    /// <summary>Attempts to create a symlink.</summary>
+    /// <summary>Attempts to create a symlink via <see cref="IFileSystem"/> so changes are hidden from Shoko's file watcher and long paths are supported.</summary>
     /// <param name="source">The physical source file.</param>
-    /// <param name="dest">The destination link path.</param>
+    /// <param name="destination">The destination link path.</param>
     /// <param name="logger">Logger instance.</param>
+    /// <param name="fileSystem">Optional Shoko file system service.</param>
     /// <param name="targetOverride">Optional specific target string.</param>
     /// <param name="useRelativeTarget">Whether to resolve the target path relatively.</param>
     /// <param name="skipExistenceCheck">If true, bypasses the filesystem check and writes the link directly.</param>
     /// <param name="checkVfsDisabled">Whether to skip link creation if VFS generation is disabled in settings.</param>
     /// <returns>True if the link exists and is correct, or was successfully created.</returns>
-    public static bool TryCreateLink(string source, string dest, ILogger logger, string? targetOverride = null, bool useRelativeTarget = true, bool skipExistenceCheck = false, bool checkVfsDisabled = true)
+    public static bool TryCreateLink(
+        string source,
+        string destination,
+        ILogger logger,
+        IFileSystem? fileSystem = null,
+        string? targetOverride = null,
+        bool useRelativeTarget = true,
+        bool skipExistenceCheck = false,
+        bool checkVfsDisabled = true
+    )
     {
         if (checkVfsDisabled && Settings.Advanced.DisableVfsGeneration)
             return true;
 
-        string linkDir = Path.GetDirectoryName(dest) ?? string.Empty;
+        string linkDir = Path.GetDirectoryName(destination) ?? string.Empty;
         string relativeTarget = targetOverride ?? source;
         if (targetOverride == null && useRelativeTarget && !string.IsNullOrWhiteSpace(linkDir))
             relativeTarget = Path.GetRelativePath(linkDir, source);
@@ -295,35 +312,63 @@ internal static class VfsShared
         {
             try
             {
-                var fileInfo = new FileInfo(dest);
-                if (fileInfo.Exists || fileInfo.LinkTarget != null)
+                if (fileSystem != null)
                 {
-                    if (string.Equals(NormalizeSeparators(fileInfo.LinkTarget ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
-                        return true;
+                    var existingStat = fileSystem.GetStat(destination, followSymbolicLinks: false);
+                    if (existingStat is SymbolicLinkStat symlinkStat)
+                    {
+                        if (string.Equals(NormalizeSeparators(symlinkStat.Target ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
+                            return true;
 
-                    fileInfo.Delete();
+                        if (symlinkStat.IsDirectoryLink == true)
+                            fileSystem.DeleteDirectory(destination, recursive: false);
+                        else
+                            fileSystem.DeleteFile(destination);
+                    }
+                    else if (existingStat is not null)
+                        fileSystem.DeleteFile(destination);
+                }
+                else
+                {
+                    var fileInfo = new FileInfo(destination);
+                    if (fileInfo.Exists || fileInfo.LinkTarget != null)
+                    {
+                        if (string.Equals(NormalizeSeparators(fileInfo.LinkTarget ?? string.Empty), NormalizeSeparators(relativeTarget), PathComparison))
+                            return true;
+
+                        fileInfo.Delete();
+                    }
                 }
             }
             catch (Exception exception)
             {
-                logger.LogWarning(exception, "VFS: Unable to remove existing link at -> {Dest}", dest);
+                logger.LogWarning(exception, "VFS: Unable to remove existing link at -> {Destination}", destination);
                 return false;
             }
         }
 
-        // Internal wrapper around the OS file APIs to create standard filesystem relative symbolic links.
+        // Internal wrapper around the OS/Shoko file APIs to create standard filesystem relative symbolic links.
         try
         {
             var stopwatch = Stopwatch.StartNew();
-            var info = File.CreateSymbolicLink(dest, relativeTarget);
+            if (fileSystem != null)
+            {
+                fileSystem.CreateSymbolicLink(relativeTarget, destination, isDirectory: false);
+                stopwatch.Stop();
+                if (stopwatch.ElapsedMilliseconds > 20)
+                    logger.LogDebug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", destination, stopwatch.ElapsedMilliseconds);
+                return true;
+            }
+
+            var info = File.CreateSymbolicLink(destination, relativeTarget);
             stopwatch.Stop();
             if (stopwatch.ElapsedMilliseconds > 20)
-                logger.LogDebug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", dest, stopwatch.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
+                logger.LogDebug("VFS: Symlink created -> '{Link}' in {Elapsed}ms", destination, stopwatch.ElapsedMilliseconds); // only log slow operations, to avoid spamming the logs
             return info.Exists;
         }
         catch (Exception exception)
         {
-            logger.LogDebug(exception, "VFS: Symlink creation failed -> {Link}", dest);
+            logger.LogDebug(exception, "VFS: Symlink creation failed -> {Link}", destination);
             return false;
         }
     }
@@ -363,8 +408,17 @@ internal static class VfsShared
     /// <param name="ignoredNames">Optional pre-computed set of ignored folder names for performance.</param>
     /// <param name="relativeTo">Optional managed folder root used to isolate relative path segments.</param>
     /// <param name="isDirectory">Whether the path represents a directory rather than a file.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe sibling checks.</param>
     /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
-    public static bool IsPathIgnored(string path, IVideoService videoService, RelayConfig settings, HashSet<string>? ignoredNames = null, string? relativeTo = null, bool isDirectory = false)
+    public static bool IsPathIgnored(
+        string path,
+        IVideoService videoService,
+        RelayConfig settings,
+        HashSet<string>? ignoredNames = null,
+        string? relativeTo = null,
+        bool isDirectory = false,
+        IFileSystem? fileSystem = null
+    )
     {
         if (string.IsNullOrEmpty(path))
             return false;
@@ -398,22 +452,22 @@ internal static class VfsShared
         }
         else if (Path.IsPathRooted(path))
         {
-            string normPath = NormalizeSeparators(path);
-            if (normPath.Length > 1)
-                normPath = normPath.TrimEnd(Path.DirectorySeparatorChar);
+            string fullNormalizedPath = NormalizeSeparators(path);
+            if (fullNormalizedPath.Length > 1)
+                fullNormalizedPath = fullNormalizedPath.TrimEnd(Path.DirectorySeparatorChar);
 
             var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
                 .Select(folder => folder.Path)
                 .Where(folderPath => !string.IsNullOrWhiteSpace(folderPath))
                 .Select(folderPath =>
                 {
-                    string norm = NormalizeSeparators(folderPath);
-                    return norm.Length > 1 ? norm.TrimEnd(Path.DirectorySeparatorChar) : norm;
+                    string normalizedFolder = NormalizeSeparators(folderPath);
+                    return normalizedFolder.Length > 1 ? normalizedFolder.TrimEnd(Path.DirectorySeparatorChar) : normalizedFolder;
                 })
                 .OrderByDescending(folderPath => folderPath.Length)
                 .FirstOrDefault(folderPath =>
-                    string.Equals(normPath, folderPath, PathComparison)
-                    || normPath.StartsWith(folderPath.EndsWith(Path.DirectorySeparatorChar) ? folderPath : folderPath + Path.DirectorySeparatorChar, PathComparison)
+                    string.Equals(fullNormalizedPath, folderPath, PathComparison)
+                    || fullNormalizedPath.StartsWith(folderPath.EndsWith(Path.DirectorySeparatorChar) ? folderPath : folderPath + Path.DirectorySeparatorChar, PathComparison)
                 );
 
             if (matchedRoot != null && TryMakeRelative(matchedRoot, path, out var relativePath))
@@ -423,13 +477,13 @@ internal static class VfsShared
         var plexLocalExtras = settings.Advanced.PlexLocalExtras;
         var names = ignoredNames ?? GetIgnoredFolderNames(settings);
         var alternateLookup = names.GetAlternateLookup<ReadOnlySpan<char>>();
-        int lastSlash = -1;
+        int lastSeparatorIndex = -1;
 
         int end;
         for (int start = 0; start < path.Length; start = end + 1)
         {
-            int relEnd = path.AsSpan(start).IndexOfAny(s_pathSeparators);
-            end = relEnd < 0 ? path.Length : start + relEnd;
+            int relativeEnd = path.AsSpan(start).IndexOfAny(s_pathSeparators);
+            end = relativeEnd < 0 ? path.Length : start + relativeEnd;
 
             if (end > start)
             {
@@ -438,8 +492,8 @@ internal static class VfsShared
                     return true;
             }
 
-            if (relEnd >= 0)
-                lastSlash = end;
+            if (relativeEnd >= 0)
+                lastSeparatorIndex = end;
         }
 
         var multiSegments = GetIgnoredCache(settings).MultiSegments;
@@ -458,7 +512,7 @@ internal static class VfsShared
 
         if (plexLocalExtras && !isDirectory)
         {
-            var fileSpan = path.AsSpan(lastSlash >= 0 ? lastSlash + 1 : 0);
+            var fileSpan = path.AsSpan(lastSeparatorIndex >= 0 ? lastSeparatorIndex + 1 : 0);
             int lastDot = fileSpan.LastIndexOf('.');
             var nameWithoutExt = lastDot >= 0 ? fileSpan[..lastDot] : fileSpan;
 
@@ -471,7 +525,8 @@ internal static class VfsShared
                 try
                 {
                     var expectedBase = nameWithoutExt[..suffixIndex];
-                    foreach (var file in Directory.EnumerateFiles(dir, "*"))
+                    IEnumerable<string> siblingFiles = fileSystem != null ? fileSystem.GetFilePaths(dir) : Directory.EnumerateFiles(dir, "*");
+                    foreach (var file in siblingFiles)
                         if (Path.GetFileNameWithoutExtension(file.AsSpan()).Equals(expectedBase, PathComparison) && videoService.IsAllowedVideoExtension(file))
                             return true;
                 }
@@ -488,24 +543,24 @@ internal static class VfsShared
 
     /// <summary>Atomically writes a file via a temporary path move using the supplied writer callback.</summary>
     /// <param name="path">The target file path.</param>
-    /// <param name="writeTmp">Callback that writes the contents to the temporary file path.</param>
-    public static void WriteAtomic(string path, Action<string> writeTmp)
+    /// <param name="writeTemp">Callback that writes the contents to the temporary file path.</param>
+    public static void WriteAtomic(string path, Action<string> writeTemp)
     {
-        string tmpPath = path + ".tmp";
-        writeTmp(tmpPath);
-        File.Move(tmpPath, path, overwrite: true);
+        string tempPath = path + ".tmp";
+        writeTemp(tempPath);
+        File.Move(tempPath, path, overwrite: true);
     }
 
     /// <summary>Asynchronously and atomically writes a file via a temporary path move using the supplied writer callback.</summary>
     /// <param name="path">The target file path.</param>
-    /// <param name="writeTmp">Asynchronous callback that writes the contents to the temporary file path.</param>
+    /// <param name="writeTemp">Asynchronous callback that writes the contents to the temporary file path.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A task representing the asynchronous write operation.</returns>
-    public static async Task WriteAtomicAsync(string path, Func<string, CancellationToken, Task> writeTmp, CancellationToken cancellationToken = default)
+    public static async Task WriteAtomicAsync(string path, Func<string, CancellationToken, Task> writeTemp, CancellationToken cancellationToken = default)
     {
-        string tmpPath = path + ".tmp";
-        await writeTmp(tmpPath, cancellationToken).ConfigureAwait(false);
-        File.Move(tmpPath, path, overwrite: true);
+        string tempPath = path + ".tmp";
+        await writeTemp(tempPath, cancellationToken).ConfigureAwait(false);
+        File.Move(tempPath, path, overwrite: true);
     }
 
     /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>

@@ -65,13 +65,7 @@ public class RefreshSeriesPlexAction(
         {
             _progress.Report(15);
             plexMetadata.InvalidateCache(primaryId);
-
-            foreach (var target in plexClient.GetConfiguredTargets())
-            {
-                var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(primaryId, target, metadataService, token).ConfigureAwait(false);
-                foreach (var ratingKey in ratingKeys)
-                    await plexClient.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
-            }
+            await plexClient.RefreshSeriesMetadataAsync(primaryId, metadataService, token).ConfigureAwait(false);
 
             _progress.Report(50);
             if (UpdateCollections)

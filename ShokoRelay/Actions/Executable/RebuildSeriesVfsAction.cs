@@ -6,15 +6,9 @@ using ShokoRelay.AnimeThemes;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Series-scoped action to rebuild VFS links and restore AnimeThemes links for the selected Shoko series.</summary>
-public class RebuildSeriesVfsAction(
-    VfsBuilder vfsBuilder,
-    AnimeThemesMapping atMapping,
-    VfsWatcher vfsWatcher,
-    PlexMetadata plexMetadata,
-    PlexClient plexClient,
-    IMetadataService metadataService,
-    ConfigProvider configProvider
-) : SeriesAction, IProgressReportingAction
+public class RebuildSeriesVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping, VfsWatcher vfsWatcher, PlexMetadata plexMetadata, PlexClient plexClient, IMetadataService metadataService)
+    : SeriesAction,
+        IProgressReportingAction
 {
     #region Setup & Metadata
 
@@ -56,7 +50,7 @@ public class RebuildSeriesVfsAction(
             await Task.Run(() => vfsBuilder.Build(primaryId, cleanRoot: false, token), token).ConfigureAwait(false);
             _progress.Report(70);
 
-            await ActionScheduleHelper.ApplyMappingIfExistsAsync(atMapping, configProvider, [primaryId], token).ConfigureAwait(false);
+            await atMapping.ApplyMappingIfExistsAsync([primaryId], token).ConfigureAwait(false);
 
             plexMetadata.InvalidateCache(primaryId);
             if (TriggerPlexUpdates && plexClient.IsEnabled)

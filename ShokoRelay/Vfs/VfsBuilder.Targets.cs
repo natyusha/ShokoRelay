@@ -36,7 +36,7 @@ public partial class VfsBuilder
                         mapping,
                         extraSeason,
                         state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
-                        Path.GetExtension(sourceInfo.Src),
+                        Path.GetExtension(sourceInfo.SourcePath),
                         state.DisplayTitle,
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
@@ -47,7 +47,7 @@ public partial class VfsBuilder
                         VfsHelper.BuildStandardFileName(
                             mapping,
                             state.EpisodePad,
-                            Path.GetExtension(sourceInfo.Src),
+                            Path.GetExtension(sourceInfo.SourcePath),
                             mapping.Video!.LocalID,
                             mapping.PartCount > 1 && mapping.PartIndex.HasValue,
                             hasPeer ? mapping.PartIndex : null,
@@ -59,7 +59,7 @@ public partial class VfsBuilder
 
                 var destinationFilePath = Path.Combine(seasonPath, fileName);
 
-                if (TryCreateMappedVideoLink(state, sourceInfo.Src, destinationFilePath, rootPath, seasonName, fileName))
+                if (TryCreateMappedVideoLink(state, sourceInfo.SourcePath, destinationFilePath, rootPath, seasonName, fileName))
                 {
                     // Resolve Primary IDs to allow local asset linking for crossover files that have been consolidated via VFS Overrides.
                     bool isCrossover =
@@ -69,7 +69,7 @@ public partial class VfsBuilder
                     if (!isCrossover)
                     {
                         bool isPrimary = (mapping.PrimaryEpisode as IShokoEpisode)?.ShokoSeriesID == state.FolderId;
-                        LinkLocalMetadataForFile(state, sourceInfo.Src, seriesPath, seasonPath, destinationFilePath, rootPath, sourceInfo.ImportRoot, "", seasonName, isPrimary);
+                        LinkLocalMetadataForFile(state, sourceInfo.SourcePath, seriesPath, seasonPath, destinationFilePath, rootPath, sourceInfo.ImportRoot, "", seasonName, isPrimary);
                     }
                 }
             }
@@ -134,7 +134,7 @@ public partial class VfsBuilder
             string fileName = VfsHelper.SanitizeName(
                 VfsHelper.BuildMovieFileName(
                     mapping,
-                    Path.GetExtension(sourceInfo.Src),
+                    Path.GetExtension(sourceInfo.SourcePath),
                     mapping.Video.LocalID,
                     mapping.PartCount > 1 && mapping.PartIndex.HasValue,
                     hasPeer ? mapping.PartIndex : null,
@@ -145,10 +145,10 @@ public partial class VfsBuilder
             );
             string destinationFilePath = Path.Combine(moviePath, fileName);
 
-            if (TryCreateMappedVideoLink(state, sourceInfo.Src, destinationFilePath, rootPath, $"Movie ❯ {folderName}", fileName))
+            if (TryCreateMappedVideoLink(state, sourceInfo.SourcePath, destinationFilePath, rootPath, $"Movie ❯ {folderName}", fileName))
             {
                 bool isPrimary = (mapping.PrimaryEpisode as IShokoEpisode)?.ShokoSeriesID == state.FolderId;
-                LinkLocalMetadataForFile(state, sourceInfo.Src, moviePath, moviePath, destinationFilePath, rootPath, sourceInfo.ImportRoot, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}", isPrimary);
+                LinkLocalMetadataForFile(state, sourceInfo.SourcePath, moviePath, moviePath, destinationFilePath, rootPath, sourceInfo.ImportRoot, $"Movie ❯ {folderName}", $"Movie ❯ {folderName}", isPrimary);
             }
         }
 
@@ -165,7 +165,7 @@ public partial class VfsBuilder
                     mapping,
                     extraSeason,
                     state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
-                    Path.GetExtension(sourceInfo.Src),
+                    Path.GetExtension(sourceInfo.SourcePath),
                     state.DisplayTitle,
                     mapping.PartIndex,
                     mapping.PartCount,
@@ -177,18 +177,18 @@ public partial class VfsBuilder
                 {
                     string extraPath = Path.Combine(moviePath, extraSeason.Folder);
                     if (!Settings.Advanced.DisableVfsGeneration)
-                        Directory.CreateDirectory(extraPath);
+                        fileSystem.CreateDirectory(extraPath);
                     string destinationFilePath = Path.Combine(extraPath, fileName);
 
                     if (state.ExpectedFiles.Contains(destinationFilePath))
                         continue;
 
-                    if (VfsShared.TryCreateLink(sourceInfo.Src, destinationFilePath, logger, skipExistenceCheck: state.SkipCheck))
+                    if (VfsShared.TryCreateLink(sourceInfo.SourcePath, destinationFilePath, logger, fileSystem, skipExistenceCheck: state.SkipCheck))
                     {
                         state.Created++;
                         state.Planned++;
                         state.ExpectedFiles.Add(destinationFilePath);
-                        state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", $"{extraSeason.Folder}/{fileName}", sourceInfo.Src);
+                        state.OnLink?.Invoke(rootPath, $"Movie ❯ {folderName}", $"{extraSeason.Folder}/{fileName}", sourceInfo.SourcePath);
                     }
                 }
             }

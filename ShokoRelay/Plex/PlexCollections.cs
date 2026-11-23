@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using Shoko.Abstractions.FileSystem.Services;
 
 namespace ShokoRelay.Plex;
 
@@ -31,7 +32,7 @@ public sealed record CollectionDeletionDetail(string TargetTitle, bool IsMovie, 
 #endregion
 
 /// <summary>Provides utilities for working with Plex collections.</summary>
-public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogger<PlexCollections> logger)
+public class PlexCollections(HttpClient httpClient, PlexClient plexClient, IFileSystem fileSystem, ILogger<PlexCollections> logger)
 {
     #region State
 
@@ -111,13 +112,13 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, ILogg
         string action = $"Upload {subEndpoint} for {collectionId}";
         try
         {
-            if (!File.Exists(imagePath))
+            if (!fileSystem.FileExists(imagePath))
             {
                 logger.LogWarning("PlexCollections: {Action} failed because the file does not exist at {ImagePath}", action, imagePath);
                 return false;
             }
 
-            using var fileStream = new FileStream(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var fileStream = fileSystem.OpenFile(imagePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var request = plexClient.CreateRequest(HttpMethod.Post, $"/library/metadata/{collectionId}/{subEndpoint}", target.ServerUrl);
 
             var content = new StreamContent(fileStream);

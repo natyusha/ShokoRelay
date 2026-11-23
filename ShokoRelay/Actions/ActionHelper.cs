@@ -2,7 +2,6 @@ using Shoko.Abstractions.Actions;
 using Shoko.Abstractions.ScheduledActions;
 using Shoko.Abstractions.ScheduledActions.Services;
 using ShokoRelay.Actions.Scheduled;
-using ShokoRelay.AnimeThemes;
 
 namespace ShokoRelay.Actions;
 
@@ -101,15 +100,6 @@ public static class ActionScheduleHelper
             semaphore.Release();
         }
     }
-
-    /// <summary>Applies AnimeThemes VFS mappings when a mapping CSV exists in the plugin configuration directory.</summary>
-    /// <param name="atMapping">The AnimeThemes mapping service.</param>
-    /// <param name="configProvider">The configuration provider.</param>
-    /// <param name="seriesFilter">Optional Shoko series IDs to limit mapping application to.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>A task representing the optional mapping application.</returns>
-    public static Task ApplyMappingIfExistsAsync(AnimeThemesMapping atMapping, ConfigProvider configProvider, IReadOnlyCollection<int>? seriesFilter, CancellationToken cancellationToken = default) =>
-        File.Exists(Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping)) ? atMapping.ApplyMappingAsync(seriesFilter, cancellationToken) : Task.CompletedTask;
 
     #endregion
 }

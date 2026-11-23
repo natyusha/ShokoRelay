@@ -213,7 +213,6 @@ public partial class ConfigProvider : IDisposable
 
     #region Settings Management
 
-
     /// <summary>Return the current settings, loading from disk if not already cached.</summary>
     /// <returns>The current <see cref="RelayConfig"/> instance.</returns>
     public RelayConfig GetSettings()
@@ -359,6 +358,29 @@ public partial class ConfigProvider : IDisposable
             _cachedExtraUsers = null; // Clear the cached extra users so they are re-parsed on the next sync after settings changes
             _cachedAdvancedUserMappings = null;
         }
+    }
+
+    /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
+    /// <remarks>
+    ///   - Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart
+    ///   - Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response
+    /// </remarks>
+    /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
+    public string? DetectRequestBaseUrl()
+    {
+        if (_httpContextAccessor?.HttpContext is not { } httpContext)
+            return null;
+
+        var request = httpContext.Request;
+
+        // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
+        var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
+        if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
+            scheme = request.IsHttps ? "https" : request.Scheme;
+
+        var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
+        var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
+        return $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
     }
 
     #endregion
@@ -516,29 +538,6 @@ public partial class ConfigProvider : IDisposable
 
     #region Internal Helpers
 
-    /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
-    /// <remarks>
-    ///   - Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart
-    ///   - Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response
-    /// </remarks>
-    /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
-    public string? DetectRequestBaseUrl()
-    {
-        if (_httpContextAccessor?.HttpContext is not { } httpContext)
-            return null;
-
-        var request = httpContext.Request;
-
-        // Inspect standard proxy headers to accurately detect HTTPS scheme and external hostname
-        var scheme = request.Headers["X-Forwarded-Proto"].FirstOrDefault()?.Split(',')[0].Trim();
-        if (string.IsNullOrEmpty(scheme) || (!scheme.Equals("http", StringComparison.OrdinalIgnoreCase) && !scheme.Equals("https", StringComparison.OrdinalIgnoreCase)))
-            scheme = request.IsHttps ? "https" : request.Scheme;
-
-        var rawHost = request.Headers["X-Forwarded-Host"].FirstOrDefault()?.Split(',')[0].Trim();
-        var host = !string.IsNullOrEmpty(rawHost) && TextHelper.ForwardedHostRegex().IsMatch(rawHost) ? rawHost : request.Host.ToString();
-        return $"{scheme}://{host}{request.PathBase}".TrimEnd('/');
-    }
-
     /// <summary>Reads a file with a brief retry mechanism to bypass transient file sharing locks.</summary>
     /// <param name="path">The file path to read.</param>
     /// <returns>The file contents.</returns>
@@ -547,7 +546,7 @@ public partial class ConfigProvider : IDisposable
         for (int attempt = 0; attempt < 3; attempt++)
             try
             {
-                return File.ReadAllText(path);
+                return VfsShared.ReadAllTextShared(path);
             }
             catch (IOException)
             {

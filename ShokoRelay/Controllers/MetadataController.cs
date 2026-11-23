@@ -300,32 +300,10 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     [HttpGet("metadata/{ratingKey}/grandchildren")]
     public IActionResult GetGrandchildren(string ratingKey) =>
         SafeRequest(() =>
-        {
-            if (PlexHelper.IsMovieKey(ratingKey))
-                return EmptyMatch();
-
-            var context = mapper.GetSeriesContext(ratingKey);
-            if (context == null)
-                return NotFound();
-
-            var (start, size) = GetPaging();
-            var allEpisodes = context.FileData.Seasons.SelectMany(season => mapper.BuildEpisodeList(context, season)).ToList();
-            var pagedData = allEpisodes.Skip(start).Take(size).ToArray();
-
-            return Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        offset = start,
-                        totalSize = allEpisodes.Count,
-                        identifier = ShokoRelayConstants.AgentScheme,
-                        size = pagedData.Length,
-                        Metadata = pagedData,
-                    },
-                }
-            );
-        });
+            PlexHelper.IsMovieKey(ratingKey) ? EmptyMatch()
+            : mapper.GetSeriesContext(ratingKey) is not { } context ? NotFound()
+            : WrapInPagedContainer(context.FileData.Seasons.SelectMany(season => mapper.BuildEpisodeList(context, season)), ShokoRelayConstants.AgentScheme)
+        );
 
     /// <summary>Enumerates all available artwork for the specified ratingKey.</summary>
     /// <remarks>See <c>/metadata/{ratingKey}</c> for supported ratingKey formats and resolution behavior.</remarks>

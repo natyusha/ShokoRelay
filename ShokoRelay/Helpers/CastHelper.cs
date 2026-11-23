@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
-using System.Globalization;
 using System.Text;
 using Newtonsoft.Json;
 using Shoko.Abstractions.Metadata.Containers;
@@ -231,6 +230,44 @@ public static class CastHelper
             }
         );
 
+    /// <summary>Determines if a credit or studio name is blacklisted.</summary>
+    /// <param name="name">The credit or studio name to evaluate.</param>
+    /// <returns>True if the credit should be filtered out.</returns>
+    private static bool IsCreditBlacklisted(string? name) =>
+        !string.IsNullOrWhiteSpace(name)
+        && (s_creditBlacklist.Contains(NormalizeCreditKey(name)) || (s_creditMerges.TryGetValue(NormalizeCreditKey(name), out var target) && s_creditBlacklist.Contains(NormalizeCreditKey(target))));
+
+    /// <summary>Resolves the preferred global credit or studio display name using explicit merges, AniDB priority, and TMDB frequency.</summary>
+    /// <param name="rawName">The raw studio, company, or creator name.</param>
+    /// <param name="isPerson">True for Person creators; false for Studios/Companies.</param>
+    /// <param name="priority">The source priority (1 = AniDB, 2 = TMDB).</param>
+    /// <returns>The globally preferred display name.</returns>
+    private static string ResolvePreferredCreditName(string rawName, bool isPerson, int priority = 2)
+    {
+        string trimmed = rawName.Trim();
+        string norm = NormalizeCreditKey(trimmed);
+        return norm.Length == 0 ? trimmed
+            : s_creditMerges.TryGetValue(norm, out var mapped) ? mapped
+            : priority == 1 ? trimmed
+            : s_anidbCreditNames.TryGetValue((isPerson, norm), out var anidbEntry) ? anidbEntry.ResolveDisplayName(trimmed, 1, record: false)
+            : s_tmdbCreditNames.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
+    }
+
+    /// <summary>Normalizes a studio, company, or creator name for comparison by stripping trailing (JP) tags, diacritics, spaces, and punctuation.</summary>
+    /// <param name="name">The name to normalize.</param>
+    /// <returns>A normalized key string.</returns>
+    private static string NormalizeCreditKey(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            return string.Empty;
+
+        string trimmed = name.Trim();
+        if (trimmed.EndsWith(" (JP)", StringComparison.OrdinalIgnoreCase))
+            trimmed = trimmed[..^5].TrimEnd();
+
+        return TextHelper.NormalizeAlphanumericKey(trimmed);
+    }
+
     #endregion
 
     #region Cast and Crew Logic
@@ -430,50 +467,6 @@ public static class CastHelper
 
     #region Studio Logic
 
-    /// <summary>Determines if a credit or studio name is blacklisted.</summary>
-    /// <param name="name">The credit or studio name to evaluate.</param>
-    /// <returns>True if the credit should be filtered out.</returns>
-    private static bool IsCreditBlacklisted(string? name) =>
-        !string.IsNullOrWhiteSpace(name)
-        && (s_creditBlacklist.Contains(NormalizeCreditKey(name)) || (s_creditMerges.TryGetValue(NormalizeCreditKey(name), out var target) && s_creditBlacklist.Contains(NormalizeCreditKey(target))));
-
-    /// <summary>Resolves the preferred global credit or studio display name using explicit merges, AniDB priority, and TMDB frequency.</summary>
-    /// <param name="rawName">The raw studio, company, or creator name.</param>
-    /// <param name="isPerson">True for Person creators; false for Studios/Companies.</param>
-    /// <param name="priority">The source priority (1 = AniDB, 2 = TMDB).</param>
-    /// <returns>The globally preferred display name.</returns>
-    private static string ResolvePreferredCreditName(string rawName, bool isPerson, int priority = 2)
-    {
-        string trimmed = rawName.Trim();
-        string norm = NormalizeCreditKey(trimmed);
-        return norm.Length == 0 ? trimmed
-            : s_creditMerges.TryGetValue(norm, out var mapped) ? mapped
-            : priority == 1 ? trimmed
-            : s_anidbCreditNames.TryGetValue((isPerson, norm), out var anidbEntry) ? anidbEntry.ResolveDisplayName(trimmed, 1, record: false)
-            : s_tmdbCreditNames.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
-    }
-
-    /// <summary>Normalizes a studio, company, or creator name for comparison by stripping trailing (JP) tags, diacritics, spaces, and punctuation.</summary>
-    /// <param name="name">The name to normalize.</param>
-    /// <returns>A normalized key string.</returns>
-    private static string NormalizeCreditKey(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-            return string.Empty;
-
-        string trimmed = name.Trim();
-        if (trimmed.EndsWith(" (JP)", StringComparison.OrdinalIgnoreCase))
-            trimmed = trimmed[..^5].TrimEnd();
-
-        var normalized = trimmed.Normalize(NormalizationForm.FormD);
-        var stringBuilderNorm = new StringBuilder(normalized.Length);
-        foreach (char character in normalized)
-            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character))
-                stringBuilderNorm.Append(char.ToLowerInvariant(character));
-
-        return stringBuilderNorm.ToString();
-    }
-
     /// <summary>Assemble an array of <see cref="TagItem"/> objects representing the series' studios, utilizing Shoko's native cross-source merging.</summary>
     /// <param name="series">The Shoko series metadata.</param>
     /// <param name="metadataService">The metadata service used to invoke cross-source merging.</param>
@@ -646,13 +639,13 @@ public static class CastHelper
                         if (string.IsNullOrWhiteSpace(title.Value))
                             continue;
 
-                        string alt = title.Value.Trim();
-                        string altNoSpace = alt.Replace(" ", "", StringComparison.Ordinal);
-                        _altOriginal.TryAdd(altNoSpace, item);
+                        string alias = title.Value.Trim();
+                        string aliasNoSpace = alias.Replace(" ", "", StringComparison.Ordinal);
+                        _altOriginal.TryAdd(aliasNoSpace, item);
 
-                        _altNames.TryAdd(alt, item);
-                        if (GetFlippedName(alt) is { } altFlipped)
-                            _altNames.TryAdd(altFlipped, item);
+                        _altNames.TryAdd(alias, item);
+                        if (GetFlippedName(alias) is { } aliasFlipped)
+                            _altNames.TryAdd(aliasFlipped, item);
                     }
                 }
             }

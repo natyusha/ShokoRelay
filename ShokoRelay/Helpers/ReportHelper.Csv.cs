@@ -140,16 +140,16 @@ public static partial class ReportHelper
                     return;
                 }
 
-                string origNorm = normalizeKey(trimmed);
-                bool isMerged = merges.TryGetValue(origNorm, out var target);
-                string targetStr = isMerged ? target! : trimmed;
-                string normKey = isMerged ? normalizeKey(targetStr) : origNorm;
-                bool isBlacklisted = normKey.Length == 0 || blacklist.Contains(normKey) || blacklist.Contains(origNorm);
+                string originalNormalizedKey = normalizeKey(trimmed);
+                bool isMerged = merges.TryGetValue(originalNormalizedKey, out var target);
+                string targetText = isMerged ? target! : trimmed;
+                string normalizedKey = isMerged ? normalizeKey(targetText) : originalNormalizedKey;
+                bool isBlacklisted = normalizedKey.Length == 0 || blacklist.Contains(normalizedKey) || blacklist.Contains(originalNormalizedKey);
 
                 string displayName = !isBlacklisted && formatDisplayName != null ? formatDisplayName(trimmed) : trimmed;
-                string? formattedTarget = !isBlacklisted && isMerged ? (formatDisplayName != null ? formatDisplayName(targetStr) : targetStr) : null;
+                string? formattedTarget = !isBlacklisted && isMerged ? (formatDisplayName != null ? formatDisplayName(targetText) : targetText) : null;
 
-                resolved = local.ResolveCache[rawName] = new ResolvedItem(normKey, displayName, formattedTarget, isBlacklisted);
+                resolved = local.ResolveCache[rawName] = new ResolvedItem(normalizedKey, displayName, formattedTarget, isBlacklisted);
             }
 
             if (resolved.IsBlacklisted || !local.SeenInSeries.Add((category, source, resolved.NormKey, resolved.DisplayName)))
@@ -209,15 +209,15 @@ public static partial class ReportHelper
                     for (int primaryIndex = 0; primaryIndex < primaries.Count; primaryIndex++)
                     {
                         var (sourceOrder, source, displayName, count) = primaries[primaryIndex];
-                        var stringBuilderSplit = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
+                        var splitBuilder = new StringBuilder($"{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
                         foreach (var (_, attachedSource, attachedDisplayName, attachedCount) in attached[primaryIndex])
-                            stringBuilderSplit.Append($";{attachedSource},{TextHelper.EscapeCsvCommas(attachedDisplayName)},{attachedCount}");
-                        rows.Add((sourceOrder, displayName, count, stringBuilderSplit.ToString()));
+                            splitBuilder.Append($";{attachedSource},{TextHelper.EscapeCsvCommas(attachedDisplayName)},{attachedCount}");
+                        rows.Add((sourceOrder, displayName, count, splitBuilder.ToString()));
                     }
                     continue;
                 }
 
-                var stringBuilderLine = new StringBuilder();
+                var lineBuilder = new StringBuilder();
                 int primaryOrder = ordered[0].SourceOrder;
                 string primaryName = ordered[0].DisplayName;
                 int primaryCount = ordered[0].Count;
@@ -227,19 +227,19 @@ public static partial class ReportHelper
                 {
                     primaryName = group.MergeTarget;
                     primaryCount = group.SeriesIds.Count;
-                    stringBuilderLine.Append($"Override,{TextHelper.EscapeCsvCommas(primaryName)},{primaryCount}");
+                    lineBuilder.Append($"Override,{TextHelper.EscapeCsvCommas(primaryName)},{primaryCount}");
                     foreach (var (_, source, displayName, count) in ordered)
-                        stringBuilderLine.Append($";{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
+                        lineBuilder.Append($";{source},{TextHelper.EscapeCsvCommas(displayName)},{count}");
                 }
                 // Case B: Has a natural winner (or target match) as ordered[0], append any subsequent variants/plurals/sources after ';'
                 else
                 {
-                    stringBuilderLine.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
+                    lineBuilder.Append($"{ordered[0].Source},{TextHelper.EscapeCsvCommas(ordered[0].DisplayName)},{ordered[0].Count}");
                     for (int orderedIndex = 1; orderedIndex < ordered.Count; orderedIndex++)
-                        stringBuilderLine.Append($";{ordered[orderedIndex].Source},{TextHelper.EscapeCsvCommas(ordered[orderedIndex].DisplayName)},{ordered[orderedIndex].Count}");
+                        lineBuilder.Append($";{ordered[orderedIndex].Source},{TextHelper.EscapeCsvCommas(ordered[orderedIndex].DisplayName)},{ordered[orderedIndex].Count}");
                 }
 
-                rows.Add((primaryOrder, primaryName, primaryCount, stringBuilderLine.ToString()));
+                rows.Add((primaryOrder, primaryName, primaryCount, lineBuilder.ToString()));
             }
 
             var stringBuilder = new StringBuilder();

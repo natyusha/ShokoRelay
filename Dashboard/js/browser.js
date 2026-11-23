@@ -272,6 +272,7 @@
     if (!details.dataset.rendered) details.dispatchEvent(new Event("toggle"));
     details.querySelector("summary")?.scrollIntoView({ behavior: "smooth", block: "center" });
   }
+
   /**
    * Helper to construct a file leaf node with source path tooltip.
    * @param {Object} file - The file metadata object.

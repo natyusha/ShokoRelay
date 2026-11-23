@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.Extensions;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Metadata.Events;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
@@ -22,6 +23,7 @@ namespace ShokoRelay.Vfs;
 /// <param name="criticRatingService">Plex critic rating service.</param>
 /// <param name="imageSyncService">Shoko image sync service.</param>
 /// <param name="plexMetadata">Plex metadata mapper.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
 public class VfsWatcher(
     IVideoService videoService,
@@ -36,6 +38,7 @@ public class VfsWatcher(
     CriticRatingService criticRatingService,
     ImageSyncService imageSyncService,
     PlexMetadata plexMetadata,
+    IFileSystem fileSystem,
     ILogger<VfsWatcher> logger
 )
 {
@@ -392,8 +395,7 @@ public class VfsWatcher(
                         var result = builder.Build(seriesIds, cleanRoot: false);
 
                         // Restore AnimeThemes links for the affected series if a mapping file exists
-                        if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                            await atMapping.ApplyMappingAsync(seriesIds, stopToken).ConfigureAwait(false);
+                        await atMapping.ApplyMappingIfExistsAsync(seriesIds, stopToken).ConfigureAwait(false);
 
                         stopwatch.Stop();
                         logger.LogInformation(
@@ -541,7 +543,7 @@ public class VfsWatcher(
         {
             foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
             {
-                if (Directory.Exists(path) && Directory.EnumerateFileSystemEntries(path).Any())
+                if (fileSystem.DirectoryExists(path) && !fileSystem.IsDirectoryEmpty(path))
                     await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
                 else
                     logger.LogDebug("VFS: Library scan for series -> {Title} [{LocalId}] skipped; path '{Path}' not ready or empty", series.GetDisplayTitle(), series.LocalID, path);
@@ -574,8 +576,7 @@ public class VfsWatcher(
                 }
 
                 // Restore AnimeThemes links for this specific series if a mapping file exists to prevent the pruned folder from losing them
-                if (File.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                    await atMapping.ApplyMappingAsync([seriesId], token).ConfigureAwait(false);
+                await atMapping.ApplyMappingIfExistsAsync([seriesId], token).ConfigureAwait(false);
             }
             finally
             {

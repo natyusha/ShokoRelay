@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Services;
 
@@ -64,6 +66,7 @@ public record ThemeMp3AuditResult(int Processed, int UpgradesFound, int MissingS
 /// <param name="httpClient">HTTP client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="ffmpegService">FFmpeg service.</param>
 /// <param name="plexClient">Plex client.</param>
@@ -73,6 +76,7 @@ public class AnimeThemesMp3Generator(
     HttpClient httpClient,
     IMetadataService metadataService,
     IVideoService videoService,
+    IFileSystem fileSystem,
     ConfigProvider configProvider,
     FfmpegService ffmpegService,
     PlexClient plexClient,
@@ -168,18 +172,26 @@ public class AnimeThemesMp3Generator(
         var excluded = VfsShared.GetIgnoredFolderNames(Settings);
         try
         {
-            var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true).Select(path => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).ToList();
+            var roots = VfsShared
+                .GetManagedFolderPaths(videoService, requireExists: true, fileSystem: fileSystem)
+                .Select(path => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                .ToList();
 
             var newCache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
 
             Parallel.ForEach(roots, root =>
             {
-                foreach (var file in Directory.EnumerateFiles(root!, "Theme.mp3", SearchOption.AllDirectories))
+                var listingOptions = new FileSystemListingOptions
                 {
-                    string dir = Path.GetDirectoryName(file)!;
-                    if (!VfsShared.IsPathIgnored(dir, videoService, Settings, excluded, relativeTo: root, isDirectory: true))
-                        newCache.TryAdd(dir, "|");
-                }
+                    Recursive = true,
+                    Extensions = [".mp3"],
+                    Filter = entry =>
+                        (entry.IsDirectory || entry.Name.Equals("Theme.mp3", StringComparison.OrdinalIgnoreCase))
+                        && !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, excluded, relativeTo: root, isDirectory: entry.IsDirectory, fileSystem: fileSystem),
+                };
+
+                foreach (var file in fileSystem.GetFilePaths(root!, listingOptions))
+                    newCache.TryAdd(Path.GetDirectoryName(file)!, "|");
             });
 
             _themeMp3Cache = newCache;
@@ -242,7 +254,7 @@ public class AnimeThemesMp3Generator(
     public async Task<ThemeMp3BatchResult> ProcessBatchAsync(AnimeThemesMp3Query query, CancellationToken cancellationToken)
     {
         string root = query.Path ?? "";
-        if (!Directory.Exists(root))
+        if (!fileSystem.DirectoryExists(root))
         {
             logger.LogWarning("AnimeThemes MP3: Batch root not found -> {Root}", root);
             return new ThemeMp3BatchResult(root, [new(root, "error", "Batch root not found.")], 0, 0, 1);
@@ -268,22 +280,20 @@ public class AnimeThemesMp3Generator(
 
         var ignoredNames = VfsShared.GetIgnoredFolderNames(Settings);
         var candidateDirs = new List<string>();
-        var pendingDirs = new Stack<string>();
-        if (!VfsShared.IsPathIgnored(root, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true))
-            pendingDirs.Push(root);
-
-        while (pendingDirs.Count > 0)
+        if (!VfsShared.IsPathIgnored(root, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true, fileSystem: fileSystem))
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            string currentDir = pendingDirs.Pop();
-            candidateDirs.Add(currentDir);
-            try
-            {
-                foreach (var subDir in Directory.EnumerateDirectories(currentDir))
-                    if (!VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true))
-                        pendingDirs.Push(subDir);
-            }
-            catch { }
+            candidateDirs.Add(root);
+            candidateDirs.AddRange(
+                fileSystem.GetDirectoryPaths(
+                    root,
+                    new FileSystemListingOptions
+                    {
+                        Recursive = true,
+                        Filter = entry => !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true, fileSystem: fileSystem),
+                    },
+                    cancellationToken
+                )
+            );
         }
         var candidateSet = candidateDirs.ToHashSet(VfsShared.PathComparer);
 
@@ -293,17 +303,18 @@ public class AnimeThemesMp3Generator(
                 if (VfsHelper.IsSeasonSubfolder(Path.GetFileName(dir)) && Path.GetDirectoryName(dir) is { Length: > 0 } parentDir && candidateSet.Contains(parentDir))
                     return false;
 
-                bool hasDirectVideo = Directory
-                    .EnumerateFiles(dir, "*", SearchOption.TopDirectoryOnly)
-                    .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot));
+                bool hasDirectVideo = fileSystem
+                    .GetFilePaths(dir, cancellationToken: cancellationToken)
+                    .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, fileSystem: fileSystem));
                 return hasDirectVideo
-                    || Directory
-                        .EnumerateDirectories(dir, "*", SearchOption.TopDirectoryOnly)
+                    || fileSystem
+                        .GetDirectoryPaths(dir, cancellationToken: cancellationToken)
                         .Where(subDir =>
-                            VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true)
+                            VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir))
+                            && !VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true, fileSystem: fileSystem)
                         )
-                        .SelectMany(subDir => Directory.EnumerateFiles(subDir, "*", SearchOption.TopDirectoryOnly))
-                        .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot));
+                        .SelectMany(subDir => fileSystem.GetFilePaths(subDir, cancellationToken: cancellationToken))
+                        .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, fileSystem: fileSystem));
             })
             .ToList();
 
@@ -361,20 +372,22 @@ public class AnimeThemesMp3Generator(
             return new("", "error", "Path is required.");
 
         logger.LogDebug("AnimeThemes MP3: Preparing context for folder -> {Folder}", folder);
-        if (!Directory.Exists(folder))
+        if (!fileSystem.DirectoryExists(folder))
             return new(folder, "error", "Folder not found.");
 
         if (VfsHelper.IsInVfsRoot(folder, out string vfsRoot))
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
-        var searchOption = query.Batch ? SearchOption.TopDirectoryOnly : SearchOption.AllDirectories;
-        string? videoPath = Directory.EnumerateFiles(folder, "*", searchOption).FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+        var videoListingOptions = new FileSystemListingOptions { Recursive = !query.Batch };
+        string? videoPath = fileSystem
+            .GetFilePaths(folder, videoListingOptions, cancellationToken)
+            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
         if (videoPath == null && query.Batch)
-            videoPath = Directory
-                .EnumerateDirectories(folder, "*", SearchOption.TopDirectoryOnly)
-                .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true))
-                .SelectMany(subDir => Directory.EnumerateFiles(subDir, "*", SearchOption.TopDirectoryOnly))
-                .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+            videoPath = fileSystem
+                .GetDirectoryPaths(folder, cancellationToken: cancellationToken)
+                .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true, fileSystem: fileSystem))
+                .SelectMany(subDir => fileSystem.GetFilePaths(subDir, cancellationToken: cancellationToken))
+                .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
 
         if (videoPath == null)
         {
@@ -417,7 +430,7 @@ public class AnimeThemesMp3Generator(
             return new(folder, "skipped", "Theme already processed for this series in another directory.");
 
         string themePath = Path.Combine(folder, "Theme.mp3");
-        if (!query.Force && File.Exists(themePath))
+        if (!query.Force && fileSystem.FileExists(themePath))
             return new(folder, "skipped", "Theme.mp3 already exists.");
 
         string? temp = null;
@@ -531,11 +544,11 @@ public class AnimeThemesMp3Generator(
             foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
             {
                 if (!Settings.Advanced.DisableVfsGeneration)
-                    Directory.CreateDirectory(vfsPath);
+                    fileSystem.CreateDirectory(vfsPath);
                 string dest = Path.Combine(vfsPath, "Theme.mp3");
 
                 logger.LogDebug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {Destination}", dest);
-                if (VfsShared.TryCreateLink(themePath, dest, logger))
+                if (VfsShared.TryCreateLink(themePath, dest, logger, fileSystem))
                     vfsLink = dest; // Track the last successful link to trigger the Plex refresh
             }
 
@@ -550,22 +563,8 @@ public class AnimeThemesMp3Generator(
                         if (bufferSeconds > 0)
                             await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
 
-                        var targets = plexClient.GetConfiguredTargets();
-                        foreach (var target in targets)
-                        {
-                            var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, metadataService).ConfigureAwait(false);
-                            foreach (var ratingKey in ratingKeys)
-                            {
-                                logger.LogDebug(
-                                    "AnimeThemes MP3: Refreshing Plex metadata for series -> {Title} [{LocalId}] (RatingKey: {RatingKey}) on {ServerName}",
-                                    series.GetDisplayTitle(),
-                                    series.LocalID,
-                                    ratingKey,
-                                    target.ServerName
-                                );
-                                await plexClient.RefreshMetadataAsync(ratingKey, target).ConfigureAwait(false);
-                            }
-                        }
+                        logger.LogDebug("AnimeThemes MP3: Refreshing Plex metadata for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+                        await plexClient.RefreshSeriesMetadataAsync(series.LocalID, metadataService).ConfigureAwait(false);
                     }
                     catch (Exception exception)
                     {
@@ -629,7 +628,7 @@ public class AnimeThemesMp3Generator(
             string upgrade = parts.Length > 1 ? parts[1] : "";
 
             string themePath = Path.Combine(folder, "Theme.mp3");
-            if (!File.Exists(themePath))
+            if (!fileSystem.FileExists(themePath))
                 return;
 
             if (string.IsNullOrEmpty(slug))
@@ -666,9 +665,9 @@ public class AnimeThemesMp3Generator(
                     Interlocked.Increment(ref processed);
                     try
                     {
-                        string? videoPath = Directory
-                            .EnumerateFiles(folder, "*", SearchOption.AllDirectories)
-                            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings));
+                        string? videoPath = fileSystem
+                            .GetFilePaths(folder, new FileSystemListingOptions { Recursive = true }, token)
+                            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
                         if (videoPath == null || !videoFileLookup.Value.TryGetValue(videoPath, out var series))
                             return;
 

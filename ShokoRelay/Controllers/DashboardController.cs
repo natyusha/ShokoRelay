@@ -4,7 +4,6 @@ using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 using System.Net;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
@@ -33,7 +32,7 @@ namespace ShokoRelay.Controllers;
 [RelayAdminAuthorize]
 [Route(ShokoRelayConstants.BasePath)]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
-public partial class DashboardController(
+public class DashboardController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
     PlexClient plexLibrary,
@@ -53,9 +52,6 @@ public partial class DashboardController(
         .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
         .Where(field => field.IsLiteral && !field.IsInitOnly)
         .ToFrozenDictionary(field => field.Name, field => field.GetValue(null)?.ToString() ?? string.Empty, StringComparer.Ordinal);
-
-    [GeneratedRegex(@"\{\{\s?(?<name>[A-Za-z0-9_]+)\s?\}\}")]
-    private static partial Regex TemplatePlaceholderRegex();
 
     #endregion
 
@@ -409,7 +405,9 @@ public partial class DashboardController(
             return NotFound();
 
         // Replace {{ConstantName}} placeholders with values from ShokoRelayConstants
-        var html = TemplatePlaceholderRegex().Replace(IoFile.ReadAllText(requested), match => s_templateConstants.TryGetValue(match.Groups["name"].Value, out var constantValue) ? constantValue : match.Value);
+        var html = TextHelper
+            .TemplatePlaceholderRegex()
+            .Replace(IoFile.ReadAllText(requested), match => s_templateConstants.TryGetValue(match.Groups["name"].Value, out var constantValue) ? constantValue : match.Value);
 
         if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
             html = html.Replace("<head>", $"<head>\n    <base href=\"{WebUtility.HtmlEncode($"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/")}\">", StringComparison.OrdinalIgnoreCase);

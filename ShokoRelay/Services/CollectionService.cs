@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Shoko.Abstractions.Extensions;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -42,6 +43,7 @@ public sealed record BuildCollectionsResult(
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="mapper">Plex metadata mapper.</param>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="logger">Logger instance.</param>
 public class CollectionService(
@@ -50,6 +52,7 @@ public class CollectionService(
     IMetadataService metadataService,
     PlexMetadata mapper,
     IVideoService videoService,
+    IFileSystem fileSystem,
     ConfigProvider configProvider,
     ILogger<CollectionService> logger
 )
@@ -87,135 +90,37 @@ public class CollectionService(
                 return new BuildCollectionsResult(0, 0, 0, 0, 0, 0, 0, createdList, uploadedDetails, [], errorsList, stopwatch.Elapsed);
 
             var excludedKeywords = (Settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
             List<string> globalRoots = VfsShared.GetManagedFolderPaths(videoService);
 
             string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FilePlexCollectionsCache);
-            var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            if (File.Exists(cachePath))
-            {
-                try
-                {
-                    foreach (var line in File.ReadAllLines(cachePath))
-                    {
-                        var parts = line.Split('|', 4);
-                        if (parts.Length == 4)
-                            cache[$"{parts[0]}|{parts[1]}|{parts[2]}"] = parts[3];
-                    }
-                }
-                catch { }
-            }
-            bool cacheModified = false;
+            var cache = LoadUploadCache(cachePath);
+            bool cacheModified = PruneStaleSectionCacheKeys(cache, targets);
 
-            // Prune cache entries belonging to library sections that are no longer configured or discovered in Plex
-            var validSectionIds = new HashSet<string>(targets.Select(target => target.SectionId.ToString()));
-            var staleSectionKeys = cache.Keys.Where(cacheKey => cacheKey.IndexOf('|') is int index && index > 0 && !validSectionIds.Contains(cacheKey[..index])).ToList();
-            if (staleSectionKeys.Count > 0)
-            {
-                foreach (var key in staleSectionKeys)
-                    cache.Remove(key);
-                cacheModified = true;
-            }
-
-            // Execute pre-cleanup pruning of old posters, arts, logos, and square images if configured and enabled
-            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && Directory.Exists(Settings.Advanced.PlexMetadataPath))
-            {
-                logger.LogInformation("CollectionService: Scanning Plex data directory for old collection images to prune...");
-                int deletedCount = 0;
-                var subFolders = new[] { "posters", "art", "clearLogos", "squareArt" }; // 'Art' / 'squareArt' are NOT plural like the upload endpoints
-
-                foreach (var target in targets)
-                {
-                    var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
-                    foreach (var collection in collections)
-                    {
-                        var metaDir = collection.GetMetadataDirectory();
-                        if (string.IsNullOrEmpty(metaDir))
-                            continue;
-
-                        foreach (var folder in subFolders)
-                        {
-                            string imagesPath = Path.Combine(Settings.Advanced.PlexMetadataPath, metaDir, "Uploads", folder);
-                            if (!Directory.Exists(imagesPath))
-                                continue;
-
-                            try
-                            {
-                                var files = new DirectoryInfo(imagesPath).EnumerateFiles().OrderBy(file => file.LastWriteTimeUtc).ToList();
-                                if (files.Count > 1)
-                                    foreach (var file in files.SkipLast(1))
-                                        try
-                                        {
-                                            file.Delete();
-                                            deletedCount++;
-                                        }
-                                        catch { }
-                            }
-                            catch (Exception exception)
-                            {
-                                logger.LogWarning(exception, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, collection.Title);
-                            }
-                        }
-                    }
-                }
-                logger.LogInformation("CollectionService: Finished pruning. Deleted {DeletedCount} stale collection images.", deletedCount);
-            }
+            if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && fileSystem.DirectoryExists(Settings.Advanced.PlexMetadataPath))
+                await PrunePlexCollectionImagesAsync(targets, cancellationToken).ConfigureAwait(false);
 
             foreach (var target in targets)
             {
                 bool isMovieTarget = target.LibraryType == PlexLibraryType.Movie;
 
-                var items = new List<PlexMetadataItem>();
-                if (allowedIds != null)
-                {
-                    // Targeted fast-path for filtered series
-                    foreach (var seriesId in allowedIds)
-                    {
-                        var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
-                        foreach (var ratingKey in ratingKeys)
-                        {
-                            using var request = plexClient.CreateRequest(HttpMethod.Get, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", target.ServerUrl);
-                            using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                            if ((await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault() is { } item)
-                                items.Add(item);
-                        }
-                    }
-                }
-                else
-                {
-                    // Bulk path: query all items in library section
-                    items = isMovieTarget
-                        ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
-                        : await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
-                }
+                var items =
+                    allowedIds != null
+                        ? await plexClient.GetSectionItemsForSeriesAsync(target, allowedIds, metadataService, cancellationToken: cancellationToken).ConfigureAwait(false)
+                        : (
+                            isMovieTarget
+                                ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
+                                : await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? []
+                        );
 
                 var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
-
-                // Map collection rating keys to metadata items to inspect existing poster state
                 var collectionRatingKeyMap = collections.Where(collection => !string.IsNullOrEmpty(collection.RatingKey)).ToDictionary(collection => collection.RatingKey!, StringComparer.OrdinalIgnoreCase);
-
-                // Map collection names to their Plex RatingKeys (IDs)
                 var collectionIdMap = collections
                     .Where(collection => !string.IsNullOrEmpty(collection.Title) && int.TryParse(collection.RatingKey, out _))
                     .GroupBy(collection => collection.Title!, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(group => group.Key, group => int.Parse(group.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
 
-                // Prune cache keys for collections that no longer exist in this target (e.g. library deleted and rebuilt)
-                var targetPrefix = $"{target.SectionId}|";
-                var staleCollectionKeys = cache
-                    .Keys.Where(cacheKey =>
-                        cacheKey.StartsWith(targetPrefix, StringComparison.Ordinal)
-                        && cacheKey.Split('|') is { Length: 3 } parts
-                        && !collectionRatingKeyMap.ContainsKey(parts[1].StartsWith("sc", StringComparison.OrdinalIgnoreCase) ? parts[1][2..] : parts[1])
-                    )
-                    .ToList();
-
-                if (staleCollectionKeys.Count > 0)
-                {
-                    foreach (var key in staleCollectionKeys)
-                        cache.Remove(key);
+                if (PruneStaleCollectionCacheKeys(cache, target.SectionId, collectionRatingKeyMap))
                     cacheModified = true;
-                }
 
                 var posted = new HashSet<(int CollectionId, string Prefix)>();
 
@@ -308,46 +213,42 @@ public class CollectionService(
 
                             foreach (var (prefix, suffix, suffixes, label, defaultFallback) in PlexConstants.CollectionImageConfigs)
                             {
-                                if (posted.Add((collectionId, prefix)))
+                                if (!posted.Add((collectionId, prefix)))
+                                    continue;
+
+                                var fallback = defaultFallback && Settings.CollectionImages;
+                                var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, collectionId, suffix, suffixes, metadataService, fallback);
+                                // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
+                                bool plexHasPoster =
+                                    prefix != "posters"
+                                    || (
+                                        collectionRatingKeyMap.TryGetValue(collectionId.ToString(), out var plexCollection)
+                                        && plexCollection.Thumb != null
+                                        && !plexCollection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
+                                    );
+                                var uploadOutcome = await TryUploadCollectionImageAsync(
+                                        target,
+                                        collectionId,
+                                        collectionName,
+                                        imagePath,
+                                        prefix,
+                                        label,
+                                        $"{target.SectionId}|{collectionId}|{prefix}",
+                                        plexHasPoster,
+                                        isMovieTarget,
+                                        "Applied",
+                                        cache,
+                                        uploadedDetails,
+                                        cancellationToken
+                                    )
+                                    .ConfigureAwait(false);
+                                if (uploadOutcome == ImageUploadOutcome.Uploaded)
                                 {
-                                    var fallback = defaultFallback && Settings.CollectionImages;
-                                    var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, collectionId, suffix, suffixes, metadataService, fallback);
-                                    if (!string.IsNullOrEmpty(imagePath))
-                                    {
-                                        long ticks = 0;
-                                        try
-                                        {
-                                            ticks = new FileInfo(imagePath).LastWriteTimeUtc.Ticks;
-                                        }
-                                        catch { }
-                                        string cacheValue = $"{imagePath}?t={ticks}";
-                                        string cacheKey = $"{target.SectionId}|{collectionId}|{prefix}";
-
-                                        // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
-                                        bool plexHasPoster =
-                                            prefix != "posters"
-                                            || (
-                                                collectionRatingKeyMap.TryGetValue(collectionId.ToString(), out var plexCollection)
-                                                && plexCollection.Thumb != null
-                                                && !plexCollection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
-                                            );
-
-                                        if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastValue) && string.Equals(lastValue, cacheValue, StringComparison.Ordinal))
-                                        {
-                                            alreadyUploaded++;
-                                            continue;
-                                        }
-
-                                        if (await plexCollections.UploadCollectionImageAsync(collectionId, imagePath, prefix, target, cancellationToken).ConfigureAwait(false))
-                                        {
-                                            cache[cacheKey] = cacheValue;
-                                            cacheModified = true;
-                                            uploaded++;
-                                            uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, collectionId));
-                                            logger.LogDebug("CollectionService: Applied {Label} for collection -> {Collection}", label, collectionName);
-                                        }
-                                    }
+                                    uploaded++;
+                                    cacheModified = true;
                                 }
+                                else if (uploadOutcome == ImageUploadOutcome.Skipped)
+                                    alreadyUploaded++;
                             }
                         }
                     }
@@ -359,42 +260,34 @@ public class CollectionService(
                         foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
                         {
                             var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots);
-                            if (!string.IsNullOrEmpty(posterPath) && File.Exists(posterPath))
+                            bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
+                            var uploadOutcome = await TryUploadCollectionImageAsync(
+                                    target,
+                                    collectionId,
+                                    collection.Title,
+                                    posterPath,
+                                    prefix,
+                                    $"custom {label}",
+                                    $"{target.SectionId}|sc{collectionId}|{prefix}",
+                                    plexHasPoster,
+                                    isMovieTarget,
+                                    "Applied smart collection",
+                                    cache,
+                                    uploadedDetails,
+                                    cancellationToken
+                                )
+                                .ConfigureAwait(false);
+                            if (uploadOutcome == ImageUploadOutcome.Uploaded)
                             {
-                                long ticks = 0;
-                                try
-                                {
-                                    ticks = new FileInfo(posterPath).LastWriteTimeUtc.Ticks;
-                                }
-                                catch { }
-
-                                string cacheValue = $"{posterPath}?t={ticks}";
-                                string cacheKey = $"{target.SectionId}|sc{collectionId}|{prefix}";
-
-                                bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
-
-                                if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastValue) && string.Equals(lastValue, cacheValue, StringComparison.Ordinal))
-                                {
-                                    alreadyUploaded++;
-                                    continue;
-                                }
-
-                                if (await plexCollections.UploadCollectionImageAsync(collectionId, posterPath, prefix, target, cancellationToken).ConfigureAwait(false))
-                                {
-                                    cache[cacheKey] = cacheValue;
-                                    cacheModified = true;
-                                    uploaded++;
-                                    uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, $"custom {label}", collection.Title, collectionId));
-                                    logger.LogInformation("CollectionService: Applied custom {Label} to smart collection -> {Title} (RatingKey: {RatingKey})", label, collection.Title, collectionId);
-                                }
+                                uploaded++;
+                                cacheModified = true;
                             }
+                            else if (uploadOutcome == ImageUploadOutcome.Skipped)
+                                alreadyUploaded++;
                         }
             }
 
-            var deletedList = new List<CollectionDeletionDetail>();
-            if (applyAssignment)
-                deletedList = await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false);
-
+            var deletedList = applyAssignment ? await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false) : [];
             if (deletedList.Count > 0)
                 foreach (var deletion in deletedList)
                 foreach (var cacheKey in cache.Keys.Where(key => key.Contains($"|{deletion.RatingKey}|") || key.Contains($"|sc{deletion.RatingKey}|")).ToList())
@@ -433,6 +326,176 @@ public class CollectionService(
             if (startedTask)
                 TaskHelper.FinishTask(TaskName);
         }
+    }
+
+    #endregion
+
+    #region Internal Helpers
+
+    /// <summary>Result state of a single collection image upload evaluation.</summary>
+    private enum ImageUploadOutcome
+    {
+        None,
+        Skipped,
+        Uploaded,
+    }
+
+    /// <summary>Loads previously uploaded collection artwork timestamps from the cache file.</summary>
+    /// <param name="cachePath">Path to the cache file.</param>
+    /// <returns>A dictionary keyed by <c>{sectionId}|{collectionId}|{prefix}</c>.</returns>
+    private static Dictionary<string, string> LoadUploadCache(string cachePath)
+    {
+        var cache = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!File.Exists(cachePath))
+            return cache;
+
+        try
+        {
+            foreach (var line in VfsShared.ReadLinesShared(cachePath))
+            {
+                var parts = line.Split('|', 4);
+                if (parts.Length == 4)
+                    cache[$"{parts[0]}|{parts[1]}|{parts[2]}"] = parts[3];
+            }
+        }
+        catch { }
+
+        return cache;
+    }
+
+    /// <summary>Removes cache entries belonging to Plex library sections no longer configured.</summary>
+    /// <param name="cache">The upload cache dictionary.</param>
+    /// <param name="targets">Active Plex library targets.</param>
+    /// <returns><c>true</c> if any entries were removed; otherwise, <c>false</c>.</returns>
+    private static bool PruneStaleSectionCacheKeys(Dictionary<string, string> cache, IReadOnlyList<PlexLibraryTarget> targets)
+    {
+        var validSectionIds = new HashSet<string>(targets.Select(target => target.SectionId.ToString()));
+        var staleKeys = cache.Keys.Where(cacheKey => cacheKey.IndexOf('|') is int index && index > 0 && !validSectionIds.Contains(cacheKey[..index])).ToList();
+        foreach (var key in staleKeys)
+            cache.Remove(key);
+        return staleKeys.Count > 0;
+    }
+
+    /// <summary>Removes cache entries for collections that no longer exist in the target Plex section.</summary>
+    /// <param name="cache">The upload cache dictionary.</param>
+    /// <param name="sectionId">The Plex section identifier.</param>
+    /// <param name="collectionRatingKeyMap">Active collections in the section keyed by rating key.</param>
+    /// <returns><c>true</c> if any entries were removed; otherwise, <c>false</c>.</returns>
+    private static bool PruneStaleCollectionCacheKeys(Dictionary<string, string> cache, int sectionId, Dictionary<string, PlexMetadataItem> collectionRatingKeyMap)
+    {
+        string targetPrefix = $"{sectionId}|";
+        var staleKeys = cache
+            .Keys.Where(cacheKey =>
+                cacheKey.StartsWith(targetPrefix, StringComparison.Ordinal)
+                && cacheKey.Split('|') is { Length: 3 } parts
+                && !collectionRatingKeyMap.ContainsKey(parts[1].StartsWith("sc", StringComparison.OrdinalIgnoreCase) ? parts[1][2..] : parts[1])
+            )
+            .ToList();
+
+        foreach (var key in staleKeys)
+            cache.Remove(key);
+        return staleKeys.Count > 0;
+    }
+
+    /// <summary>Prunes stale collection artwork files inside Plex's local metadata directory, keeping only the newest upload per type.</summary>
+    /// <param name="targets">Configured Plex library targets.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A task representing the pruning operation.</returns>
+    private async Task PrunePlexCollectionImagesAsync(IReadOnlyList<PlexLibraryTarget> targets, CancellationToken cancellationToken)
+    {
+        logger.LogInformation("CollectionService: Scanning Plex data directory for old collection images to prune...");
+        int deletedCount = 0;
+        var subFolders = new[] { "posters", "art", "clearLogos", "squareArt" }; // 'Art' / 'squareArt' are NOT plural like the upload endpoints
+
+        foreach (var target in targets)
+        {
+            var collections = await plexClient.GetSectionCollectionsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+            foreach (var collection in collections)
+            {
+                var metaDir = collection.GetMetadataDirectory();
+                if (string.IsNullOrEmpty(metaDir))
+                    continue;
+
+                foreach (var folder in subFolders)
+                {
+                    string imagesPath = Path.Combine(Settings.Advanced.PlexMetadataPath, metaDir, "Uploads", folder);
+                    if (!fileSystem.DirectoryExists(imagesPath))
+                        continue;
+
+                    try
+                    {
+                        var files = fileSystem.GetFileEntries(imagesPath, cancellationToken: cancellationToken).OrderBy(entry => entry.FileStat?.LastWriteTime ?? DateTime.MinValue).ToList();
+                        if (files.Count > 1)
+                            foreach (var file in files.SkipLast(1))
+                                try
+                                {
+                                    fileSystem.DeleteFile(file.Path);
+                                    deletedCount++;
+                                }
+                                catch { }
+                    }
+                    catch (Exception exception)
+                    {
+                        logger.LogWarning(exception, "CollectionService: Failed to prune {Folder} for collection '{Title}'", folder, collection.Title);
+                    }
+                }
+            }
+        }
+        logger.LogInformation("CollectionService: Finished pruning. Deleted {DeletedCount} stale collection images.", deletedCount);
+    }
+
+    /// <summary>Uploads a local collection artwork file to Plex unless an identical cached upload already exists on the collection.</summary>
+    /// <param name="target">Target Plex library.</param>
+    /// <param name="collectionId">Plex collection rating key.</param>
+    /// <param name="collectionName">Collection display title.</param>
+    /// <param name="imagePath">Local image path.</param>
+    /// <param name="prefix">Plex upload endpoint prefix.</param>
+    /// <param name="label">Human-readable artwork label.</param>
+    /// <param name="cacheKey">Cache lookup key.</param>
+    /// <param name="plexHasPoster">Whether Plex currently reports a non-composite poster.</param>
+    /// <param name="isMovieTarget">Whether the target library is a movie library.</param>
+    /// <param name="logContext">Log prefix for uploaded details.</param>
+    /// <param name="cache">Mutable upload cache dictionary.</param>
+    /// <param name="uploadedDetails">Target list for recording uploaded artwork details.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The <see cref="ImageUploadOutcome"/> indicating whether the image was uploaded, skipped, or absent.</returns>
+    private async Task<ImageUploadOutcome> TryUploadCollectionImageAsync(
+        PlexLibraryTarget target,
+        int collectionId,
+        string collectionName,
+        string? imagePath,
+        string prefix,
+        string label,
+        string cacheKey,
+        bool plexHasPoster,
+        bool isMovieTarget,
+        string logContext,
+        Dictionary<string, string> cache,
+        List<CollectionUploadDetail> uploadedDetails,
+        CancellationToken cancellationToken
+    )
+    {
+        if (string.IsNullOrEmpty(imagePath) || !fileSystem.FileExists(imagePath))
+            return ImageUploadOutcome.None;
+
+        long ticks = 0;
+        try
+        {
+            ticks = fileSystem.GetFileStat(imagePath)?.LastWriteTime.Ticks ?? 0;
+        }
+        catch { }
+
+        string cacheValue = $"{imagePath}?t={ticks}";
+        if (plexHasPoster && cache.TryGetValue(cacheKey, out var lastValue) && string.Equals(lastValue, cacheValue, StringComparison.Ordinal))
+            return ImageUploadOutcome.Skipped;
+
+        if (!await plexCollections.UploadCollectionImageAsync(collectionId, imagePath, prefix, target, cancellationToken).ConfigureAwait(false))
+            return ImageUploadOutcome.None;
+
+        cache[cacheKey] = cacheValue;
+        uploadedDetails.Add(new CollectionUploadDetail(target.Title, isMovieTarget, label, collectionName, collectionId));
+        logger.LogInformation("CollectionService: {LogContext} {Label} for collection -> {Collection}", logContext, label, collectionName);
+        return ImageUploadOutcome.Uploaded;
     }
 
     #endregion

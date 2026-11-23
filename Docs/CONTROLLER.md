@@ -425,6 +425,8 @@ POST /animethemes/vfs/import                                   -> ImportAnimeThe
   - `filter`: (optional) comma-separated Shoko or AniDB (prefixed with an 'a') series IDs.
   - Cache Format: `VfsPath|VideoId|Bitmask`.
   - Bitmask flags: `1:NC, 2:Lyrics, 4:Subs, 8:Uncen, 16:NSFW, 32:Spoil, 64:Trans, 128:Over`.
+  - Honours `Advanced.AnimeThemesCrossRootMode` (`Disabled`, `HardlinkOrCopy`, `Move`) to transfer missing `.webm` files across VFS-enabled managed folders before linking.
+    - This records cross-root transfer counts and details in `at-vfs-build.report` too.
 - `AnimeThemesVfsMap` generates the mapping CSV, tests a single filename mapping, or updates/populates mapping fields in the CSV without redownloading the video.
   - `path`: (optional) provide a filename or relative path to preview its mapping result, or update it.
   - `save`: (default false) set to true to update or save the resolved metadata fields into `anidb_animethemes_xrefs.csv` and refresh its VFS link.

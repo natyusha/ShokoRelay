@@ -6,7 +6,7 @@ using ShokoRelay.AnimeThemes;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Executable action to build or rebuild the Shoko Relay Virtual File System across all eligible managed folders.</summary>
-public class BuildVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping, ConfigProvider configProvider, ILogger<BuildVfsAction> logger) : IExecutableAction, IProgressReportingAction
+public class BuildVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping, ILogger<BuildVfsAction> logger) : IExecutableAction, IProgressReportingAction
 {
     #region Setup & Metadata
 
@@ -56,7 +56,7 @@ public class BuildVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping,
                     var result = await Task.Run(() => vfsBuilder.Build((int?)null, Clean, token), token).ConfigureAwait(false);
                     _progress.Report(70);
 
-                    await ActionScheduleHelper.ApplyMappingIfExistsAsync(atMapping, configProvider, null, token).ConfigureAwait(false);
+                    await atMapping.ApplyMappingIfExistsAsync(null, token).ConfigureAwait(false);
 
                     ReportHelper.WriteReport($"{ShokoRelayConstants.TaskVfsBuild}.report", result, ReportHelper.BuildVfsReport, logger);
                     _progress.Report(100);

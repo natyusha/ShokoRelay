@@ -87,10 +87,25 @@ public sealed record WebmCacheEntry(string VfsPath, int VideoId, int Bitmask);
 /// <param name="LinksCreated">Count of successful symlinks.</param>
 /// <param name="Skipped">Count of themes skipped due to missing files.</param>
 /// <param name="SeriesMatched">Count of Shoko series that found theme matches.</param>
+/// <param name="Hardlinked">Count of cross-root theme files hardlinked.</param>
+/// <param name="Copied">Count of cross-root theme files copied.</param>
+/// <param name="Moved">Count of cross-root theme files moved.</param>
 /// <param name="Errors">List of error messages.</param>
 /// <param name="CacheEntries">Data generated for the standalone video player cache.</param>
+/// <param name="TransferDetails">Details of cross-root theme file transfers.</param>
 /// <param name="Elapsed">Total time taken for the operation.</param>
-public sealed record AnimeThemesMappingApplyResult(int LinksCreated, int Skipped, int SeriesMatched, IReadOnlyList<string> Errors, IReadOnlyList<WebmCacheEntry> CacheEntries, TimeSpan Elapsed);
+public sealed record AnimeThemesMappingApplyResult(
+    int LinksCreated,
+    int Skipped,
+    int SeriesMatched,
+    int Hardlinked,
+    int Copied,
+    int Moved,
+    IReadOnlyList<string> Errors,
+    IReadOnlyList<WebmCacheEntry> CacheEntries,
+    IReadOnlyList<string> TransferDetails,
+    TimeSpan Elapsed
+);
 
 /// <summary>Internal helper record used when looking up theme metadata by video identifier.</summary>
 /// <inheritdoc cref="AnimeThemesMappingEntry" />

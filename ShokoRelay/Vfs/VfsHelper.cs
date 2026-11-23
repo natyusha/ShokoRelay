@@ -1,6 +1,8 @@
 using System.Buffers;
 using System.Collections.Frozen;
 using System.Text.RegularExpressions;
+using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 
 namespace ShokoRelay.Vfs;
 
@@ -312,37 +314,37 @@ public static partial class VfsHelper
     /// <summary>Perform diff-based cleanup of unexpected files and empty directories left behind by renames or moves.</summary>
     /// <param name="resolvedVfsSeriesPaths">The unique set of VFS paths involved in the build.</param>
     /// <param name="expectedFiles">The tracked set of files that should exist.</param>
-    public static void CleanupOrphanedFilesAndFolders(HashSet<string> resolvedVfsSeriesPaths, HashSet<string> expectedFiles)
+    /// <param name="fileSystem">Shoko file system service.</param>
+    public static void CleanupOrphanedFilesAndFolders(HashSet<string> resolvedVfsSeriesPaths, HashSet<string> expectedFiles, IFileSystem fileSystem)
     {
         if (Settings.Advanced.DisableVfsGeneration)
             return;
 
+        var recursiveOptions = new FileSystemListingOptions { Recursive = true };
         string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
         foreach (var seriesPath in resolvedVfsSeriesPaths)
         {
-            if (!Directory.Exists(seriesPath))
+            if (!fileSystem.DirectoryExists(seriesPath))
                 continue;
 
-            foreach (var file in Directory.EnumerateFiles(seriesPath, "*", SearchOption.AllDirectories))
+            foreach (var file in fileSystem.GetFilePaths(seriesPath, recursiveOptions))
                 if (!expectedFiles.Contains(file))
                     try
                     {
-                        var fileInfo = new FileInfo(file);
-
                         // Allow AnimeThemesMapping to manage its own files
-                        if (fileInfo.LinkTarget != null && fileInfo.LinkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
+                        if (fileSystem.ReadSymbolicLink(file) is { } linkTarget && linkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
                             continue;
 
-                        File.Delete(file);
+                        fileSystem.DeleteFile(file);
                     }
                     catch { }
 
-            var directories = Directory.EnumerateDirectories(seriesPath, "*", SearchOption.AllDirectories).OrderByDescending(dir => dir.Length).ToList();
+            var directories = fileSystem.GetDirectoryPaths(seriesPath, recursiveOptions).OrderByDescending(dir => dir.Length).ToList();
             foreach (var directory in directories)
                 try
                 {
-                    if (!Directory.EnumerateFileSystemEntries(directory).Any())
-                        Directory.Delete(directory);
+                    if (fileSystem.IsDirectoryEmpty(directory))
+                        fileSystem.DeleteDirectory(directory);
                 }
                 catch { }
         }
@@ -353,19 +355,21 @@ public static partial class VfsHelper
     /// <param name="importRoot">The physical import root directory.</param>
     /// <param name="themeRootName">The name of the AnimeThemes directory.</param>
     /// <param name="session">Active build session context containing caches.</param>
+    /// <param name="fileSystem">Shoko file system service.</param>
     /// <returns>The absolute path of the theme file if it exists; otherwise, null.</returns>
-    public static string? GetThemeSourcePath(string relativePath, string importRoot, string themeRootName, VfsBuildSession session)
+    public static string? GetThemeSourcePath(string relativePath, string importRoot, string themeRootName, VfsBuildSession session, IFileSystem fileSystem)
     {
         string themeRootPath = Path.Combine(importRoot, themeRootName);
         var cache = session
             .PhysicalThemeCaches.GetOrAdd(themeRootPath, root => new Lazy<Dictionary<string, string>>(() =>
             {
                 var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-                if (Directory.Exists(root))
+                if (fileSystem.DirectoryExists(root))
                 {
                     try
                     {
-                        foreach (string file in Directory.EnumerateFiles(root, "*.webm", SearchOption.AllDirectories))
+                        var options = new FileSystemListingOptions { Recursive = true, Extensions = [".webm"] };
+                        foreach (string file in fileSystem.GetFilePaths(root, options))
                             dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimLeadingSlashes()] = Path.GetFullPath(file);
                     }
                     catch { }

@@ -1,3 +1,4 @@
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 
@@ -6,8 +7,9 @@ namespace ShokoRelay.Services;
 /// <summary>Service responsible for triggering server-side import and housekeeping actions.</summary>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="releaseService">Shoko video release service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
-public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService, ILogger<ShokoImportService> logger)
+public class ShokoImportService(IVideoService videoService, IVideoReleaseService releaseService, IFileSystem fileSystem, ILogger<ShokoImportService> logger)
 {
     #region Import Logic
 
@@ -70,7 +72,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                     return false;
                 if (!managedFolderStatus.TryGetValue(folder.ID, out bool online))
                 {
-                    online = folder.AvailableFreeSpace != -1 && Directory.Exists(folder.Path);
+                    online = folder.AvailableFreeSpace != -1 && fileSystem.DirectoryExists(folder.Path);
                     if (!online)
                         logger.LogWarning("ShokoImportService: Managed folder '{FolderName}' [{FolderId}] is offline/unmounted -> Skipping missing file checks for its contents.", folder.Name, folder.ID);
                     managedFolderStatus[folder.ID] = online;
@@ -81,7 +83,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
             // A file is considered "missing" if its managed folder is online and it doesn't exist on disk OR if its path is blocked by Relay ignore rules.
             var toDelete = all.Where(videoFile =>
                     IsFolderOnline(videoFile.ManagedFolder)
-                    && (!File.Exists(videoFile.Path) || VfsShared.IsPathIgnored(videoFile.Path, videoService, Settings, ignoredNames, relativeTo: videoFile.ManagedFolder.Path))
+                    && (!fileSystem.FileExists(videoFile.Path) || VfsShared.IsPathIgnored(videoFile.Path, videoService, Settings, ignoredNames, relativeTo: videoFile.ManagedFolder.Path, fileSystem: fileSystem))
                 )
                 .ToList();
 

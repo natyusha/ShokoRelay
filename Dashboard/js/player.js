@@ -842,35 +842,29 @@
       playerVideo.volume = Math.max(0, Math.min(1, Math.round((playerVideo.volume + delta) * 100) / 100));
     };
 
+    /**
+     * Handles mouse wheel scrolling over volume controls to adjust playback volume.
+     * @param {WheelEvent} event - The wheel event.
+     * @returns {void}
+     */
+    const onVolumeWheel = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      resetIdle(event);
+      stepVolume(event.deltaY < 0 ? 0.05 : -0.05);
+    };
+
     if (playerMuteBtn) {
       playerMuteBtn.onclick = (event) => {
         event.stopPropagation();
         if (playerVideo.src) playerVideo.muted = !playerVideo.muted;
       };
-      playerMuteBtn.addEventListener(
-        "wheel",
-        (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          resetIdle(event);
-          stepVolume(event.deltaY < 0 ? 0.05 : -0.05);
-        },
-        { passive: false },
-      );
+      playerMuteBtn.addEventListener("wheel", onVolumeWheel, { passive: false });
     }
 
     if (playerVolText) {
       playerVolText.onclick = (event) => event.stopPropagation();
-      playerVolText.addEventListener(
-        "wheel",
-        (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          resetIdle(event);
-          stepVolume(event.deltaY < 0 ? 0.05 : -0.05);
-        },
-        { passive: false },
-      );
+      playerVolText.addEventListener("wheel", onVolumeWheel, { passive: false });
     }
 
     initSearchInteractions(uiFilter, uiFilterClear, () => renderTree(getFilteredItems()));

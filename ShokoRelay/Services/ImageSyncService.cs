@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
+using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using Shoko.Abstractions.Metadata.Image.Options;
@@ -25,8 +27,9 @@ public sealed record ImageSyncResult(int Processed, int Uploaded, int Skipped, i
 /// <param name="plexClient">Plex client.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="imageManager">Shoko image manager.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
-public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, ILogger<ImageSyncService> logger)
+public class ImageSyncService(PlexClient plexClient, IMetadataService metadataService, IImageManager imageManager, IFileSystem fileSystem, ILogger<ImageSyncService> logger)
 {
     #region Setup
 
@@ -209,11 +212,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                     bool isMovie = target.LibraryType == PlexLibraryType.Movie;
                     string labelType = isMovie ? "Movie" : "Episode";
-                    string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
-                    var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsStr)}";
+                    string coordsText = $"S{coords.Season:D2}E{coords.Episode:D2}";
+                    var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsText)}";
 
                     // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
-                    var hasPhysicalFiles = (episode.Videos ?? []).Any(video => video.Files?.Any(file => !string.IsNullOrWhiteSpace(file.Path) && File.Exists(file.Path)) == true);
+                    var hasPhysicalFiles = (episode.Videos ?? []).Any(video => video.Files?.Any(file => !string.IsNullOrWhiteSpace(file.Path) && fileSystem.FileExists(file.Path)) == true);
                     if (!hasPhysicalFiles)
                     {
                         if (
@@ -259,24 +262,23 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         if (isMismatch)
                         {
                             addStats(true, false, false, true);
-                            errorsBag.Add($"[Coordinate Mismatch] {episodeLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: {coordsStr})");
+                            errorsBag.Add($"[Coordinate Mismatch] {episodeLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: {coordsText})");
                             return;
                         }
                     }
 
                     // Find a local episode thumbnail alongside the physical video files
+                    var artworkListingOptions = new FileSystemListingOptions { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
                     var localThumb = (episode.Videos ?? [])
                         .SelectMany(video => video.Files ?? [])
                         .Select(file => file.Path)
-                        .Where(path => !string.IsNullOrWhiteSpace(path) && Directory.Exists(Path.GetDirectoryName(path)))
-                        .Select(path => (Dir: Path.GetDirectoryName(path)!, Base: Path.GetFileNameWithoutExtension(path)))
+                        .Where(path => !string.IsNullOrWhiteSpace(path))
+                        .Select(path => (Dir: Path.GetDirectoryName(path), Base: Path.GetFileNameWithoutExtension(path)))
+                        .Where(entry => !string.IsNullOrEmpty(entry.Dir))
                         .SelectMany(entry =>
-                            Directory
-                                .EnumerateFiles(entry.Dir, "*")
-                                .Where(file =>
-                                    string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase)
-                                    && PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file))
-                                )
+                            fileSystem
+                                .GetFilePaths(entry.Dir!, artworkListingOptions, itemToken)
+                                .Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase))
                         )
                         .FirstOrDefault();
 
@@ -332,34 +334,14 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     }
                 }
 
-                var items = new List<PlexMetadataItem>();
-                if (allowedSet != null)
-                {
-                    // Targeted fast-path for filtered series
-                    foreach (var seriesId in allowedSet)
-                    {
-                        var ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
-                        foreach (var ratingKey in ratingKeys)
-                        {
-                            string path =
-                                target.LibraryType == PlexLibraryType.Movie
-                                    ? $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1"
-                                    : $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000";
-                            using var request = plexClient.CreateRequest(HttpMethod.Get, path, target.ServerUrl);
-                            using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                            if ((await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata is { } metaList)
-                                items.AddRange(metaList);
-                        }
-                    }
-                }
-                else
-                {
-                    // Bulk path: query all items in library section
-                    items =
-                        target.LibraryType == PlexLibraryType.Movie
-                            ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
-                            : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
-                }
+                var items =
+                    allowedSet != null
+                        ? await plexClient.GetSectionItemsForSeriesAsync(target, allowedSet, metadataService, includeLeaves: target.LibraryType != PlexLibraryType.Movie, cancellationToken).ConfigureAwait(false)
+                        : (
+                            target.LibraryType == PlexLibraryType.Movie
+                                ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
+                                : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
+                        );
 
                 await Parallel.ForEachAsync(items, DefaultParallelOptions(cancellationToken), ProcessThumbnailItem).ConfigureAwait(false);
             }
@@ -396,8 +378,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
                 string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
                 var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
-                string coordsStr = $"S{coords.Season:D2}E{coords.Episode:D2}";
-                var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsStr}";
+                string coordsText = $"S{coords.Season:D2}E{coords.Episode:D2}";
+                var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsText}";
 
                 logger.LogDebug("ImageSyncService: Episode thumbnail for -> {LogName} is no longer present in Plex ... Purging from Shoko", episodeLogName);
                 await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
@@ -479,11 +461,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     }
 
                     // Find a local artwork file for a series based on a prioritized list of allowed filenames
+                    var artworkListingOptions = new FileSystemListingOptions { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
                     string? foundFile = VfsShared
                         .ResolveSeriesVfsPaths(series, metadataService)
-                        .Where(Directory.Exists)
-                        .SelectMany(Directory.EnumerateFiles)
-                        .Where(file => PlexConstants.LocalMediaAssets.Artwork.ContainsKey(Path.GetExtension(file)))
+                        .SelectMany(path => fileSystem.GetFilePaths(path, artworkListingOptions, token))
                         .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
                         .Where(item => item.Index >= 0)
                         .OrderBy(item => item.Index)
@@ -538,10 +519,11 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         if (!string.IsNullOrEmpty(foundFile))
             try
             {
-                var fileInfo = new FileInfo(foundFile);
-                fileInfo = fileInfo.LinkTarget != null ? (fileInfo.ResolveLinkTarget(true) as FileInfo ?? fileInfo) : fileInfo;
-                if (exists = fileInfo.Exists)
-                    foundFile = fileInfo.FullName;
+                if (fileSystem.GetFileStat(foundFile) is not null)
+                {
+                    foundFile = fileSystem.ResolveSymbolicLink(foundFile) ?? foundFile;
+                    exists = true;
+                }
             }
             catch { }
 
@@ -567,7 +549,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         }
 
         string md5;
-        using (var fileStream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+        using (var fileStream = fileSystem.OpenFile(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             md5 = Convert.ToHexString(MD5.HashData(fileStream));
 
         var matchingXref = existingXrefs.FirstOrDefault(xref => string.Equals(xref.GetImage()?.ResourceID, md5, StringComparison.OrdinalIgnoreCase));
@@ -584,7 +566,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 await PurgeEntityImagesUnlockedAsync(entity, imageType, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
 
                 // Upload a local file from disk to Shoko and establish explicit ownership using the RelaySource cross-reference
-                using var stream = new FileStream(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var stream = fileSystem.OpenFile(foundFile!, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
                 UploadAndPreferImage(stream, entity, imageType, ServiceRegistration.RelaySource);
             }
             finally

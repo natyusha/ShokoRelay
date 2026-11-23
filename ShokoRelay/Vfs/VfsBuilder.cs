@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
@@ -8,8 +9,9 @@ namespace ShokoRelay.Vfs;
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="assetLinker">VFS asset linker.</param>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
-public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService, ILogger<VfsBuilder> logger)
+public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker assetLinker, IVideoService videoService, IFileSystem fileSystem, ILogger<VfsBuilder> logger)
 {
     #region Public Interface
 
@@ -350,7 +352,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 {
                     foreach (var theme in themes)
                     {
-                        if (VfsHelper.GetThemeSourcePath(theme.RelativePath, root, themeRootName, session) is string sourcePath)
+                        if (VfsHelper.GetThemeSourcePath(theme.RelativePath, root, themeRootName, session, fileSystem) is string sourcePath)
                         {
                             string destinationFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
                             state.ExpectedFiles.Add(destinationFilePath);
@@ -365,7 +367,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             }
         }
 
-        VfsHelper.CleanupOrphanedFilesAndFolders(state.ResolvedVfsSeriesPaths, state.ExpectedFiles);
+        VfsHelper.CleanupOrphanedFilesAndFolders(state.ResolvedVfsSeriesPaths, state.ExpectedFiles, fileSystem);
 
         return (state.Created, state.Skipped, state.SkippedDetails, state.Errors, state.Planned);
     }
@@ -379,15 +381,15 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="mapping">The file mapping to resolve.</param>
     /// <param name="locationInfo">Outputs the resolved import root and physical source path.</param>
     /// <returns>True if the physical file exists and is eligible for linking; otherwise, false.</returns>
-    private bool TryResolveAndValidate(SeriesBuildState state, MapHelper.FileMapping mapping, out (string ImportRoot, string Src) locationInfo)
+    private bool TryResolveAndValidate(SeriesBuildState state, MapHelper.FileMapping mapping, out (string ImportRoot, string SourcePath) locationInfo)
     {
-        (string ImportRoot, string Src)? resolvedLocation = null;
+        (string ImportRoot, string SourcePath)? resolvedLocation = null;
         foreach (var file in mapping.Video.Files ?? [])
         {
             if (!VfsShared.IsVfsEnabledFolder(file.ManagedFolder))
                 continue;
             var importRoot = VfsShared.ResolveImportRootPath(file);
-            if (importRoot != null && VfsShared.ResolveSourcePath(file, importRoot) is { } sourcePath)
+            if (importRoot != null && VfsShared.ResolveSourcePath(file, importRoot, fileSystem) is { } sourcePath)
             {
                 resolvedLocation = (importRoot, sourcePath);
                 break;
@@ -401,7 +403,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             locationInfo = default;
             return false;
         }
-        if (VfsShared.IsPathIgnored(resolvedLocation.Value.Src, videoService, Settings, state.IgnoredFolders, relativeTo: resolvedLocation.Value.ImportRoot))
+        if (VfsShared.IsPathIgnored(resolvedLocation.Value.SourcePath, videoService, Settings, state.IgnoredFolders, relativeTo: resolvedLocation.Value.ImportRoot, fileSystem: fileSystem))
         {
             state.Skipped++;
             state.SkippedDetails.Add($"[Excluded Path] {state.Series.GetDisplayTitle()} [{state.Series.LocalID}] S{mapping.Coords.Season}E{mapping.Coords.Episode} - {mapping.FileName}");
@@ -504,9 +506,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="logger">The logger to use for logging messages.</param>
     /// <param name="isMovieRoot">Whether this root is the standalone movies directory.</param>
     /// <param name="recreate">Whether to recreate the empty directory and .ignore file after cleanup.</param>
-    private static void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, ILogger logger, bool isMovieRoot = false, bool recreate = true)
+    private void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, ILogger logger, bool isMovieRoot = false, bool recreate = true)
     {
-        if (Settings.Advanced.DisableVfsGeneration || !Directory.Exists(path))
+        if (Settings.Advanced.DisableVfsGeneration || !fileSystem.DirectoryExists(path))
             return;
 
         if (!VfsShared.IsSafeToDelete(path))
@@ -517,7 +519,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
 
         // Safety verification: Prevent wiping user media if VfsRootPath was accidentally set to an existing non-VFS media directory
         string marker = Path.Combine(path, ".ignore");
-        if (!File.Exists(marker) && Directory.EnumerateFileSystemEntries(path).Any(entry => !File.GetAttributes(entry).HasFlag(FileAttributes.ReparsePoint)))
+        if (!fileSystem.FileExists(marker) && fileSystem.GetFileSystemEntries(path).Any(entry => !entry.IsSymbolicLink))
         {
             logger.LogError("VFS: Aborting cleanup! Path '{Path}' contains non-symlink data and lacks a .ignore marker. Verify VFS Root Path settings.", path);
             return;
@@ -526,25 +528,21 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         try
         {
             var cleanStopwatch = Stopwatch.StartNew();
-            Parallel.ForEach(Directory.GetDirectories(path), DefaultParallelOptions(), dir =>
+            Parallel.ForEach(fileSystem.GetDirectoryPaths(path), DefaultParallelOptions(), dir =>
             {
                 try
                 {
-                    Directory.Delete(dir, true);
+                    fileSystem.DeleteDirectory(dir, true);
                 }
                 catch { }
             });
-            Directory.Delete(path, true);
+            fileSystem.DeleteDirectory(path, true);
             cleanupDetails.Add(new RootCleanupDetails(path, cleanStopwatch.ElapsedMilliseconds));
             logger.LogInformation("VFS: Cleaned {Type}root folder -> '{Path}' in {Elapsed}ms", isMovieRoot ? "movie " : "", path, cleanStopwatch.ElapsedMilliseconds);
             if (recreate)
             {
-                Directory.CreateDirectory(path);
-                try
-                {
-                    File.WriteAllText(Path.Combine(path, ".ignore"), "");
-                }
-                catch { }
+                fileSystem.CreateDirectory(path);
+                WriteIgnoreMarker(path);
             }
         }
         catch (Exception exception)
@@ -557,18 +555,25 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <param name="path">The absolute path of the directory to ensure.</param>
     /// <param name="session">The active build session tracking created directories.</param>
     /// <param name="isRoot">Whether this directory is a top-level VFS root.</param>
-    private static void EnsureDirectory(string path, VfsBuildSession session, bool isRoot = false)
+    private void EnsureDirectory(string path, VfsBuildSession session, bool isRoot = false)
     {
         if (session.CreatedDirs.TryAdd(path, 0) && !Settings.Advanced.DisableVfsGeneration)
         {
-            Directory.CreateDirectory(path);
+            fileSystem.CreateDirectory(path);
             if (isRoot)
-                try
-                {
-                    File.WriteAllText(Path.Combine(path, ".ignore"), "");
-                }
-                catch { }
+                WriteIgnoreMarker(path);
         }
+    }
+
+    /// <summary>Writes an empty <c>.ignore</c> marker inside a VFS root directory.</summary>
+    /// <param name="directoryPath">The VFS root directory path.</param>
+    private void WriteIgnoreMarker(string directoryPath)
+    {
+        try
+        {
+            using var markerStream = fileSystem.OpenFile(Path.Combine(directoryPath, ".ignore"), FileMode.Create, FileAccess.Write, FileShare.None);
+        }
+        catch { }
     }
 
     /// <summary>Recursively deletes the virtual directory for a series across all active VFS roots.</summary>
@@ -599,9 +604,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 string path = Path.Combine(root, rootFolderName, folderId.ToString());
                 try
                 {
-                    if (Directory.Exists(path))
+                    if (fileSystem.DirectoryExists(path))
                     {
-                        Directory.Delete(path, true);
+                        fileSystem.DeleteDirectory(path, true);
                         logger.LogInformation("VFS: Pruned empty/orphaned series folder -> {Path}", path);
                     }
                 }
@@ -620,9 +625,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 string moviePath = Path.Combine(root, movieRoot, episodeId.ToString());
                 try
                 {
-                    if (Directory.Exists(moviePath))
+                    if (fileSystem.DirectoryExists(moviePath))
                     {
-                        Directory.Delete(moviePath, true);
+                        fileSystem.DeleteDirectory(moviePath, true);
                         logger.LogInformation("VFS: Pruned empty/orphaned movie folder -> {Path}", moviePath);
                     }
                 }
@@ -665,7 +670,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             return false;
         }
 
-        if (VfsShared.TryCreateLink(sourcePath, destinationFilePath, logger, skipExistenceCheck: state.SkipCheck))
+        if (VfsShared.TryCreateLink(sourcePath, destinationFilePath, logger, fileSystem, skipExistenceCheck: state.SkipCheck))
         {
             state.Created++;
             state.Planned++;

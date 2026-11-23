@@ -97,10 +97,6 @@
   // #endregion
 
   // #region MP3 - State and UI
-  initToggle("at-mp3-seasonal", false);
-  initToggle("at-mp3-force", false);
-  initToggle("at-mp3-batch", true);
-
   /** @type {HTMLAudioElement|null} Reference to the active HTML5 Audio element. */
   let atAudio = null;
   /** @type {HTMLElement|null} Reference to the active 'Now Playing' toast element. */
@@ -322,6 +318,22 @@
   // #endregion
 
   // #region Initialization
+  initToggle("at-mp3-seasonal", false);
+  initToggle("at-mp3-force", false);
+  initToggle("at-mp3-batch", true);
+
+  if (atTrack) {
+    atTrack.onclick = (event) => {
+      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((event.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
+    };
+    atTrack.onmousedown = (event) => {
+      if (event.button === 1 && atAudio?.src) {
+        event.preventDefault();
+        atAudio.paused ? atAudio.play() : atAudio.pause();
+      }
+    };
+  }
+
   initAtSanitizers(); // Initialize sanitizers immediately on script load
   // #endregion
 })();

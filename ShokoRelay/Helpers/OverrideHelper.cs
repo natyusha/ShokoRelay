@@ -77,7 +77,7 @@ public static class OverrideHelper
         {
             try
             {
-                foreach (var rawLine in File.ReadAllLines(path))
+                foreach (var rawLine in VfsShared.ReadLinesShared(path))
                 {
                     var line = rawLine.Trim();
                     if (line.Length == 0 || line[0] == '#')
@@ -231,8 +231,8 @@ public static class OverrideHelper
         // 2. Auto TMDB Merge Just-In-Time Resolution
         if (Settings.Advanced.MergeTmdbSeries && series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdbSeries && !string.IsNullOrWhiteSpace(tmdbSeries.ID.ID))
         {
-            string tmdbIdStr = tmdbSeries.ID.ID;
-            if (s_tmdbGroups.TryGetValue(tmdbIdStr, out var cachedGroup))
+            string tmdbIdText = tmdbSeries.ID.ID;
+            if (s_tmdbGroups.TryGetValue(tmdbIdText, out var cachedGroup))
                 return [.. cachedGroup.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.LocalID)];
 
             var xrefs = metadataService.GetCrossReferencesForProviderEntry(tmdbSeries.ID).OfType<IMetadataSeriesCrossReference>().ToList();
@@ -250,13 +250,13 @@ public static class OverrideHelper
 
                 if (groupIds.Count > 1)
                 {
-                    s_tmdbGroups[tmdbIdStr] = groupIds;
+                    s_tmdbGroups[tmdbIdText] = groupIds;
                     return [.. groupIds.Select(metadataService.GetShokoSeriesByAnidbID).OfType<IShokoSeries>().Select(seriesItem => seriesItem.LocalID)];
                 }
             }
 
             // Single-item result or isolated series: cache to prevent re-querying
-            s_tmdbGroups[tmdbIdStr] = [series.AnidbAnimeID];
+            s_tmdbGroups[tmdbIdText] = [series.AnidbAnimeID];
         }
 
         return [shokoSeriesId];

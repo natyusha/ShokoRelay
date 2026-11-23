@@ -224,7 +224,7 @@ internal sealed class SeriesBuildState(
     public HashSet<string> LinkedSeriesMetaDirs { get; } = new(VfsShared.PathComparer);
 
     /// <summary>Deferred series-level metadata linking entries ordered with primary series directories first.</summary>
-    public List<(string SourceDir, string DestSeriesDir, string ImportRoot, string SeriesSeasonLabel, bool IsPrimary)> PendingSeriesMetaDirs { get; } = [];
+    public List<(string SourceDir, string DestinationSeriesDir, string ImportRoot, string SeriesSeasonLabel, bool IsPrimary)> PendingSeriesMetaDirs { get; } = [];
 }
 
 #endregion

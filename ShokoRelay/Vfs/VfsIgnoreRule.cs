@@ -1,11 +1,12 @@
 using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;
 
 /// <summary>Automatically ignores Shoko Relay's internal VFS and local asset directories during Shoko's import scans.</summary>
-public class VfsIgnoreRule(IVideoService videoService, ConfigProvider configProvider) : IManagedFolderIgnoreRule
+public class VfsIgnoreRule(IVideoService videoService, ConfigProvider configProvider, IFileSystem fileSystem) : IManagedFolderIgnoreRule
 {
     #region Ignore Rule
 
@@ -14,7 +15,7 @@ public class VfsIgnoreRule(IVideoService videoService, ConfigProvider configProv
 
     /// <inheritdoc/>
     public bool ShouldIgnore(IManagedFolder folder, FileSystemEntry entry) =>
-        VfsShared.IsPathIgnored(entry.Path, videoService, configProvider.GetSettings(), relativeTo: folder?.Path, isDirectory: entry.IsDirectory);
+        VfsShared.IsPathIgnored(entry.Path, videoService, configProvider.GetSettings(), relativeTo: folder?.Path, isDirectory: entry.IsDirectory, fileSystem: fileSystem);
 
     #endregion
 }

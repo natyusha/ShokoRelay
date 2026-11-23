@@ -1,5 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
+using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using IoFile = System.IO.File;
@@ -14,6 +16,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="animeThemesMapping">AnimeThemes mapping service.</param>
 /// <param name="webmDownloader">AnimeThemes WebM downloader.</param>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
 [RelayAdminAuthorize]
@@ -27,6 +30,7 @@ public class AnimeThemesController(
     AnimeThemesMapping animeThemesMapping,
     AnimeThemesWebmDownloader webmDownloader,
     IVideoService videoService,
+    IFileSystem fileSystem,
     ILogger<AnimeThemesController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
@@ -125,7 +129,7 @@ public class AnimeThemesController(
                 foreach (var folderPath in VfsShared.GetManagedFolderPaths(videoService))
                 {
                     string candidate = Path.GetFullPath(Path.Combine(folderPath, relativeCandidate));
-                    if (VfsShared.IsPathUnderDirectory(candidate, folderPath) && Directory.Exists(candidate))
+                    if (VfsShared.IsPathUnderDirectory(candidate, folderPath) && fileSystem.DirectoryExists(candidate))
                     {
                         fullFolderPath = candidate;
                         break;
@@ -223,7 +227,7 @@ public class AnimeThemesController(
             return BadRequest();
         }
 
-        if (!IsInsideManagedFolders(themePath) || !IoFile.Exists(themePath))
+        if (!IsInsideManagedFolders(themePath) || !fileSystem.FileExists(themePath))
             return NotFound();
 
         try
@@ -236,7 +240,7 @@ public class AnimeThemesController(
         catch { }
 
         // Stream via FileStream rather than PhysicalFile to prevent browsers from receiving physical file paths or triggering security errors
-        return File(new FileStream(themePath, FileMode.Open, FileAccess.Read, FileShare.Read), "audio/mpeg", enableRangeProcessing: true);
+        return File(fileSystem.OpenFile(themePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete), "audio/mpeg", enableRangeProcessing: true);
     }
 
     #endregion
@@ -281,11 +285,11 @@ public class AnimeThemesController(
                 foreach (var line in VfsShared.ReadLinesShared(cachePath))
                 {
                     var pipeParts = line.Split('|');
-                    string pathRaw = pipeParts[0];
+                    string rawPath = pipeParts[0];
                     int videoId = (pipeParts.Length > 1 && int.TryParse(pipeParts[1], out var parsedVideoId)) ? parsedVideoId : 0;
                     int flags = (pipeParts.Length > 2 && int.TryParse(pipeParts[2], out var parsedFlags)) ? parsedFlags : 0;
 
-                    var segments = pathRaw.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    var segments = rawPath.Replace('\\', '/').Trim().Split('/', StringSplitOptions.RemoveEmptyEntries);
                     int? seriesId = ResolveWebmTreeSeriesId(segments);
 
                     if (!seriesId.HasValue || (videoId > 0 && !seenSeriesVideoKeys.Add((seriesId.Value, videoId))))
@@ -313,7 +317,7 @@ public class AnimeThemesController(
                             anidbId = info.AniDbId,
                             file = Path.GetFileNameWithoutExtension(segments[^1]),
                             relPath = videoIdToRelativePath.GetValueOrDefault(videoId),
-                            path = pathRaw.Replace('\\', '/').Trim(),
+                            path = rawPath.Replace('\\', '/').Trim(),
                             videoId,
                             nc = (flags & 1) != 0,
                             lyrics = (flags & 2) != 0,
@@ -364,9 +368,9 @@ public class AnimeThemesController(
         }
 
         // Stream via FileStream rather than PhysicalFile to prevent browsers from receiving physical file paths or triggering security errors
-        return !IsInsideManagedFolders(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !IoFile.Exists(fullPath)
+        return !IsInsideManagedFolders(fullPath) || !string.Equals(Path.GetExtension(fullPath), ".webm", StringComparison.OrdinalIgnoreCase) || !fileSystem.FileExists(fullPath)
             ? NotFound()
-            : File(new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read), "video/webm", enableRangeProcessing: true);
+            : File(fileSystem.OpenFile(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete), "video/webm", enableRangeProcessing: true);
     }
 
     /// <summary>Returns the list of videoIds marked as favourites.</summary>
@@ -487,11 +491,12 @@ public class AnimeThemesController(
 
             // Scan physically present .webm files once into an in-memory dictionary
             var physicalThemes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var webmOptions = new FileSystemListingOptions { Recursive = true, Extensions = [".webm"] };
             foreach (var managedFolder in managedFolders)
             {
                 string themeDir = Path.Combine(managedFolder, themeRootName);
-                if (Directory.Exists(themeDir))
-                    foreach (var file in Directory.EnumerateFiles(themeDir, "*.webm", SearchOption.AllDirectories))
+                if (fileSystem.DirectoryExists(themeDir))
+                    foreach (var file in fileSystem.GetFilePaths(themeDir, webmOptions))
                         physicalThemes.TryAdd(Path.GetRelativePath(themeDir, file).Replace('\\', '/').TrimStart('/'), file);
             }
 

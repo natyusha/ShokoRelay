@@ -263,7 +263,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             : [];
         bool isMultiEpisodeMovie = fileMainEpisodes.Count > 1;
 
-        string title = TextHelper.ResolveMovieTitle(episode, series, tmdbMovie, isStandaloneMovie: true, seriesTitle: context.Titles.DisplayTitle, isMultiEpFile: isMultiEpisodeMovie);
+        string title = TextHelper.ResolveMovieTitle(episode, series, tmdbMovie, isStandaloneMovie: true, seriesTitle: context.Titles.DisplayTitle, isMultiEpisodeFile: isMultiEpisodeMovie);
         string? originallyAvailableAt = episode.AirDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
             ?? series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);

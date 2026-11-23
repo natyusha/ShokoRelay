@@ -83,8 +83,7 @@ public class ShokoController(
                 var result = filterIds.Count > 0 ? vfsBuilder.Build(filterIds, clean) : vfsBuilder.Build((int?)null, clean);
 
                 // Restore AnimeThemes links after the VFS build (filtered or global) if a mapping file exists
-                if (IoFile.Exists(Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping)))
-                    await atMapping.ApplyMappingAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
+                await atMapping.ApplyMappingIfExistsAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
                 // Trigger standard debounced Plex updates if this is a targeted manual rebuild
                 if (PlexLibrary.IsEnabled && filterIds.Count > 0)

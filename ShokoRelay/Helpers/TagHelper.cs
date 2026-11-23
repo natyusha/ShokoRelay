@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
-using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Anidb;
@@ -311,16 +310,9 @@ public static partial class TagHelper
     /// <returns>A normalized alphanumeric ASCII lowercase string.</returns>
     private static string NormalizeTagKey(string text)
     {
-        if (string.IsNullOrWhiteSpace(text))
+        string key = TextHelper.NormalizeAlphanumericKey(text);
+        if (key.Length == 0)
             return string.Empty;
-
-        var normalized = text.Normalize(NormalizationForm.FormD);
-        var stringBuilderNorm = new StringBuilder(normalized.Length);
-        foreach (char character in normalized)
-            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character))
-                stringBuilderNorm.Append(char.ToLowerInvariant(character));
-
-        string key = stringBuilderNorm.ToString();
 
         // Simple plural stemming for deduplication keys (preserves display names)
         if (key.Length > 4 && key.EndsWith("ies", StringComparison.Ordinal))

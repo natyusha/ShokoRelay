@@ -192,6 +192,27 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         }
     }
 
+    /// <summary>Triggers a Plex metadata refresh across all configured library targets for the specified Shoko series ID.</summary>
+    /// <param name="shokoSeriesId">The Shoko series ID.</param>
+    /// <param name="metadataService">Shoko metadata service.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The count of rating keys refreshed.</returns>
+    public async Task<int> RefreshSeriesMetadataAsync(int shokoSeriesId, IMetadataService metadataService, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || shokoSeriesId <= 0)
+            return 0;
+
+        int refreshed = 0;
+        foreach (var target in GetConfiguredTargets())
+        {
+            var ratingKeys = await FindRatingKeysForShokoSeriesInSectionAsync(shokoSeriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
+            foreach (var ratingKey in ratingKeys)
+                if (await RefreshMetadataAsync(ratingKey, target, cancellationToken).ConfigureAwait(false))
+                    refreshed++;
+        }
+        return refreshed;
+    }
+
     /// <summary>Request Plex to analyze the media for a specific item (e.g., to regenerate thumbnails or detect stream changes after a file replacement).</summary>
     /// <param name="ratingKey">The Plex rating key.</param>
     /// <param name="target">The target Plex library.</param>
@@ -448,6 +469,55 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
     #region Metadata Queries
 
+    /// <summary>Fetches metadata items from a Plex server endpoint path.</summary>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="path">The relative Plex API path to query.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The deserialized list of metadata items, or an empty list if unavailable.</returns>
+    public async Task<List<PlexMetadataItem>> GetMetadataItemsAsync(PlexLibraryTarget target, string path, CancellationToken cancellationToken = default)
+    {
+        if (!IsEnabled || target == null || string.IsNullOrWhiteSpace(path))
+            return [];
+
+        using var request = CreateRequest(HttpMethod.Get, path, target.ServerUrl);
+        using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        return (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata ?? [];
+    }
+
+    /// <summary>Fetches Plex metadata items for a set of primary Shoko series IDs within the specified library target.</summary>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="primarySeriesIds">The primary Shoko series IDs to resolve.</param>
+    /// <param name="metadataService">Shoko metadata service.</param>
+    /// <param name="includeLeaves">When <c>true</c> on a show library, retrieves all descendant episode leaves instead of top-level show metadata.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A list of matching <see cref="PlexMetadataItem"/> entries.</returns>
+    public async Task<List<PlexMetadataItem>> GetSectionItemsForSeriesAsync(
+        PlexLibraryTarget target,
+        IEnumerable<int> primarySeriesIds,
+        IMetadataService metadataService,
+        bool includeLeaves = false,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var items = new List<PlexMetadataItem>();
+        if (!IsEnabled || target == null)
+            return items;
+
+        foreach (var seriesId in primarySeriesIds)
+        {
+            var ratingKeys = await FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false);
+            foreach (var ratingKey in ratingKeys)
+            {
+                string path =
+                    includeLeaves && target.LibraryType != PlexLibraryType.Movie
+                        ? $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000"
+                        : $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1";
+                items.AddRange(await GetMetadataItemsAsync(target, path, cancellationToken).ConfigureAwait(false));
+            }
+        }
+        return items;
+    }
+
     /// <summary>Finds the Plex rating keys for a Shoko series within the given Plex section using its metadata GUID.</summary>
     /// <param name="shokoSeriesId">Shoko series ID.</param>
     /// <param name="target">The target Plex library.</param>
@@ -475,30 +545,22 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
                 foreach (var episode in episodes)
                 {
                     string guid = $"{ShokoRelayConstants.MovieAgentScheme}://movie/{PlexConstants.MoviePrefix}{episode.LocalID}";
-                    using var request = CreateRequest(
-                        HttpMethod.Get,
-                        $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",
-                        target.ServerUrl
-                    );
-                    using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                    var item = (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
+                    var item = (
+                        await GetMetadataItemsAsync(target, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", cancellationToken)
+                            .ConfigureAwait(false)
+                    ).FirstOrDefault();
                     if (int.TryParse(item?.RatingKey, out int key))
                         keys.Add(key);
                 }
                 return keys;
             }
-            else
-            {
-                string guid = $"{ShokoRelayConstants.AgentScheme}://show/{primaryId}";
-                using var request = CreateRequest(
-                    HttpMethod.Get,
-                    $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(guid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1",
-                    target.ServerUrl
-                );
-                using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                var item = (await PlexApi.ReadContainerAsync(response, cancellationToken).ConfigureAwait(false))?.Metadata?.FirstOrDefault();
-                return int.TryParse(item?.RatingKey, out int key) ? [key] : [];
-            }
+
+            string showGuid = $"{ShokoRelayConstants.AgentScheme}://show/{primaryId}";
+            var showItem = (
+                await GetMetadataItemsAsync(target, $"/library/sections/{target.SectionId}/all?guid={Uri.EscapeDataString(showGuid)}&X-Plex-Container-Start=0&X-Plex-Container-Size=1", cancellationToken)
+                    .ConfigureAwait(false)
+            ).FirstOrDefault();
+            return int.TryParse(showItem?.RatingKey, out int showKey) ? [showKey] : [];
         }
         catch (Exception exception)
         {

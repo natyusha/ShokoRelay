@@ -1,4 +1,6 @@
 using System.Collections.Frozen;
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.Metadata.Containers;
@@ -71,6 +73,10 @@ public static partial class TextHelper
     [GeneratedRegex(@"/\*[\s\S]*?\*/|""(?:\\[\s\S]|[^""\\])*""|'(?:\\[\s\S]|[^'\\])*'|(?<semi>;)")]
     private static partial Regex CssTopLevelSemicolonRegex();
 
+    /// <summary>Regex matching <c>{{ConstantName}}</c> placeholders in dashboard HTML templates.</summary>
+    [GeneratedRegex(@"\{\{\s?(?<name>[A-Za-z0-9_]+)\s?\}\}")]
+    public static partial Regex TemplatePlaceholderRegex();
+
     #endregion
 
     #region General Text Helpers
@@ -85,6 +91,23 @@ public static partial class TextHelper
     /// <param name="inputText">The string to process.</param>
     /// <returns>The condensed string.</returns>
     public static string CondenseSpaces(string inputText) => CondenseSpacesRegex().Replace(inputText, " ");
+
+    /// <summary>Normalizes text into a lowercase ASCII alphanumeric key by decomposing Unicode characters and stripping diacritics, whitespace, and punctuation.</summary>
+    /// <param name="text">The raw input text.</param>
+    /// <returns>The normalized lowercase alphanumeric key.</returns>
+    public static string NormalizeAlphanumericKey(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        var decomposed = text.Normalize(NormalizationForm.FormD);
+        var keyBuilder = new StringBuilder(decomposed.Length);
+        foreach (char character in decomposed)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character))
+                keyBuilder.Append(char.ToLowerInvariant(character));
+
+        return keyBuilder.ToString();
+    }
 
     /// <summary>Replace literal commas with the unicode escape \u002C.</summary>
     /// <param name="value">The string to escape.</param>
@@ -409,9 +432,9 @@ public static partial class TextHelper
     /// <param name="tmdbMovie">The optional TMDB movie metadata.</param>
     /// <param name="isStandaloneMovie">True when resolving for a standalone Movie library entry where multi-episode files collapse into one item.</param>
     /// <param name="seriesTitle">Optional pre-resolved series display title to avoid redundant lookups.</param>
-    /// <param name="isMultiEpFile">Optional pre-computed flag indicating whether the file spans multiple main episodes.</param>
+    /// <param name="isMultiEpisodeFile">Optional pre-computed flag indicating whether the file spans multiple main episodes.</param>
     /// <returns>The resolved movie title string.</returns>
-    public static string ResolveMovieTitle(IEpisode episode, ISeries series, IMovie? tmdbMovie, bool isStandaloneMovie = false, string? seriesTitle = null, bool? isMultiEpFile = null)
+    public static string ResolveMovieTitle(IEpisode episode, ISeries series, IMovie? tmdbMovie, bool isStandaloneMovie = false, string? seriesTitle = null, bool? isMultiEpisodeFile = null)
     {
         string resolvedSeriesTitle = !string.IsNullOrWhiteSpace(seriesTitle) ? seriesTitle : ResolveFullSeriesTitles(series).DisplayTitle;
         if (string.IsNullOrWhiteSpace(resolvedSeriesTitle) && tmdbMovie != null)
@@ -425,7 +448,7 @@ public static partial class TextHelper
             return resolvedSeriesTitle;
 
         // In standalone movie libraries, omit the episode subtitle when a single video file spans multiple main episodes
-        if (isStandaloneMovie && (isMultiEpFile ?? IsMultiEpisodeMovieFile(episode)))
+        if (isStandaloneMovie && (isMultiEpisodeFile ?? IsMultiEpisodeMovieFile(episode)))
             return resolvedSeriesTitle;
 
         string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
