@@ -518,8 +518,8 @@ public partial class ConfigProvider : IDisposable
 
     /// <summary>Extracts the externally-reachable base URL from the current HTTP request headers, if an HTTP context is active.</summary>
     /// <remarks>
-    ///   Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart.
-    ///   Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response.
+    ///   - Reads <c>X-Forwarded-Proto</c> and <c>X-Forwarded-Host</c> directly because Shoko's <c>Web.TrustedProxies</c> setting defaults to empty and requires a restart
+    ///   - Only admin-authenticated dashboard requests persist the detected URL to <c>AutoShokoServerUrl</c>; unauthenticated requests affect only the active response
     /// </remarks>
     /// <returns>The detected base URL without trailing slash, or <c>null</c> when no HTTP context is active.</returns>
     public string? DetectRequestBaseUrl()

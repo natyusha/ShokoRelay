@@ -75,5 +75,5 @@ jobs:
       - name: Check Dashboard Layout & CSS Property Order (Prettier)
         run: |
           npm install --save-dev prettier prettier-plugin-css-order
-          npx prettier --check "ShokoRelay/Dashboard/**/*.js" "ShokoRelay/Dashboard/**/*.css" --plugin prettier-plugin-css-order
-          npx prettier --check "ShokoRelay/Dashboard/**/*.cshtml" --parser html
+          npx prettier --check "Dashboard/**/*.js" "Dashboard/**/*.css" --plugin prettier-plugin-css-order
+          npx prettier --check "Dashboard/**/*.cshtml" --parser html
