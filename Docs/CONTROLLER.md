@@ -444,7 +444,7 @@ HEAD /animethemes/webm/stream?path={path}                      -> AnimeThemesWeb
 GET  /animethemes/webm/favourites                              -> GetAnimeThemesFavourites
 POST /animethemes/webm/favourites                              -> UpdateAnimeThemesFavourite
 POST /animethemes/webm/download                                -> DownloadAnimeThemesWebm
-     [?name={string}&year={int}&season={string}&force={true|false}&destination={path}]
+     [?name={string}&year={int}&season={string}&recent={int}&force={true|false}&destination={path}]
 ```
 
 - `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, `relPath` (source folder path for folder view support), and the configured `playbackMode`.
@@ -456,7 +456,9 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 - `GetAnimeThemesFavourites` returns a list of `videoId` favourites from `favs_animethemes.csv` in the plugin's configuration directory.
 - `UpdateAnimeThemesFavourite` toggles a `videoId` in the favourites list using a raw integer body.
 - `DownloadAnimeThemesWebm` fetches WebM files from the AnimeThemes API and organizes them by Year/Season inside the configured `!AnimeThemes` folder.
-  - At least one filter (`name` or `season`) is required to prevent accidentally downloading the entire database.
+  - Supports downloading by `name` (capped at 10 downloaded themes), `year`/`season`, or `recent` (`1`–`100` most recently added videos on AnimeThemes sorted by `CREATED_AT_DESC`).
+  - `recent` cannot be combined with `name`, `year`, or `season`.
+  - At least one filter (`name`, `year`, `season`, or `recent`) is required to prevent accidentally downloading the entire database.
   - If a `season` is provided without a `year`, it automatically defaults to the current year.
   - `force`: (default false) set to true to overwrite existing `.webm` files.
   - `destination`: (optional) absolute path to a specific managed folder to force downloads into.

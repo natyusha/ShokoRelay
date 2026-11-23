@@ -120,7 +120,97 @@ public static partial class TagHelper
 
     #endregion
 
-    #region Tag Filtering
+    #region Public API
+
+    /// <summary>Pre-warms the global tag display name cache across all series in Shoko for the current configuration.</summary>
+    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    public static void WarmCache(IMetadataService metadataService, CancellationToken cancellationToken = default)
+    {
+        var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
+        if (key.Sources != TagSources.None)
+            EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService, cancellationToken);
+    }
+
+    /// <summary>Return an array of tag objects derived from a series, applying filters, global deduplication, and configured sources.</summary>
+    /// <param name="series">The Shoko series metadata.</param>
+    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
+    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
+    /// <returns>An array of tag metadata objects.</returns>
+    public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null, IMetadataService? metadataService = null)
+    {
+        var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
+        if (key.Sources == TagSources.None)
+            return [];
+
+        var state = GetOrCreateTagCacheState(key);
+        EnsureWarmed(state, key, metadataService);
+
+        bool shouldRecord = series is IShokoSeries shokoSeries && state.RecordedSeriesIds.TryAdd(shokoSeries.LocalID, 0);
+
+        return
+        [
+            .. ExtractNormalizedTags(CollectRawTags(series, tmdbSeries, key.Sources, key.MinWeight), state)
+                .Select(tag => state.DisplayNames.GetOrAdd(tag.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(tag.CleanName), tag.Priority, shouldRecord))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(displayName => (object)new { tag = displayName }),
+        ];
+    }
+
+    /// <summary>Builds a diagnostic CSV report of all tags across Shoko series after applying default tag overrides.</summary>
+    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
+    /// <returns>A CSV-formatted string listing source, tag, and series count, with merged variants appended after semicolons.</returns>
+    public static string BuildTagReport(IMetadataService metadataService) =>
+        new ReportHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, rawTag => TagCleanupRegex().Replace(rawTag, "")).Build(
+            metadataService.GetAllShokoSeries() ?? [],
+            (series, record) =>
+            {
+                if (series.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
+                    foreach (var tag in anidbTags)
+                        record("AniDB", 0, tag.Name);
+
+                if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
+                    foreach (var tag in tmdb.Tags)
+                        if (tag.Kind is TagKind.Genre || (tag.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(tag.Name)))
+                            record("TMDB", 1, tag.Name);
+
+                foreach (var tag in series.Tags ?? [])
+                    if (tag != null && tag.ID.Source == MetadataSource.User)
+                        record("User", 2, tag.Name);
+            }
+        );
+
+    /// <summary>Convert text to title case, honouring special word list logic.</summary>
+    /// <param name="text">Input text.</param>
+    /// <returns>Formatted string.</returns>
+    public static string TitleCase(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return text;
+
+        // Primary Pass: Capitalize words and apply Upper/Lower lists
+        string result = WordRegex()
+            .Replace(text.ToLowerInvariant(), match => s_forceLower.Contains(match.Value) ? match.Value.ToLowerInvariant()
+                : s_forceUpper.Contains(match.Value) ? match.Value.ToUpperInvariant()
+                // Capitalise all words accounting for apostrophes first
+                : char.ToUpperInvariant(match.Value[0]) + match.Value[1..]);
+
+        // Force capitalise the first character no matter what
+        result = char.ToUpperInvariant(result[0]) + result[1..];
+
+        // Force capitalise the first character of the last word no matter what
+        int lastSpaceIndex = result.LastIndexOf(' ');
+        if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
+            result = result[..(lastSpaceIndex + 1)] + char.ToUpperInvariant(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
+
+        // Apply special case preferences for whole words and hyphenated suffixes as the absolute final step
+        result = WordRegex().Replace(result, match => ApplySpecialCasing(match.Value));
+        return result;
+    }
+
+    #endregion
+
+    #region Internal Helpers
 
     /// <summary>Thread-local accumulation state used during parallel tag cache warming.</summary>
     private sealed class WarmThreadState
@@ -133,16 +223,6 @@ public static partial class TagHelper
 
         /// <summary>Best-priority tag variant encountered within the current series.</summary>
         public readonly Dictionary<string, (int Priority, string TitleCased)> BestInSeries = new(StringComparer.OrdinalIgnoreCase);
-    }
-
-    /// <summary>Pre-warms the global tag display name cache across all series in Shoko for the current configuration.</summary>
-    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    /// <param name="cancellationToken">Optional cancellation token.</param>
-    public static void WarmCache(IMetadataService metadataService, CancellationToken cancellationToken = default)
-    {
-        var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
-        if (key.Sources != TagSources.None)
-            EnsureWarmed(GetOrCreateTagCacheState(key), key, metadataService, cancellationToken);
     }
 
     /// <summary>Retrieves or compiles the cached blacklist, merge rules, and display-name state for the given configuration key.</summary>
@@ -251,31 +331,6 @@ public static partial class TagHelper
         }
     }
 
-    /// <summary>Return an array of tag objects derived from a series, applying filters, global deduplication, and configured sources.</summary>
-    /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
-    /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
-    /// <returns>An array of tag metadata objects.</returns>
-    public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null, IMetadataService? metadataService = null)
-    {
-        var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
-        if (key.Sources == TagSources.None)
-            return [];
-
-        var state = GetOrCreateTagCacheState(key);
-        EnsureWarmed(state, key, metadataService);
-
-        bool shouldRecord = series is IShokoSeries shokoSeries && state.RecordedSeriesIds.TryAdd(shokoSeries.LocalID, 0);
-
-        return
-        [
-            .. ExtractNormalizedTags(CollectRawTags(series, tmdbSeries, key.Sources, key.MinWeight), state)
-                .Select(tag => state.DisplayNames.GetOrAdd(tag.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(tag.CleanName), tag.Priority, shouldRecord))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .Select(displayName => (object)new { tag = displayName }),
-        ];
-    }
-
     /// <summary>Collects raw tag names and source priorities for a series according to the configured tag sources and minimum weight.</summary>
     /// <param name="series">The series metadata.</param>
     /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
@@ -351,33 +406,6 @@ public static partial class TagHelper
             .DistinctBy(tag => tag.NormKey)
             .Select(tag => (tag.CleanName, tag.NormKey, tag.Priority));
 
-    /// <summary>Builds a diagnostic CSV report of all tags across Shoko series after applying default tag overrides.</summary>
-    /// <param name="metadataService">The Shoko metadata service used to enumerate all series.</param>
-    /// <returns>A CSV-formatted string listing source, tag, and series count, with merged variants appended after semicolons.</returns>
-    public static string BuildTagReport(IMetadataService metadataService) =>
-        new ReportHelper.CsvReportBuilder("Tag", "tag", NormalizeTagKey, s_defaultTagMerges, s_defaultTagBlacklist, TitleCase, rawTag => TagCleanupRegex().Replace(rawTag, "")).Build(
-            metadataService.GetAllShokoSeries() ?? [],
-            (series, record) =>
-            {
-                if (series.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
-                    foreach (var tag in anidbTags)
-                        record("AniDB", 0, tag.Name);
-
-                if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
-                    foreach (var tag in tmdb.Tags)
-                        if (tag.Kind is TagKind.Genre || (tag.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(tag.Name)))
-                            record("TMDB", 1, tag.Name);
-
-                foreach (var tag in series.Tags ?? [])
-                    if (tag != null && tag.ID.Source == MetadataSource.User)
-                        record("User", 2, tag.Name);
-            }
-        );
-
-    #endregion
-
-    #region Title Casing Logic
-
     /// <summary>Applies special case preferences for whole words and hyphenated suffixes.</summary>
     /// <param name="word">The word token to format.</param>
     /// <returns>The properly formatted word string.</returns>
@@ -397,34 +425,6 @@ public static partial class TagHelper
         }
 
         return word;
-    }
-
-    /// <summary>Convert text to title case, honouring special word list logic.</summary>
-    /// <param name="text">Input text.</param>
-    /// <returns>Formatted string.</returns>
-    public static string TitleCase(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return text;
-
-        // Primary Pass: Capitalize words and apply Upper/Lower lists
-        string result = WordRegex()
-            .Replace(text.ToLowerInvariant(), match => s_forceLower.Contains(match.Value) ? match.Value.ToLowerInvariant()
-                : s_forceUpper.Contains(match.Value) ? match.Value.ToUpperInvariant()
-                // Capitalise all words accounting for apostrophes first
-                : char.ToUpperInvariant(match.Value[0]) + match.Value[1..]);
-
-        // Force capitalise the first character no matter what
-        result = char.ToUpperInvariant(result[0]) + result[1..];
-
-        // Force capitalise the first character of the last word no matter what
-        int lastSpaceIndex = result.LastIndexOf(' ');
-        if (lastSpaceIndex >= 0 && lastSpaceIndex < result.Length - 1)
-            result = result[..(lastSpaceIndex + 1)] + char.ToUpperInvariant(result[lastSpaceIndex + 1]) + result[(lastSpaceIndex + 2)..];
-
-        // Apply special case preferences for whole words and hyphenated suffixes as the absolute final step
-        result = WordRegex().Replace(result, match => ApplySpecialCasing(match.Value));
-        return result;
     }
 
     #endregion

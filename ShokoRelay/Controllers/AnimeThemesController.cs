@@ -428,19 +428,30 @@ public class AnimeThemesController(
         }
     }
 
-    /// <summary>Downloads AnimeThemes WebM files directly based on filters.</summary>
+    /// <summary>Downloads AnimeThemes WebM files directly based on filters or recent additions.</summary>
     /// <param name="query">Filter parameters for downloading.</param>
     /// <returns>A task representing the result of the download operation.</returns>
     [HttpPost("animethemes/webm/download")]
     public async Task<IActionResult> DownloadAnimeThemesWebm([FromQuery] AnimeThemesWebmQuery query)
     {
-        if (!string.IsNullOrWhiteSpace(query.Season) && !query.Year.HasValue)
-            query = query with { Year = DateTime.Now.Year };
+        if (query.Recent.HasValue)
+        {
+            if (query.Recent.Value is < 1 or > 100)
+                return BadRequest(new RelayResponse<object>(Status: "error", Message: "Recent count must be between 1 and 100."));
+            if (!string.IsNullOrWhiteSpace(query.Name) || query.Year.HasValue || !string.IsNullOrWhiteSpace(query.Season))
+                return BadRequest(new RelayResponse<object>(Status: "error", Message: "Cannot combine 'recent' with Name, Year, or Season filters."));
+        }
+        else
+        {
+            if (!string.IsNullOrWhiteSpace(query.Season) && !query.Year.HasValue)
+                query = query with { Year = DateTime.Now.Year };
 
-        return string.IsNullOrWhiteSpace(query.Name) && string.IsNullOrWhiteSpace(query.Season)
-            ? BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name or Season) is required."))
-            : await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, ReportHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
-                .ConfigureAwait(false);
+            if (string.IsNullOrWhiteSpace(query.Name) && !query.Year.HasValue && string.IsNullOrWhiteSpace(query.Season))
+                return BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name, Year, Season, or Recent) is required."));
+        }
+
+        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, ReportHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
+            .ConfigureAwait(false);
     }
 
     #endregion

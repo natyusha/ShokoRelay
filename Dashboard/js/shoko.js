@@ -22,7 +22,6 @@
       if (anchor) anchor.href = shokoBase + path;
     });
   };
-  resolveSystemLinks();
 
   /** @type {string} Placeholder text for the VFS Overrides Editor. */
   const OVERRIDES_PLACEHOLDER =
@@ -62,12 +61,14 @@
   // #endregion
 
   // #region Shoko: VFS
-  // Initialize the VFS Clean toggle (broom icon).
-  initToggle("vfs-clean", true);
+  /**
+   * Initializes the VFS Overrides Editor modal and binds load/save handlers.
+   * @returns {void}
+   */
+  function initVfsOverridesModal() {
+    const overridesBtn = element("vfs-overrides");
+    if (!overridesBtn) return;
 
-  // Wire up the VFS Overrides Editor modal.
-  const overridesBtn = element("vfs-overrides");
-  if (overridesBtn) {
     const overridesText = element("overrides-text");
     if (overridesText) overridesText.placeholder = OVERRIDES_PLACEHOLDER;
     overridesBtn.onclick = async () => {
@@ -103,17 +104,15 @@
     window._sr.updateControlStates?.();
   };
 
-  window._sr = window._sr || {};
-  window._sr.updateSyncUserState = updateSyncUserState;
+  /**
+   * Initializes the Sync Watched States modal controls and triggers.
+   * @returns {void}
+   */
+  function initSyncWatchedModal() {
+    const triggerButton = element("shoko-sync-watched");
+    if (!triggerButton) return;
 
-  if (syncUsersSelect) {
-    syncUsersSelect.addEventListener("change", updateSyncUserState);
-    updateSyncUserState();
-  }
-
-  // Managed User and Admin Watched-State Synchronization Modal.
-  if (element("shoko-sync-watched")) {
-    element("shoko-sync-watched").onclick = () => {
+    triggerButton.onclick = () => {
       const modal = element("sync-modal");
       const startBtn = element("sync-start-button");
       const dryBtn = element("sync-dry-button");
@@ -193,6 +192,18 @@
   // #endregion
 
   // #region Initialization
+  resolveSystemLinks();
+  initToggle("vfs-clean", true);
+  initVfsOverridesModal();
+
+  window._sr = window._sr || {};
+  window._sr.updateSyncUserState = updateSyncUserState;
+  if (syncUsersSelect) {
+    syncUsersSelect.addEventListener("change", updateSyncUserState);
+    updateSyncUserState();
+  }
+
+  initSyncWatchedModal();
   initShokoSanitizers(); // Initialize sanitizers immediately on script load
   // #endregion
 })();

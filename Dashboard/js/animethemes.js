@@ -26,12 +26,6 @@
     window._sr.setIfNotEmpty(params, "filter", element("at-filter-map")?.value);
     return params;
   };
-
-  /**
-   * Dynamically calculates the current anime season parameters for WebM downloads.
-   * @returns {URLSearchParams} The compiled parameters.
-   */
-  window._sr.getWebmSeasonParams = () => new URLSearchParams({ season: ["Winter", "Spring", "Summer", "Fall"][Math.floor(new Date().getMonth() / 3)] });
   // #endregion
 
   // #region Actions Registry
@@ -94,6 +88,75 @@
       }
     },
   });
+  // #endregion
+
+  // #region WebM - Downloader
+  /**
+   * Initializes the AnimeThemes Downloader modal controls and section download handlers.
+   * @returns {void}
+   */
+  function initWebmDownloaderModal() {
+    const triggerButton = element(window._sr.tasks.atWebmDownload);
+    const modal = element("webm-download-modal");
+    if (!triggerButton || !modal) return;
+
+    const seasonButton = element("at-dl-season-btn");
+    const nameInput = element("at-dl-name");
+    const nameButton = element("at-dl-name-btn");
+    const recentButton = element("at-dl-recent-btn");
+    const cancelButton = element("at-dl-cancel");
+
+    /**
+     * Synchronizes the enabled state for the name filter download button based on active input value.
+     * @returns {void}
+     */
+    const updateButtonStates = () => {
+      if (nameButton) nameButton.disabled = !nameInput?.value.trim();
+    };
+
+    if (nameInput) nameInput.oninput = updateButtonStates;
+
+    let closeModal = () => {};
+
+    /**
+     * Closes the downloader modal and executes a WebM download task under the shared dashboard task runner.
+     * @param {URLSearchParams} queryParams - The query parameters for the download request.
+     * @returns {void}
+     */
+    const startDownload = (queryParams) => {
+      closeModal();
+      window._sr.runAction(triggerButton, async () => {
+        showToast("WebM Download: Processing...", "info", TOAST_MS);
+        const response = await fetchJson(`${base}/animethemes/webm/download?${queryParams}`, { method: "POST" });
+        toastOperation(response, "WebM Download", { hideOnSucceed: 0 });
+      });
+    };
+
+    if (seasonButton) {
+      seasonButton.onclick = () => {
+        const currentYear = new Date().getFullYear();
+        const currentSeason = ["Winter", "Spring", "Summer", "Fall"][Math.floor(new Date().getMonth() / 3)];
+        startDownload(new URLSearchParams({ year: String(currentYear), season: currentSeason }));
+      };
+    }
+
+    if (nameButton) {
+      nameButton.onclick = () => {
+        const animeName = nameInput?.value.trim();
+        if (animeName) startDownload(new URLSearchParams({ name: animeName }));
+      };
+    }
+
+    if (recentButton) {
+      recentButton.onclick = () => startDownload(new URLSearchParams({ recent: "10" }));
+    }
+
+    triggerButton.onclick = () => {
+      updateButtonStates();
+      closeModal = window._sr.openModal(modal);
+      if (cancelButton) cancelButton.onclick = closeModal;
+    };
+  }
   // #endregion
 
   // #region MP3 - State and UI
@@ -188,18 +251,6 @@
       playBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
       updatePlaybackTooltip(playBtn);
     }
-  }
-
-  if (atTrack) {
-    atTrack.onclick = (event) => {
-      if (atAudio?.duration && isFinite(atAudio.duration)) atAudio.currentTime = ((event.clientX - atTrack.getBoundingClientRect().left) / atTrack.offsetWidth) * atAudio.duration;
-    };
-    atTrack.onmousedown = (event) => {
-      if (event.button === 1 && atAudio?.src) {
-        event.preventDefault();
-        atAudio.paused ? atAudio.play() : atAudio.pause();
-      }
-    };
   }
   // #endregion
 
@@ -335,5 +386,6 @@
   }
 
   initAtSanitizers(); // Initialize sanitizers immediately on script load
+  initWebmDownloaderModal();
   // #endregion
 })();

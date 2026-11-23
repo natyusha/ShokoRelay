@@ -173,8 +173,6 @@
     wrap.appendChild(container);
   }
 
-  document.addEventListener("click", () => document.querySelectorAll(".multiselect.open").forEach((openElement) => openElement.classList.remove("open")));
-
   /**
    * Generates a dual-textarea UI for mapping dictionaries and binds it to the configuration state.
    * @param {HTMLElement} wrap - The container element to append to.
@@ -424,6 +422,8 @@
   // #endregion
 
   // #region Initialization
+  document.addEventListener("click", () => document.querySelectorAll(".multiselect.open").forEach((openElement) => openElement.classList.remove("open")));
+
   // Help Modal Logic
   const helpBtn = element("settings-help-open");
   if (helpBtn)

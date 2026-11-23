@@ -260,8 +260,9 @@ Shoko Relay includes full [AnimeThemes](https://animethemes.moe/) integration. T
 The plugin will look for '.webm' theme files in a folder called `!AnimeThemes` (or the configured `AnimeThemes Root Path`) which is located in the root of your anime library (this works for any "destination" type folder managed by Shoko). These files must have the same name as they do on the AnimeThemes website and then a mapping must be generated for them, in what is essentially a 3 step process. Simply navigate to the "AnimeThemes: VFS" section of the dashboard page to get started.
 
 1. Download anime theme videos and place them in the `!AnimeThemes` folder
-   - There is a torrent available with over 19000+ themes and a button on the dashboard for downloading themes from the current season
-   - An endpoint (`/animethemes/webm/download`) is also available to help download things not available in the current torrent
+   - There is a torrent available with over 19000+ themes and a button on the dashboard for downloading themes that aren't in said torrent
+   - The button opens the "AnimeThemes Downloader" modal which allows themes to be downloaded by recently added, the current season, or via name filter (up to 10 themes)
+   - An endpoint (`/animethemes/webm/download`) is also available for scripted or expanded downloads
 2. Generate a mapping for the videos by clicking the `Build Mapping File` button:
    - If you have the torrent click the `Import Curated Mapping File` button to download the [current torrent mapping](https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/anidb_animethemes_xrefs.csv)
      - This will overwrite any existing mappings if they exist

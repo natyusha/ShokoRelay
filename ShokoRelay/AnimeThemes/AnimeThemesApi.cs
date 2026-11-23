@@ -141,6 +141,33 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
         return (await PostGraphQlAsync<AnimePaginationResponse>(query, variables, cancellationToken).ConfigureAwait(false))?.AnimePagination;
     }
 
+    /// <summary>Fetches a paginated list of the most recently added AnimeThemes videos ordered by creation date descending.</summary>
+    /// <param name="first">Maximum number of video entries to request on this page.</param>
+    /// <param name="page">The 1-based pagination page index.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A <see cref="RecentVideoPagination"/> containing a page of recently added videos.</returns>
+    public async Task<RecentVideoPagination?> FetchRecentVideosAsync(int first, int page, CancellationToken cancellationToken)
+    {
+        const string Query =
+            @"query($first: Int, $page: Int) {
+          videoPagination(first: $first, page: $page, sort: [CREATED_AT_DESC]) {
+            paginatorInfo { hasMorePages }
+            data {
+              id basename link
+              animethemeentries {
+                nodes {
+                  animetheme {
+                    anime { year season }
+                  }
+                }
+              }
+            }
+          }
+        }";
+
+        return (await PostGraphQlAsync<RecentVideoPaginationResponse>(Query, new { first, page }, cancellationToken).ConfigureAwait(false))?.VideoPagination;
+    }
+
     #endregion
 
     #region Internal Helpers
@@ -438,6 +465,22 @@ public class AnimeThemesApi(HttpClient? httpClient = null, ILogger<AnimeThemesAp
     /// <param name="Data">Page of anime entries.</param>
     /// <param name="PaginatorInfo">Pagination metadata.</param>
     public sealed record AnimePagination(List<AnimeThemeAnime>? Data, PaginatorInfo? PaginatorInfo);
+
+    /// <summary>Response for paginated recent video queries.</summary>
+    /// <param name="VideoPagination">The paginated recent video results container.</param>
+    public sealed record RecentVideoPaginationResponse(RecentVideoPagination? VideoPagination);
+
+    /// <summary>Container for paginated recent video entries.</summary>
+    /// <param name="Data">Page of recent video entries.</param>
+    /// <param name="PaginatorInfo">Pagination metadata.</param>
+    public sealed record RecentVideoPagination(List<RecentVideoEntry>? Data, PaginatorInfo? PaginatorInfo);
+
+    /// <summary>Lightweight video entry returned by recent video pagination queries.</summary>
+    /// <param name="Id">The unique video ID.</param>
+    /// <param name="Basename">Physical basename of the video file.</param>
+    /// <param name="Link">The direct video resource URL.</param>
+    /// <param name="Animethemeentries">Connection to associated theme entries.</param>
+    public sealed record RecentVideoEntry(int Id, string? Basename, string? Link, VideoThemeEntryConnection? Animethemeentries);
 
     #endregion
 }

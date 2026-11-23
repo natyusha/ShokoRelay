@@ -256,16 +256,7 @@
             <button id="{{ TaskAtMapBuild }}" class="w46-button" title="Build Mapping File" data-relay-endpoint="/animethemes/vfs/map" data-relay-label="AnimeThemes Mapping" data-relay-persist="true">
               <svg class="icon-svg"><use href="img/icons.svg#database-sync-outline"></use></svg>
             </button>
-            <button
-              id="{{ TaskAtWebmDownload }}"
-              class="w46-button"
-              title="Download Current Season"
-              data-relay-endpoint="/animethemes/webm/download"
-              data-relay-method="POST"
-              data-relay-params="getWebmSeasonParams"
-              data-relay-label="WebM Download"
-              data-relay-persist="true"
-            >
+            <button id="{{ TaskAtWebmDownload }}" class="w46-button" title="AnimeThemes Downloader" type="button">
               <svg class="icon-svg"><use href="img/icons.svg#download"></use></svg>
             </button>
           </div>
@@ -489,6 +480,37 @@
     </div>
     <!-- #endregion -->
 
+    <!-- #region MARK: AnimeThemes Downloader Modal
+    -->
+    <div id="webm-download-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="webm-download-modal-title">
+      <div class="modal sync" role="document">
+        <header id="webm-download-modal-title">AnimeThemes Downloader</header>
+        <div class="modal-body">
+          <div>
+            <div>
+              <label for="at-dl-name">Filtered Downloads</label>
+              <input id="at-dl-name" type="text" placeholder="Filter by title (max 10 themes)" />
+            </div>
+            <div class="full">
+              <button id="at-dl-name-btn" type="button" disabled>Download</button>
+            </div>
+          </div>
+          <hr class="divider" />
+          <p>Preset Downloads</p>
+          <div class="full">
+            <button id="at-dl-season-btn" type="button">Download Current Season</button>
+            <button id="at-dl-recent-btn" type="button">Download Recently Added</button>
+          </div>
+          <hr class="divider" />
+          <small>Please use the AnimeThemes batch torrent for bulk downloads.</small><br /><small>This is intended for themes that have yet to be archived.</small>
+        </div>
+        <footer>
+          <button id="at-dl-cancel" class="cancel" type="button">Cancel</button>
+        </footer>
+      </div>
+    </div>
+    <!-- #endregion -->
+
     <!-- #region MARK: Confirm Modal
     -->
     <div id="confirm-modal" class="modal-overlay" aria-hidden="true" role="dialog" aria-modal="true">
@@ -640,7 +662,7 @@
             <small>Any setting that includes a <strong>⟳</strong> symbol requires a VFS rebuild to take effect. This is because they directly affect how the VFS is generated.</small>
             <h4>Shoko Server URL / Plex Server URL</h4>
             <small>These settings can be ignored unless you want to use specific Shoko/Plex server URLs or are having issues with the auto detection.</small>
-            <h4>Require Auth</h4>
+            <h4>Require Authentication</h4>
             <small>
               Will cause Shoko administrator authentication to be required for all dashboard config, log, and task endpoints. Static UI assets, Plex metadata provider routes, and the Plex webhook are exempt.
               "Full" enforces authentication everywhere and "Allow Player Access" allows the AnimeThemes Player to be used without auth (with the favourites feature disabled).

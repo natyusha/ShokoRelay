@@ -335,8 +335,13 @@ public class CollectionService(
     /// <summary>Result state of a single collection image upload evaluation.</summary>
     private enum ImageUploadOutcome
     {
+        /// <summary>No local image was available or the upload failed.</summary>
         None,
+
+        /// <summary>An identical cached image was already present on the collection.</summary>
         Skipped,
+
+        /// <summary>The image was uploaded to Plex.</summary>
         Uploaded,
     }
 

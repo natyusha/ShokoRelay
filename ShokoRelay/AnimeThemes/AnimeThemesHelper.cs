@@ -240,7 +240,7 @@ internal static partial class AnimeThemesHelper
 
     #endregion
 
-    #region CSV Logic
+    #region Audio Tagging
 
     /// <summary>Reads ID3v2 text frames from an MP3 file header and maps common fields to friendly tag keys.</summary>
     /// <param name="filePath">The absolute path to the MP3 file.</param>
@@ -289,6 +289,10 @@ internal static partial class AnimeThemesHelper
         }
         return tags;
     }
+
+    #endregion
+
+    #region CSV Logic
 
     /// <summary>Parses a CSV string into a tuple containing preserved comments and a list of mapping entries.</summary>
     /// <param name="content">The raw CSV content string.</param>

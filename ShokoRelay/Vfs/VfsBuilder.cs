@@ -71,9 +71,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             var allRoots = VfsShared.GetManagedFolderPaths(videoService);
             foreach (var root in allRoots)
             {
-                CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails, logger);
+                CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails);
                 bool doMovie = Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
-                CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, logger, true, doMovie);
+                CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, true, doMovie);
             }
         }
 
@@ -503,10 +503,9 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     /// <summary>Safely purges the contents and removes a root VFS directory.</summary>
     /// <param name="path">The absolute path of the root directory to clean.</param>
     /// <param name="cleanupDetails">The tracking list for cleanups.</param>
-    /// <param name="logger">The logger to use for logging messages.</param>
     /// <param name="isMovieRoot">Whether this root is the standalone movies directory.</param>
     /// <param name="recreate">Whether to recreate the empty directory and .ignore file after cleanup.</param>
-    private void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, ILogger logger, bool isMovieRoot = false, bool recreate = true)
+    private void CleanVfsRoot(string path, List<RootCleanupDetails> cleanupDetails, bool isMovieRoot = false, bool recreate = true)
     {
         if (Settings.Advanced.DisableVfsGeneration || !fileSystem.DirectoryExists(path))
             return;

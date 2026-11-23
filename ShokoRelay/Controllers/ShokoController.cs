@@ -293,7 +293,6 @@ public class ShokoController(
                 int effectiveThreshold = threshold ?? Settings.Advanced.EmptyPlexTrashThreshold;
 
                 if (effectiveThreshold > 0 && PlexLibrary.IsEnabled)
-                {
                     foreach (var target in PlexLibrary.GetConfiguredTargets())
                     {
                         var (_, trashed, message) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, effectiveThreshold, dryRun).ConfigureAwait(false);
@@ -301,7 +300,6 @@ public class ShokoController(
                         if (trashed.Count > 0)
                             plexRemoved.AddRange(trashed.Select(item => $"[{target.Title}] {item}"));
                     }
-                }
                 else if (trashOnly)
                     plexMessages.Add("Empty Plex Trash is disabled. Configure a threshold under Provider Settings > Advanced or pass 'threshold=N'.");
 

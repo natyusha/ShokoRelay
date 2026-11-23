@@ -302,7 +302,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
 
             // Critical guard: if a network mount drops entirely, 100% of the library is trashed. Always abort regardless of threshold setting.
             if (percent >= 100)
-                return (false, trashedItems, $"Catastrophic failure detected: 100% of library is trashed. Aborting to prevent data loss.");
+                return (false, trashedItems, "Catastrophic failure detected: 100% of library is trashed. Aborting to prevent data loss.");
 
             if (percent > threshold)
                 return (false, trashedItems, $"Safety threshold exceeded. {trashedSize}/{totalSize} ({percent:F1}%) items trashed (Limit: {threshold}%).");
@@ -320,7 +320,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             logger.LogWarning("PlexClient: Network timeout during empty trash for section {SectionId}", target.SectionId);
-            return (false, [], $"Network timeout during trash processing.");
+            return (false, [], "Network timeout during trash processing.");
         }
         catch (Exception exception)
         {

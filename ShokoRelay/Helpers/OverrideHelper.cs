@@ -74,7 +74,6 @@ public static class OverrideHelper
 
         // Load Manual CSV Overrides
         if (File.Exists(path))
-        {
             try
             {
                 foreach (var rawLine in VfsShared.ReadLinesShared(path))
@@ -113,7 +112,6 @@ public static class OverrideHelper
                 }
             }
             catch { }
-        }
 
         // Atomic swap & cache clear
         s_groups = newGroups;

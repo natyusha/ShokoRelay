@@ -471,7 +471,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["year"]                  = episode.AirDate?.Year,
             ["summary"]               = TextHelper.SanitizeSummaryWithFallback(episodeDescription, resolvedTmdbEpisode != null ? TextHelper.GetDescriptionByLanguage(resolvedTmdbEpisode, Settings.DescriptionLanguage) : null, Settings.SummaryMode),
             ["isAdult"]               = isAdult,
-            ["duration"]              = (int)episode.Runtime.TotalMilliseconds,
+            ["duration"]              = (int)Math.Min(int.MaxValue, episode.Runtime.TotalMilliseconds),
 
             ["parentRatingKey"]       = series.GetPlexRatingKey(mapped.Season),
             ["parentKey"]             = $"/metadata/{series.GetPlexRatingKey(mapped.Season)}",
