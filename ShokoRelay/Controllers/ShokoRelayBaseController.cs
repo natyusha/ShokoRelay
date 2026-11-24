@@ -23,15 +23,17 @@ internal static class RelayAuthSession
 {
     private const string CookieName = "shoko-relay-auth";
     private const string ProtectorPurpose = "ShokoRelay.AdminAuth.v1";
-    private static readonly TimeSpan s_sessionLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan s_persistentLifetime = TimeSpan.FromDays(30);
+    private static readonly TimeSpan s_sessionLifetime = TimeSpan.FromDays(1);
     private static readonly byte[] s_fallbackKey = RandomNumberGenerator.GetBytes(32);
 
     /// <summary>Issues a signed HttpOnly session cookie for the authenticated administrator.</summary>
     /// <param name="context">The current HTTP context.</param>
     /// <param name="user">The authenticated Shoko administrator.</param>
-    public static void SignIn(HttpContext context, IUser user)
+    /// <param name="rememberMe">When <c>true</c>, persists the cookie across browser restarts for 30 days; otherwise issues a browser-session cookie.</param>
+    public static void SignIn(HttpContext context, IUser user, bool rememberMe = false)
     {
-        var expiresAt = DateTimeOffset.UtcNow.Add(s_sessionLifetime);
+        var expiresAt = DateTimeOffset.UtcNow.Add(rememberMe ? s_persistentLifetime : s_sessionLifetime);
         byte[] payload = Encoding.UTF8.GetBytes($"{user.LocalID}:{expiresAt.ToUnixTimeSeconds()}");
         byte[] protectedBytes = context.RequestServices.GetService<IDataProtectionProvider>() is { } dataProtection
             ? dataProtection.CreateProtector(ProtectorPurpose).Protect(payload)
@@ -47,7 +49,7 @@ internal static class RelayAuthSession
                 SameSite = SameSiteMode.Strict,
                 Secure = context.Request.IsHttps,
                 Path = "/",
-                Expires = expiresAt,
+                Expires = rememberMe ? expiresAt : null,
             }
         );
     }
@@ -199,12 +201,12 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <param name="Status">The result status of the request (e.g., "ok", "error", "skipped").</param>
     /// <param name="Message">An optional descriptive message or error detail.</param>
     /// <param name="Data">The actual result data object.</param>
-    /// <param name="LogUrl">An optional URL to a report log file.</param>
-    public record RelayResponse<T>(string Status = "ok", string? Message = null, T? Data = default, string? LogUrl = null);
+    /// <param name="ReportUrl">An optional URL to a generated task report file.</param>
+    public record RelayResponse<T>(string Status = "ok", string? Message = null, T? Data = default, string? ReportUrl = null);
 
     #endregion
 
-    #region Logging Helper
+    #region Report Helper
 
     /// <summary>Executes a background task with full lifecycle tracking, logging, and standardized response formatting. Supports optional concurrency locking.</summary>
     /// <typeparam name="T">The type of the result data.</typeparam>
@@ -223,7 +225,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         {
             T result = await action().ConfigureAwait(false);
             ReportHelper.WriteReport($"{taskName}.report", result, reportBuilder, Logger);
-            IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, LogUrl: $"{ApiBase}/logs/{taskName}.report"));
+            IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, ReportUrl: $"{ApiBase}/reports/{taskName}.report"));
             TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
             return actionResult;
         }

@@ -86,12 +86,12 @@
 }
 /* #endregion */
 
-/* #region MARK: Task Logs
+/* #region MARK: Task Reports
 */
-.log-item {
+.report-item {
   margin: 0.75rem 0;
 }
-#logs-list .log-link {
+#reports-list .report-link {
   padding-right: 6px;
   font-weight: 500;
   font-size: 1.1em;
@@ -296,59 +296,6 @@ button.loading:hover {
 #plex-automation-run .button-spinner {
   scale: 103.5%;
   margin: 0 0 0 -2px;
-}
-/* #endregion */
-
-/* #region MARK: Styled Checkboxes
-*/
-label.shoko-checkbox {
-  display: inline-flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  cursor: pointer;
-  margin-left: 2px;
-  padding: 0.219rem 0;
-  user-select: none;
-}
-label.shoko-checkbox input[type="checkbox"] {
-  position: absolute;
-  clip: rect(0 0 0 0);
-  margin: -1px;
-  border: 0;
-  padding: 0;
-  width: 1px;
-  height: 1px;
-  white-space: nowrap;
-}
-.shoko-checkbox-text {
-  display: inline-block;
-  margin-top: -2px;
-  line-height: 1em;
-}
-.shoko-checkbox-title {
-  font-weight: 500;
-}
-.shoko-checkbox-icon {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  transition: all 0.3s ease-in-out;
-  fill: var(--highlight-color);
-}
-.shoko-checkbox-icon svg {
-  width: 1.5rem;
-  height: 1.5rem;
-}
-label.shoko-checkbox:hover .shoko-checkbox-icon {
-  fill: var(--hover-color);
-}
-.shoko-checkbox-icon .checked,
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .unchecked {
-  display: none;
-}
-label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .checked {
-  display: block;
-  fill: var(--hover-color);
 }
 /* #endregion */
 

@@ -448,7 +448,7 @@ public class AdvancedConfig
     public string PlexServerUrl { get; set; } = "";
 
     /// <summary>Authentication enforcement mode for administrative plugin endpoints.</summary>
-    [Display(Name = "Require Authentication", Description = "Applies to dashboard, config, logs, and task endpoints")]
+    [Display(Name = "Require Authentication", Description = "Applies to dashboard, config, report, and task endpoints")]
     [DefaultValue(RequireAuthMode.Disabled)]
     public RequireAuthMode RequireAuth { get; set; } = RequireAuthMode.Disabled;
 

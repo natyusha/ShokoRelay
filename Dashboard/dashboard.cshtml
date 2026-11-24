@@ -316,7 +316,7 @@
                 data-relay-endpoint="/plex/images/sync"
                 data-relay-label="Shoko Image Sync"
                 data-relay-persist="true"
-                data-relay-confirm='Are you sure you want to upload all local images to Shoko?<br><br><small>This will mark them as "preferred" for their corresponding entry.</small>'
+                data-relay-confirm='Are you sure you want to upload all local images to Shoko?<br /><br /><small>This will mark them as "preferred" for their corresponding entry.</small>'
                 data-relay-confirm-button="Sync Images"
               >
                 Sync Plex Images
@@ -338,10 +338,10 @@
                 data-relay-label="Purge Missing"
                 data-relay-persist="true"
                 data-relay-confirm="
-                  Are you sure you want to purge all records for missing files?<br><br>
+                  Are you sure you want to purge all records for missing files?<br /><br />
                   <small>
-                    This will permanently remove them from Shoko's database.<br>
-                    The configured <b>AniDB > MyList Options > Delete Action</b> will also be triggered.<br><br>
+                    This will permanently remove them from Shoko's database.<br />
+                    The configured <b>AniDB > MyList Options > Delete Action</b> will also be triggered.<br /><br />
                     If <b>Empty Plex Trash Threshold</b> is configured, Plex's trash will also be emptied safely.
                   </small>
                 "
@@ -424,20 +424,20 @@
       </section>
       <!-- #endregion -->
 
-      <!-- #region MARK: Task Logs
+      <!-- #region MARK: Task Reports
       -->
       <div>
         <section>
-          <details id="task-logs-details" class="details-anim">
+          <details id="task-reports-details" class="details-anim">
             <summary>
               <h2>
                 <svg class="icon-svg"><use href="img/icons.svg#text-box-outline"></use></svg>
-                Task Logs
+                Task Reports
               </h2>
             </summary>
             <div class="details-content">
               <hr />
-              <ul class="help-list" id="logs-list"></ul>
+              <ul class="help-list" id="reports-list"></ul>
             </div>
           </details>
         </section>
@@ -461,6 +461,9 @@
       <a class="float-link github-float" href="https://github.com/natyusha/ShokoRelay" title="Github" aria-label="Shoko Relay on GitHub">
         <svg class="icon-svg"><use href="img/icons.svg#github"></use></svg>
       </a>
+      <button id="auth-logout" class="float-link" title="Logout" type="button" aria-label="Logout" hidden>
+        <svg class="icon-svg"><use href="img/icons.svg#logout"></use></svg>
+      </button>
     </div>
     <!-- #endregion -->
 
@@ -488,21 +491,21 @@
         <div class="modal-body">
           <div>
             <div>
-              <label for="at-dl-name">Filtered Downloads</label>
+              <label for="at-dl-name">Filtered</label>
               <input id="at-dl-name" type="text" placeholder="Filter by title (max 10 themes)" />
             </div>
             <div class="full">
               <button id="at-dl-name-btn" type="button" disabled>Download</button>
             </div>
           </div>
-          <hr class="divider" />
-          <p>Preset Downloads</p>
+          <br />
+          <h3>Preset</h3>
           <div class="full">
             <button id="at-dl-season-btn" type="button">Download Current Season</button>
             <button id="at-dl-recent-btn" type="button">Download Recently Added</button>
           </div>
           <hr class="divider" />
-          <small>Please use the AnimeThemes batch torrent for bulk downloads.</small><br /><small>This is intended for themes that have yet to be archived.</small>
+          <small>Please use the AnimeThemes batch torrent for bulk downloads</small>
         </div>
         <footer>
           <button id="at-dl-cancel" class="cancel" type="button">Cancel</button>
@@ -664,8 +667,9 @@
             <small>These settings can be ignored unless you want to use specific Shoko/Plex server URLs or are having issues with the auto detection.</small>
             <h4>Require Authentication</h4>
             <small>
-              Will cause Shoko administrator authentication to be required for all dashboard config, log, and task endpoints. Static UI assets, Plex metadata provider routes, and the Plex webhook are exempt.
-              "Full" enforces authentication everywhere and "Allow Player Access" allows the AnimeThemes Player to be used without auth (with the favourites feature disabled).
+              Will cause Shoko administrator authentication to be required for all dashboard config, report, and task endpoints. Static UI assets, Plex metadata provider routes, and the Plex webhook are exempt.
+              "Full" enforces authentication everywhere and "Allow Player Access" allows the AnimeThemes Player to be used without auth (with the favourites feature disabled). When authenticated there is a also
+              a logout button in the bottom right of the dashboard.
             </small>
             <h4>Path Mappings</h4>
             <small>Configure this if your Plex server has different mappings than Shoko and you want to bypass auto detection for a marginal performance improvement. Nothing else requires it.</small>

@@ -344,6 +344,12 @@
             }
             setValueByPath(config, prop.Path, nextValue);
             await saveSettings(config);
+            window._sr.authState = {
+              authenticated: true,
+              required: nextValue !== 0,
+              allowPlayerAccess: nextValue === 2,
+            };
+            window._sr.updateLogoutButton?.();
           };
           // Custom validation for ShokoServerUrl and PlexServerUrl
         } else if (prop.Path.endsWith("ShokoServerUrl") || prop.Path.endsWith("PlexServerUrl")) {
@@ -437,8 +443,8 @@
     loadConfig();
   })();
 
-  const logsDetails = document.querySelector("#logs-list")?.closest(".details-anim");
-  const logsContent = logsDetails?.querySelector(".details-content");
-  if (logsDetails && logsContent) initDetailsAnimation(logsDetails, logsContent);
+  const reportsDetails = document.querySelector("#reports-list")?.closest(".details-anim");
+  const reportsContent = reportsDetails?.querySelector(".details-content");
+  if (reportsDetails && reportsContent) initDetailsAnimation(reportsDetails, reportsContent);
   // #endregion
 })();

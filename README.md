@@ -52,7 +52,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
   - Click the `Generate VFS` button in the "Shoko: VFS" section to initialize your collection
     - First time generation may take several minutes to complete with a large library
   - A report of the run will be written to `reports/shoko-vfs-build.report` inside the plugin's cache directory
-    - You can download the report via the dashboard's "Task Logs" section or a toast that will appear on task completion
+    - You can download the report via the dashboard's "Task Reports" section or a toast that will appear on task completion
   - Automatic VFS updates run in the background and everything that triggers them is documented under [VFS Updates](#vfs-updates)
 - **Recommended:**
   - Link the plugin to your Plex account via the `Start Plex Auth` button in the "Plex Authentication" section
@@ -72,7 +72,7 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
 ```
 
 <details>
-<summary><b>Recommended Shoko Server Configuration</b></summary><br>
+<summary><b>Recommended Shoko Server Configuration</b></summary><br />
 
 Enable the following options in Shoko to ensure that Plex has at least one source of metadata for everything:
 
@@ -136,7 +136,7 @@ Enable the following options in Shoko to ensure that Plex has at least one sourc
   - Seasons: `Hide for single-season series`
 
 <details>
-<summary><b>Legacy Agent Cleanup</b></summary><br>
+<summary><b>Legacy Agent Cleanup</b></summary><br />
 
 Once you are happy with your new libraries you can safely delete all of the old data left behind from any anime related legacy agents you may have used. To do so simply navigate to your [Plex Media Server data directory](https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/) and search for the full agent name. You can then delete all of the files and folders found that match the search result. Some example search terms are listed below:
 
@@ -422,7 +422,7 @@ If you prefer separate movie libraries (which is not recommended), Shoko Relay p
 - Plex Movie libraries do not support individual metadata for specials, so they will be relegated to generic "Local Extras" without descriptions or any other metadata
 
 <details>
-<summary><b>Usage</b></summary><br>
+<summary><b>Usage</b></summary><br />
 
 - Navigate to `Settings > Metadata Agents`
 - Click `Add Provider` in the Metadata Providers header and supply the following URL:
@@ -437,7 +437,7 @@ If you prefer separate movie libraries (which is not recommended), Shoko Relay p
 </details>
 
 <details>
-<summary><b>Info</b></summary><br>
+<summary><b>Info</b></summary><br />
 
 #### VFS Mapping
 
@@ -483,7 +483,7 @@ This allows shows which are separated on AniDB but part of the same TMDB listing
 If a secondary series does _not_ share a TMDB link (or if you want to manually map episodes of a single series), you can assign specific season and episode coordinates by appending episode information to the ID. The formatting is available in the details block below:
 
 <details>
-<summary><b>Advanced Episode Formatting</b></summary><br>
+<summary><b>Advanced Episode Formatting</b></summary><br />
 
 Custom episode assignments allow series to be mapped to specific seasons and episode numbers using the following syntax:
 
@@ -570,10 +570,10 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 #### How Reports Work
 
 - Reports are stored in the `reports/` subfolder within the plugin's cache directory.
-- When a task completes, a toast notification appears on the dashboard with a `[view log]` link.
+- When a task completes, a toast notification appears on the dashboard with a `[view report]` link.
 - These files are overwritten each time the corresponding task is run.
 - To save a specific report, you must download or copy the text before running that task again.
-- Links to the currently generated logs are available at the bottom of the dashboard in the "Task Logs" section
+- Links to the currently generated reports are available at the bottom of the dashboard in the "Task Reports" section
 
 ### Plugin API
 

@@ -22,6 +22,7 @@ Endpoints managed by `DashboardController`
 
 ```
 POST /auth/login                                               -> Login
+POST /auth/logout                                              -> Logout
 GET  /auth/verify?force={true|false}&player={true|false}       -> VerifyAuth
 GET  /dashboard                                                -> GetDashboardPage
 GET  /browser?seriesId={id}&anidbId={id}                       -> GetBrowserPage
@@ -38,11 +39,13 @@ GET  /tasks/active                                             -> GetActiveTasks
 GET  /tasks/completed                                          -> GetCompletedTasks
 POST /tasks/clear/{taskName}                                   -> ClearTaskResult
 
-GET  /logs/list                                                -> GetLogsList
-GET  /logs/{fileName}                                          -> GetLog
+GET  /reports/list                                             -> GetReportsList
+GET  /reports/{fileName}                                       -> GetReport
 ```
 
 - `Login` authenticates a Shoko administrator via username and password (`IUserService.AuthenticateUser`) and issues a signed `HttpOnly` session cookie.
+  - Accepts an optional `rememberMe` boolean; when `true`, persists the session cookie for 30 days instead of a browser-session cookie.
+- `Logout` clears the signed `HttpOnly` administrator session cookie.
 - `VerifyAuth` checks whether the caller satisfies administrator authorization when `Advanced.RequireAuth` is enabled (or unconditionally when `force=true`, used before enabling auth).
   - Passing `player=true` permits an unauthenticated status check when `RequireAuth` is set to `Allow Player Access`.
 - `GetDashboardPage` Serves the main settings dashboard (`dashboard.cshtml`).
@@ -65,8 +68,8 @@ GET  /logs/{fileName}                                          -> GetLog
 - `GetActiveTasks` returns a list of unique task identifiers currently running on the server.
 - `GetCompletedTasks` returns a dictionary of results for tasks that finished while the dashboard was disconnected or before a refresh.
 - `ClearTaskResult` acknowledges and removes a stored result from the server's memory.
-- `GetLogsList` returns a JSON list of all currently generated task logs that exist on disk.
-- `GetLog` serves report files from the plugin's `reports` cache directory without browser caching.
+- `GetReportsList` returns a JSON list of all currently generated task reports that exist on disk.
+- `GetReport` serves report files from the plugin's reports cache directory without browser caching.
   - Access is restricted strictly to files ending with `.report` inside the `reports/` cache directory to prevent directory traversal.
 
 **Notes:**
@@ -74,12 +77,12 @@ GET  /logs/{fileName}                                          -> GetLog
 - Authentication: When `Advanced.RequireAuth` is enabled, all endpoints under `DashboardController`, `ShokoController`, `PlexController`, and `AnimeThemesController` require Shoko administrator authentication.
   - This can be done using Shoko's standard `apikey` header for Swagger/curl, or the dashboard's `HttpOnly` session cookie via `POST /auth/login`.
     - Cookie-authenticated requests leave Shoko's `IActorContext` actor as system.
-  - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`), `/auth/login`, `/auth/verify`, and `MetadataController` (Plex requirement).
+  - This excludes static UI pages/assets (`/dashboard`, `/browser`, `/player`, `/dashboard/{\*path}`, `/theme.css`), `/auth/login`, `/auth/logout`, `/auth/verify`, and `MetadataController` (Plex requirement).
   - When set to `Allow Player Access`, the read-only AnimeThemes Player data endpoints (`/webm/tree`, `/webm/stream`, and `GET /animethemes/webm/favourites`) are also accessible without authentication.
     - Restricted-tag visibility filtering is not applied to player listings.
   - The following endpoint is also excluded: `POST /plex/webhook` (validated via server UUID and user rules).
 
-All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `logUrl` in the response. Reports include:
+All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `reportUrl` in the response. Reports include:
 
 ```
 /animethemes/vfs/build                                         -> at-vfs-build.report

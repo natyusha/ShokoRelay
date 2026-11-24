@@ -25,9 +25,9 @@ public static partial class ReportHelper
         {
             var stringBuilder = new StringBuilder();
             builder(stringBuilder, data);
-            string logsDir = ReportsDirectory;
-            Directory.CreateDirectory(logsDir);
-            VfsShared.WriteTextAtomic(Path.Combine(logsDir, fileName), stringBuilder.ToString());
+            string reportsDir = ReportsDirectory;
+            Directory.CreateDirectory(reportsDir);
+            VfsShared.WriteTextAtomic(Path.Combine(reportsDir, fileName), stringBuilder.ToString());
         }
         catch (Exception exception)
         {
@@ -229,14 +229,14 @@ public static partial class ReportHelper
         builder.AppendLine();
         builder.AppendLine("Tasks Executed:");
         builder.AppendLine($"  - Collection Generation    : {result.CollectionsElapsed.TotalSeconds:F2}s");
-        builder.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexCollectionsBuild}.report");
+        builder.AppendLine($"    Report File URL          : {apiBase}/reports/{ShokoRelayConstants.TaskPlexCollectionsBuild}.report");
         builder.AppendLine($"  - Critic Rating Application: {result.RatingsElapsed.TotalSeconds:F2}s");
-        builder.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexRatingsApply}.report");
+        builder.AppendLine($"    Report File URL          : {apiBase}/reports/{ShokoRelayConstants.TaskPlexRatingsApply}.report");
 
         if (result.ImageSyncElapsed.HasValue)
         {
             builder.AppendLine($"  - Plex Image Sync          : {result.ImageSyncElapsed.Value.TotalSeconds:F2}s");
-            builder.AppendLine($"    Log File URL             : {apiBase}/logs/{ShokoRelayConstants.TaskPlexImagesSync}.report");
+            builder.AppendLine($"    Report File URL          : {apiBase}/reports/{ShokoRelayConstants.TaskPlexImagesSync}.report");
         }
 
         if (result.TrashElapsed.HasValue)

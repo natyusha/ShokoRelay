@@ -61,7 +61,7 @@
       const completeResponse = await fetchJson(base + "/tasks/completed", {}, false);
       const completeData = getData(completeResponse);
       if (completeResponse.isOk && completeData) {
-        let hasNewLogs = false;
+        let hasNewReports = false;
         for (const [taskName, result] of Object.entries(completeData)) {
           const button = element(taskName);
           if (button?.classList.contains("clicking")) continue;
@@ -70,10 +70,10 @@
 
           toastOperation({ isOk: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
           await fetchJson(base + `/tasks/clear/${taskName}`, { method: "POST" }, false);
-          hasNewLogs = true;
+          hasNewReports = true;
           if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
         }
-        if (hasNewLogs) loadLogs();
+        if (hasNewReports) loadReports();
       }
     } finally {
       isTaskSyncing = false;
@@ -81,40 +81,40 @@
   }
 
   /**
-   * Fetches the list of generated task logs from the server and renders them as clickable links.
+   * Fetches the list of generated task reports from the server and renders them as clickable links.
    * @returns {Promise<void>}
    */
-  async function loadLogs() {
-    const logsList = element("logs-list");
-    if (!logsList) return;
+  async function loadReports() {
+    const reportsList = element("reports-list");
+    if (!reportsList) return;
 
-    const response = await fetchJson(base + "/logs/list");
+    const response = await fetchJson(base + "/reports/list");
     if (response.isOk) {
       const files = getData(response) || [];
       if (files.length > 0) {
-        logsList.innerHTML = "";
+        reportsList.innerHTML = "";
         files.forEach((file) => {
           const listItem = document.createElement("li");
-          listItem.className = "log-item";
+          listItem.className = "report-item";
 
           const link = document.createElement("a");
-          link.href = `${base}/logs/${file.name}`;
+          link.href = `${base}/reports/${file.name}`;
           link.target = "_blank";
           link.rel = "noopener noreferrer";
           link.textContent = file.friendlyName;
-          link.className = "log-link";
+          link.className = "report-link";
 
           const small = document.createElement("small");
           small.textContent = ` (${file.name})`;
 
           listItem.append(link, small);
-          logsList.appendChild(listItem);
+          reportsList.appendChild(listItem);
         });
       } else {
-        logsList.innerHTML = '<li class="placeholder">No log reports generated yet. Click any "Generate" or automation button on the dashboard to start a task.</li>';
+        reportsList.innerHTML = '<li class="placeholder">No reports generated yet. Click any "Generate" or automation button on the dashboard to start a task.</li>';
       }
     } else {
-      logsList.innerHTML = '<li class="placeholder">Failed to load task logs list from server.</li>';
+      reportsList.innerHTML = '<li class="placeholder">Failed to load task reports list from server.</li>';
     }
   }
 
@@ -136,7 +136,7 @@
       button.classList.remove("clicking");
       if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(button, false), TOAST_MS);
       else syncActiveTasks();
-      loadLogs();
+      loadReports();
     }
   }
 
@@ -244,7 +244,7 @@
     await window._sr.authReady;
     setInterval(syncActiveTasks, 3000);
     syncActiveTasks();
-    loadLogs();
+    loadReports();
   })();
   // #endregion
 })();

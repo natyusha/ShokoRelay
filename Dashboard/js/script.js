@@ -43,6 +43,40 @@
 
   // #region Auth Helpers
   /**
+   * Synchronizes the floating logout button visibility with the current authentication state on the dashboard.
+   * @returns {void}
+   */
+  function updateLogoutButton() {
+    const logoutButton = element("auth-logout");
+    if (!logoutButton) return;
+    const auth = window._sr.authState;
+    logoutButton.hidden = !(auth?.required && auth?.authenticated);
+  }
+
+  /**
+   * Binds the floating dashboard logout button to clear the server session cookie and prompt for re-authentication.
+   * @returns {void}
+   */
+  function initLogoutButton() {
+    const logoutButton = element("auth-logout");
+    if (!logoutButton) return;
+    logoutButton.onclick = async () => {
+      try {
+        await fetch(`${base}/auth/logout`, { method: "POST" });
+      } catch {}
+      window._sr.authState = { ...(window._sr.authState || {}), authenticated: false };
+      updateLogoutButton();
+      setAuthLocked(true);
+      const isOk = await ensureAuth({ dismissable: false });
+      if (isOk) {
+        window._sr.authState = { ...(window._sr.authState || {}), authenticated: true };
+        setAuthLocked(false);
+        updateLogoutButton();
+      }
+    };
+  }
+
+  /**
    * Enables or disables interactive dashboard controls while waiting for authentication.
    * @param {boolean} locked - True to grey out and disable dashboard controls; false to restore them.
    * @returns {void}
@@ -88,7 +122,17 @@
             <input id="auth-username" type="text" autocomplete="username" placeholder="Enter your Shoko username" />
             <label for="auth-password">Password</label>
             <input id="auth-password" type="password" autocomplete="current-password" placeholder="Enter your Shoko password" />
-            <small>Sign in with a Shoko administrator account</small>
+            <label class="shoko-checkbox">
+              <input id="auth-remember" type="checkbox" />
+              <span class="shoko-checkbox-icon" aria-hidden="true">
+                <svg class="unchecked"><use href="img/icons.svg#checkbox-blank-circle-outline"></use></svg>
+                <svg class="checked"><use href="img/icons.svg#checkbox-marked-circle-outline"></use></svg>
+              </span>
+              <span class="shoko-checkbox-text">
+                <span class="shoko-checkbox-title">Remember Me</span><br />
+                <small>Persist session across browser restarts</small>
+              </span>
+            </label>
           </div>
           <footer>
             <button id="auth-cancel" class="cancel" type="button">Cancel</button>
@@ -100,10 +144,12 @@
 
       const usernameInput = element("auth-username");
       const passwordInput = element("auth-password");
+      const rememberInput = element("auth-remember");
       const submitBtn = element("auth-submit");
       const cancelBtn = element("auth-cancel");
       usernameInput.value = "";
       passwordInput.value = "";
+      if (rememberInput) rememberInput.checked = false;
       cancelBtn.hidden = !dismissable;
 
       let close = () => {};
@@ -116,7 +162,11 @@
       const finish = (isOk, fromModalClose = false) => {
         if (!authPromptPromise) return;
         authPromptPromise = null;
-        if (isOk) authGeneration++;
+        if (isOk) {
+          authGeneration++;
+          if (window._sr.authState) window._sr.authState.authenticated = true;
+          updateLogoutButton();
+        }
         if (!fromModalClose) close();
         resolve(isOk);
       };
@@ -127,6 +177,7 @@
       submitBtn.onclick = async () => {
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
+        const rememberMe = !!rememberInput?.checked;
         if (!username) {
           usernameInput.focus();
           return;
@@ -136,7 +187,7 @@
           const check = await fetch(`${base}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ username, password }),
+            body: JSON.stringify({ username, password, rememberMe }),
           });
           if (check.ok) {
             finish(true);
@@ -178,13 +229,17 @@
           required: !!data.required,
           allowPlayerAccess: !!data.allowPlayerAccess,
         };
+        updateLogoutButton();
         if (!isPlayer) setAuthLocked(false);
         return true;
       }
       if (response.status === 401 || response.status === 403) {
+        window._sr.authState = { authenticated: false, required: true, allowPlayerAccess: false };
+        updateLogoutButton();
         const isOk = await ensureAuth({ dismissable: false });
         if (isOk) {
           window._sr.authState = { authenticated: true, required: true, allowPlayerAccess: false };
+          updateLogoutButton();
           if (!isPlayer) setAuthLocked(false);
           return true;
         }
@@ -311,7 +366,7 @@
   }
 
   /**
-   * Show success/error toasts for HTTP responses with log-link injection and summary.
+   * Show success/error toasts for HTTP responses with report-link injection and summary.
    * @param {Object} response - The normalized fetch response object.
    * @param {string} label - Identifies the operation.
    * @param {Object} [options] - Display options.
@@ -320,17 +375,17 @@
   function toastOperation(response, label, options = {}) {
     const { summary, hideOnSucceed, type } = options;
     const { text, errorCount } = summarizeResult(response);
-    const logUrl = response.data?.logUrl || response.data?.LogUrl;
-    const logLink = logUrl ? `[<a href="${esc(logUrl)}" target="_blank" rel="noopener noreferrer" class="log-link">view log</a>]` : "";
+    const reportUrl = response.data?.reportUrl || response.data?.ReportUrl;
+    const reportLink = reportUrl ? `[<a href="${esc(reportUrl)}" target="_blank" rel="noopener noreferrer" class="report-link">view report</a>]` : "";
 
     if (response.isOk) {
       const display = summary || response.data?.message || response.data?.Message || (response.data?.status !== "ok" ? response.data?.status : null) || text || "Complete";
       const toastType = type || (errorCount > 0 ? "error" : "success");
-      const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (logUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
-      showToast(`${esc(label)}: ${esc(display)} ${logLink}`, toastType, persistence);
+      const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (reportUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
+      showToast(`${esc(label)}: ${esc(display)} ${reportLink}`, toastType, persistence);
     } else {
       const display = summary || response.data?.message || response.data?.Message || text || (typeof response.data === "string" ? response.data : JSON.stringify(response.data));
-      showToast(`${esc(label)} Failed: ${esc(display)} ${logLink}`, "error", 0);
+      showToast(`${esc(label)} Failed: ${esc(display)} ${reportLink}`, "error", 0);
     }
   }
 
@@ -429,6 +484,7 @@
     esc,
     TOAST_MS,
     ensureAuth,
+    updateLogoutButton,
     fetchJson,
     showToast,
     toastOperation,
@@ -647,6 +703,7 @@
   // #endregion
 
   // #region Lifecycle Execution
+  initLogoutButton();
   initTooltips();
   // #endregion
 })();
