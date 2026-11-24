@@ -6,7 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" ExcludeAssets="runtime" />
-    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.141" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.142" ExcludeAssets="runtime" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

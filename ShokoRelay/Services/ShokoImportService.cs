@@ -33,7 +33,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
         try
         {
-            await videoService.ScheduleScanForManagedFolders(onlyDropSources: false, forceScan: true).ConfigureAwait(false);
+            await videoService.ScheduleScanForManagedFolders(onlyDropSources: false, options: new() { ForceScan = true }).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
