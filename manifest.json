@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.24.0",
+      "tag": "v0.24.0",
+      "source_revision": "7129814b57a48126d187b2c5afaa70e8403b7c80",
+      "released_at": "2026-11-25T06:23:38Z",
+      "channel": "Dev",
+      "release_notes": "A breaking abstractions change (just like yesterday) with the same \"lightly tested\" statement from the previous release still applying.\r\n\r\n**Notes:**\r\n- Force refreshing the dashboard (`Ctrl-F5`) is required for all of the front end changes to take effect\r\n\r\n**Changes:**\r\n- Added a \"Remember Me\" option (30-day persistent vs. browser-session cookie) to the login modal along with a conditional Logout button and `POST /auth/logout` endpoint when `RequireAuth` is enabled\r\n- Renamed task log endpoints (`/logs/*` → `/reports/*`), `RelayResponse.ReportUrl`, and dashboard UI/CSS identifiers from \"Logs\" to \"Reports\" across the API, dashboard, and documentation\r\n- Included TMDB movie tags (`IMovie`) in tag filtering, global cache warming, and CSV tag reports, and fixed TMDB rating fallbacks for standalone movies when a linked movie has no rating\r\n- Guarded `PurgeMissingFiles` against unmounted empty mount points using `IFileSystem.IsDirectoryEmpty`\r\n- Improved cross-platform VFS symlink safety (Windows directory symlinks, real-directory collisions, atomic writes, and deferred symlink `Stat` evaluation in `VfsIgnoreRule`)\r\n- Filtered ignored subdirectories during recursive AnimeThemes MP3 audits and cached per-directory artwork lookups during Plex image sync\r\n- Fixed stale VFS folders when replacing TMDB links on auto-merged series, fixed DST transition collisions when scheduling daily action triggers, and prevented `HttpContext` / `ExecutionContext` leaks into background tasks\r\n- Polished modal footer/cancel button styling, shared styled checkboxes across dashboard/browser/player pages, and deduplicated shared helpers across Plex, Sync, Config, VFS, and Dashboard modules\r\n- Updated `Docs/CONTROLLER.md`, `README.md`, and dashboard help text\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.143\r\n\r\n**Contributions:**\r\n* @revam in https://github.com/natyusha/ShokoRelay/pull/25\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.23.0...v0.24.0",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.24.0/ShokoRelay-v0.24.0-dev_linux-arm64.zip",
+          "checksum": "sha256:6ae242542624ddf3224774b555b6eb058676910e037a6380bdaaafce22ec5881"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.24.0/ShokoRelay-v0.24.0-dev_linux-x64.zip",
+          "checksum": "sha256:afb2ed1781c33d1fad8871a3aba25425465452d887e4b982a14f2c4547cb5264"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.24.0/ShokoRelay-v0.24.0-dev_win-x64.zip",
+          "checksum": "sha256:15e06e43ad18b054de7b3c374f6bcb6fe1eb82b11021816787118afceda112b4"
+        }
+      ]
+    },
+    {
       "version": "0.23.0",
       "tag": "v0.23.0",
       "source_revision": "424f966105d36303f47dda50ce88e95d3b442b0f",
