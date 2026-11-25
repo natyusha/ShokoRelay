@@ -1,4 +1,3 @@
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -62,7 +61,13 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
                 continue;
 
             string mappingFileDir = Path.GetDirectoryName(fullTxtPath)!;
-            string[] lines = await File.ReadAllLinesAsync(fullTxtPath).ConfigureAwait(false);
+            var linesList = new List<string>();
+            await using (var txtStream = fileSystem.OpenFile(fullTxtPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            using (var txtReader = new StreamReader(txtStream))
+                while (await txtReader.ReadLineAsync().ConfigureAwait(false) is { } txtLine)
+                    linesList.Add(txtLine);
+
+            string[] lines = [.. linesList];
             bool modified = false;
             var dirsToScan = new HashSet<string>(VfsShared.PathComparer);
 
@@ -160,7 +165,7 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
             }
 
             if (modified)
-                await VfsShared.WriteLinesAtomicAsync(fullTxtPath, lines).ConfigureAwait(false);
+                await VfsShared.WriteLinesAtomicAsync(fullTxtPath, lines, fileSystem: fileSystem).ConfigureAwait(false);
 
             foreach (var dir in dirsToScan)
                 try

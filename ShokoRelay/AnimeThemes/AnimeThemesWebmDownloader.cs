@@ -1,6 +1,5 @@
 using System.Net;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.AnimeThemes;
@@ -32,6 +31,7 @@ public record WebmDownloadResult(int Downloaded, int Skipped, int Errors, List<s
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="mappingService">AnimeThemes mapping service.</param>
+/// <param name="configProvider">Configuration provider.</param>
 /// <param name="logger">Logger instance.</param>
 public class AnimeThemesWebmDownloader(
     AnimeThemesApi apiClient,
@@ -39,6 +39,7 @@ public class AnimeThemesWebmDownloader(
     IVideoService videoService,
     IFileSystem fileSystem,
     AnimeThemesMapping mappingService,
+    ConfigProvider configProvider,
     ILogger<AnimeThemesWebmDownloader> logger
 )
 {
@@ -115,14 +116,14 @@ public class AnimeThemesWebmDownloader(
 
         // Cache files that already have a valid AniDB ID mapping to avoid redundant processing
         var mappedFilesWithAnidb = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        string mapPath = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
         await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (File.Exists(mapPath))
                 try
                 {
-                    var parsed = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
+                    var parsed = AnimeThemesHelper.ParseMappingContentWithComments(await VfsShared.ReadAllTextSharedAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
                     foreach (var entry in parsed.Where(entry => entry.AniDbId > 0))
                         mappedFilesWithAnidb.Add(Path.GetFileName(entry.FilePath));
                 }

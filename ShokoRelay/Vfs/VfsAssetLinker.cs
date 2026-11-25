@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Vfs;

@@ -2,7 +2,6 @@ using System.Buffers;
 using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 
 namespace ShokoRelay.Vfs;
 

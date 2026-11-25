@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using Shoko.Abstractions.FileSystem.Services;
 
 namespace ShokoRelay.Plex;
 
@@ -27,7 +26,8 @@ public sealed record CollectionUploadDetail(string TargetTitle, bool IsMovie, st
 /// <param name="IsMovie">Whether the target library is a movie library.</param>
 /// <param name="CollectionName">Name of the collection.</param>
 /// <param name="RatingKey">Plex collection rating key.</param>
-public sealed record CollectionDeletionDetail(string TargetTitle, bool IsMovie, string CollectionName, int RatingKey);
+/// <param name="SectionId">Plex section ID.</param>
+public sealed record CollectionDeletionDetail(string TargetTitle, bool IsMovie, string CollectionName, int RatingKey, int SectionId = 0);
 
 #endregion
 
@@ -235,7 +235,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, IFile
                 )
                 {
                     logger.LogInformation("PlexCollections: Deleted empty collection '{Title}' (RatingKey: {RatingKey}) in section {SectionId}", collectionItem.Title ?? "Unknown", id, target.SectionId);
-                    deleted.Add(new CollectionDeletionDetail(target.Title, isMovie, collectionItem.Title ?? "Unknown", id));
+                    deleted.Add(new CollectionDeletionDetail(target.Title, isMovie, collectionItem.Title ?? "Unknown", id, target.SectionId));
                 }
             }
         }

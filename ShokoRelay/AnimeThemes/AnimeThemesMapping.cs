@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.AnimeThemes;
@@ -43,7 +42,7 @@ public partial class AnimeThemesMapping(
 
         try
         {
-            var entries = AnimeThemesHelper.ParseMappingContentWithComments(File.ReadAllText(mapPath)).Entries;
+            var entries = AnimeThemesHelper.ParseMappingContentWithComments(VfsShared.ReadAllTextShared(mapPath)).Entries;
             foreach (var entry in entries)
             {
                 if (entry.AniDbId <= 0)
@@ -490,7 +489,7 @@ public partial class AnimeThemesMapping(
 
         try
         {
-            return AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false));
+            return AnimeThemesHelper.ParseMappingContentWithComments(await VfsShared.ReadAllTextSharedAsync(mapPath, cancellationToken).ConfigureAwait(false));
         }
         catch
         {

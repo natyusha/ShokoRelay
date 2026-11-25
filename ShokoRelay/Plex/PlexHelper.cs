@@ -150,8 +150,17 @@ public static partial class PlexHelper
     /// <param name="suffixes">The allowed filename suffixes for this image type.</param>
     /// <param name="metadataService">Metadata service used to resolve roots.</param>
     /// <param name="globalRoots">Optional pre-resolved list of active VFS root directories.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe directory lookups.</param>
     /// <returns>Path to poster file or null.</returns>
-    public static string? FindCollectionImagePath(IShokoSeries? series, string collectionName, int collectionId, string[] suffixes, IMetadataService metadataService, IReadOnlyList<string>? globalRoots = null)
+    public static string? FindCollectionImagePath(
+        IShokoSeries? series,
+        string collectionName,
+        int collectionId,
+        string[] suffixes,
+        IMetadataService metadataService,
+        IReadOnlyList<string>? globalRoots = null,
+        IFileSystem? fileSystem = null
+    )
     {
         string? normalizedTitle = NormalizeCollectionKey(collectionName);
         int groupId = series?.TopLevelGroupID ?? 0;
@@ -170,9 +179,9 @@ public static partial class PlexHelper
         foreach (var root in roots)
         {
             string postersPath = Path.Combine(root, postersFolderName);
-            if (!Directory.Exists(postersPath))
+            if (fileSystem != null ? !fileSystem.DirectoryExists(postersPath) : !Directory.Exists(postersPath))
                 continue;
-            foreach (var file in Directory.EnumerateFiles(postersPath))
+            foreach (var file in fileSystem != null ? fileSystem.GetFilePaths(postersPath) : Directory.EnumerateFiles(postersPath))
             {
                 string extension = Path.GetExtension(file);
                 if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.ContainsKey(extension))
@@ -198,11 +207,19 @@ public static partial class PlexHelper
     /// <param name="groupId">The Shoko group identifier.</param>
     /// <param name="suffix">Optional image type suffix (e.g. -logo, -backdrop, -square).</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe directory lookups.</param>
     /// <returns>Path to poster or null.</returns>
-    public static string? FindCollectionImagePathByGroup(IShokoSeries series, int groupId, string suffix, IMetadataService metadataService) =>
+    public static string? FindCollectionImagePathByGroup(IShokoSeries series, int groupId, string suffix, IMetadataService metadataService, IFileSystem? fileSystem = null) =>
         series == null || groupId <= 0
             ? null
-            : FindCollectionImagePath(series, series.TopLevelGroup?.PreferredTitle?.Value ?? series.TopLevelGroup?.DefaultTitle?.Value ?? string.Empty, groupId, [suffix], metadataService);
+            : FindCollectionImagePath(
+                series,
+                series.TopLevelGroup?.PreferredTitle?.Value ?? series.TopLevelGroup?.DefaultTitle?.Value ?? string.Empty,
+                groupId,
+                [suffix],
+                metadataService,
+                fileSystem: fileSystem
+            );
 
     /// <summary>Build a filesystem path for a collection image (poster, logo, or backdrop).</summary>
     /// <param name="series">The Shoko series metadata.</param>
@@ -212,6 +229,7 @@ public static partial class PlexHelper
     /// <param name="suffixes">The prioritized array of all allowed local filename suffixes.</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <param name="allowPrimarySeriesFallback">Whether to use primary series poster as fallback.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe directory lookups.</param>
     /// <returns>Local filesystem path string or null.</returns>
     public static string? GetCollectionImage(
         IShokoSeries series,
@@ -220,12 +238,13 @@ public static partial class PlexHelper
         string suffix,
         string[] suffixes,
         IMetadataService metadataService,
-        bool allowPrimarySeriesFallback = true
+        bool allowPrimarySeriesFallback = true,
+        IFileSystem? fileSystem = null
     )
     {
         if (series == null || metadataService == null)
             return null;
-        var posterPath = FindCollectionImagePath(series, collectionName, collectionId, suffixes, metadataService);
+        var posterPath = FindCollectionImagePath(series, collectionName, collectionId, suffixes, metadataService, fileSystem: fileSystem);
         if (!string.IsNullOrWhiteSpace(posterPath))
             return posterPath;
 

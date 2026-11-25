@@ -244,11 +244,15 @@ internal static partial class AnimeThemesHelper
 
     /// <summary>Reads ID3v2 text frames from an MP3 file header and maps common fields to friendly tag keys.</summary>
     /// <param name="filePath">The absolute path to the MP3 file.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe file access.</param>
     /// <returns>A dictionary of extracted tag keys and values.</returns>
-    internal static Dictionary<string, string> ReadId3v2Tags(string filePath)
+    internal static Dictionary<string, string> ReadId3v2Tags(string filePath, IFileSystem? fileSystem = null)
     {
         var tags = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using Stream fileStream =
+            fileSystem != null
+                ? fileSystem.OpenFile(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete)
+                : new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         Span<byte> header = stackalloc byte[10];
         if (fileStream.Read(header) < 10 || header[0] != 'I' || header[1] != 'D' || header[2] != '3')
             return tags;

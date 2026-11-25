@@ -41,6 +41,13 @@ public sealed record ApplyRatingsResult(
 /// <param name="logger">Logger instance.</param>
 public class CriticRatingService(PlexClient plexClient, IMetadataService metadataService, ILogger<CriticRatingService> logger)
 {
+    #region Setup
+
+    /// <summary>Semaphore serializing critic rating application operations across manual, scheduled, and debounced fixup triggers.</summary>
+    private readonly SemaphoreSlim _applyLock = new(1, 1);
+
+    #endregion
+
     #region Public API
 
     /// <summary>Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.</summary>
@@ -50,6 +57,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
     public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
+        await _applyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         bool startedTask = TaskHelper.StartTask(TaskName);
         logger.LogInformation("CriticRatingService: Starting task...");
         var stopwatch = Stopwatch.StartNew();
@@ -119,6 +127,7 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
         {
             if (startedTask)
                 TaskHelper.FinishTask(TaskName);
+            _applyLock.Release();
         }
     }
 

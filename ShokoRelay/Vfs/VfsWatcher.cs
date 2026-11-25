@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.Extensions;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Metadata.Events;
 using Shoko.Abstractions.Video.Events;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using ShokoRelay.Services;
+using ShokoRelay.Sync;
 
 namespace ShokoRelay.Vfs;
 
@@ -219,7 +219,7 @@ public class VfsWatcher(
         EnqueueSeries(seriesIds);
     }
 
-    /// <summary>Handles Shoko series deletion events, queueing the series for locked VFS pruning and cache invalidation.</summary>
+    /// <summary>Handles Shoko series deletion events, queueing the series and any cached override peers for locked VFS pruning and cache invalidation.</summary>
     /// <param name="sender">Event sender.</param>
     /// <param name="event">Event parameters containing removed series information.</param>
     private void OnSeriesRemoved(object? sender, SeriesInfoUpdatedEventArgs @event)
@@ -228,8 +228,9 @@ public class VfsWatcher(
             return;
 
         int primaryId = series.GetPrimaryId(metadataService);
+        var affectedIds = new HashSet<int>(OverrideHelper.GetCachedGroupIds(series.AnidbAnimeID, metadataService)) { primaryId, series.LocalID };
         logger.LogInformation("VFS: Series removed -> {Title} [{LocalId}] ... Queueing VFS prune", series.GetDisplayTitle(), series.LocalID);
-        EnqueueSeries(primaryId == series.LocalID ? [primaryId] : [primaryId, series.LocalID], invalidateMetadata: true);
+        EnqueueSeries(affectedIds, invalidateMetadata: true);
     }
 
     /// <summary>Handles Shoko metadata link changes, queueing affected series for VFS updates and cache invalidation when TMDB links change.</summary>
@@ -367,7 +368,7 @@ public class VfsWatcher(
             {
                 if (Settings.Advanced.DeferVfsCreationUntilFixup)
                 {
-                    var removedIds = seriesIds.Where(id => metadataService.GetShokoSeriesByID(id) == null).ToList();
+                    var removedIds = seriesIds.Where(id => metadataService.GetShokoSeriesByID(id) is not { } series || !VfsShared.ResolveSeriesVfsPaths(series, metadataService).Any()).ToList();
                     if (removedIds.Count > 0)
                     {
                         await VfsShared.VfsLock.WaitAsync(stopToken).ConfigureAwait(false);
@@ -678,12 +679,20 @@ public class VfsWatcher(
             }
             else
             {
-                // Execute subsequent API actions sequentially to guarantee metadata framework exists
-                logger.LogInformation("VFS: Triggering debounced collection update for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
-                await collectionService.BuildCollectionsAsync([series], clean: false, cancellationToken: token).ConfigureAwait(false);
+                await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
+                try
+                {
+                    // Execute subsequent API actions sequentially to guarantee metadata framework exists
+                    logger.LogInformation("VFS: Triggering debounced collection update for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+                    await collectionService.BuildCollectionsAsync([series], clean: false, cancellationToken: token).ConfigureAwait(false);
 
-                logger.LogInformation("VFS: Triggering debounced critic rating application for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
-                await criticRatingService.ApplyRatingsAsync([series.LocalID], token).ConfigureAwait(false);
+                    logger.LogInformation("VFS: Triggering debounced critic rating application for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+                    await criticRatingService.ApplyRatingsAsync([series.LocalID], token).ConfigureAwait(false);
+                }
+                finally
+                {
+                    SyncHelper.SyncLock.Release();
+                }
 
                 if (Settings.Advanced.EnableImageSync)
                 {
@@ -694,8 +703,16 @@ public class VfsWatcher(
                         await Task.Delay(TimeSpan.FromSeconds(retryDelaySeconds), token).ConfigureAwait(false);
                     }
 
-                    logger.LogInformation("VFS: Triggering debounced image sync for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
-                    await imageSyncService.SyncImagesAsync([series.LocalID], token).ConfigureAwait(false);
+                    await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
+                    try
+                    {
+                        logger.LogInformation("VFS: Triggering debounced image sync for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
+                        await imageSyncService.SyncImagesAsync([series.LocalID], token).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        SyncHelper.SyncLock.Release();
+                    }
                 }
             }
         }

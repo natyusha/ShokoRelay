@@ -2,7 +2,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Security.Cryptography;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using Shoko.Abstractions.Metadata.Image.Options;
@@ -405,7 +404,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             if (groupSeries.Count == 0)
                 continue;
 
-            string? groupPosterFile = groupSeries.Select(series => PlexHelper.FindCollectionImagePathByGroup(series, group.LocalID, "", metadataService)).FirstOrDefault(path => !string.IsNullOrEmpty(path));
+            string? groupPosterFile = groupSeries
+                .Select(series => PlexHelper.FindCollectionImagePathByGroup(series, group.LocalID, "", metadataService, fileSystem))
+                .FirstOrDefault(path => !string.IsNullOrEmpty(path));
             var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
                     groupPosterFile,
                     group,

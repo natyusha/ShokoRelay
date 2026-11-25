@@ -184,12 +184,16 @@ public static class CastHelper
             if (crew.Creator is { } creator)
                 onCredit(creator.Title, creator.Type == CreatorType.Person, crew.Source != MetadataSource.TMDB);
 
-        foreach (var studio in series.Studios ?? [])
-            onCredit(studio.Name, false, studio.ID.Source != MetadataSource.TMDB);
-
         var resolvedTmdb = tmdbSeries ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault();
+        var networkNames = resolvedTmdb?.Networks?.Select(network => network.Name).Where(name => !string.IsNullOrWhiteSpace(name)).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var studio in series.Studios ?? [])
+            if (!string.IsNullOrWhiteSpace(studio.Name) && (networkNames == null || !networkNames.Contains(studio.Name)))
+                onCredit(studio.Name, false, studio.ID.Source != MetadataSource.TMDB);
+
         foreach (var studio in resolvedTmdb?.Studios ?? [])
-            onCredit(studio.Name, false, false);
+            if (!string.IsNullOrWhiteSpace(studio.Name) && (networkNames == null || !networkNames.Contains(studio.Name)))
+                onCredit(studio.Name, false, false);
     }
 
     /// <summary>Builds a diagnostic CSV report of all cast, crew, and studio credits across Shoko series after applying default credit overrides.</summary>
@@ -523,9 +527,10 @@ public static class CastHelper
                     if (crew.Creator == null)
                         return null;
                     string? rawName = crew.Creator.Title;
-                    return string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName)
-                        ? null
-                        : ResolvePreferredCreditName(rawName, crew.Creator.Type == CreatorType.Person, crew.Source == MetadataSource.TMDB ? 2 : 1);
+                    if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
+                        return null;
+                    string preferredName = ResolvePreferredCreditName(rawName, crew.Creator.Type == CreatorType.Person, crew.Source == MetadataSource.TMDB ? 2 : 1);
+                    return IsCreditBlacklisted(preferredName) ? null : preferredName;
                 })
                 .Where(name => !string.IsNullOrWhiteSpace(name))
                 .DistinctBy(name => NormalizeCreditKey(name!))

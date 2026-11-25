@@ -34,7 +34,7 @@ public partial class AnimeThemesMapping
             if (!File.Exists(mapPath))
                 throw new FileNotFoundException("Mapping file not found");
 
-            var entries = AnimeThemesHelper.ParseMappingContentWithComments(await File.ReadAllTextAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
+            var entries = AnimeThemesHelper.ParseMappingContentWithComments(await VfsShared.ReadAllTextSharedAsync(mapPath, cancellationToken).ConfigureAwait(false)).Entries;
             var (stopwatch, state) = (Stopwatch.StartNew(), new MappingState());
             string themeRootName = VfsShared.ResolveAnimeThemesFolderName();
             string vfsRoot = VfsShared.ResolveRootFolderName();

@@ -1,7 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
 using IoFile = System.IO.File;
@@ -232,7 +231,7 @@ public class AnimeThemesController(
 
         try
         {
-            var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
+            var tags = AnimeThemesHelper.ReadId3v2Tags(themePath, fileSystem);
             foreach (var tag in tags)
                 Response.Headers[$"X-Theme-{tag.Key}"] = Uri.EscapeDataString(tag.Value);
             Response.Headers["Access-Control-Expose-Headers"] = "X-Theme-Title, X-Theme-Slug, X-Theme-Artist, X-Theme-Album";

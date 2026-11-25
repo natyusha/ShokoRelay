@@ -3,7 +3,6 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video;
 using Shoko.Abstractions.Video.Enums;
 using Shoko.Abstractions.Video.Services;
@@ -591,20 +590,26 @@ internal static class VfsShared
     /// <param name="path">The target file path.</param>
     /// <param name="writeTemp">Asynchronous callback that writes the contents to the temporary file path.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe moves and deletions.</param>
     /// <returns>A task representing the asynchronous write operation.</returns>
-    public static async Task WriteAtomicAsync(string path, Func<string, CancellationToken, Task> writeTemp, CancellationToken cancellationToken = default)
+    public static async Task WriteAtomicAsync(string path, Func<string, CancellationToken, Task> writeTemp, CancellationToken cancellationToken = default, IFileSystem? fileSystem = null)
     {
         string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
         try
         {
             await writeTemp(tempPath, cancellationToken).ConfigureAwait(false);
-            File.Move(tempPath, path, overwrite: true);
+            if (fileSystem != null)
+                fileSystem.MoveFile(tempPath, path, overwrite: true);
+            else
+                File.Move(tempPath, path, overwrite: true);
         }
         catch
         {
             try
             {
-                if (File.Exists(tempPath))
+                if (fileSystem != null)
+                    fileSystem.DeleteFile(tempPath);
+                else if (File.Exists(tempPath))
                     File.Delete(tempPath);
             }
             catch { }
@@ -634,9 +639,26 @@ internal static class VfsShared
     /// <param name="path">The target file path.</param>
     /// <param name="lines">The lines to write.</param>
     /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <param name="fileSystem">Optional Shoko file system service for long-path-safe writes.</param>
     /// <returns>A task representing the asynchronous write operation.</returns>
-    public static Task WriteLinesAtomicAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken = default) =>
-        WriteAtomicAsync(path, (temporaryPath, cancellationToken) => File.WriteAllLinesAsync(temporaryPath, lines, cancellationToken), cancellationToken);
+    public static Task WriteLinesAtomicAsync(string path, IEnumerable<string> lines, CancellationToken cancellationToken = default, IFileSystem? fileSystem = null) =>
+        WriteAtomicAsync(
+            path,
+            async (temporaryPath, token) =>
+            {
+                if (fileSystem != null)
+                {
+                    await using var stream = fileSystem.OpenFile(temporaryPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    await using var writer = new StreamWriter(stream);
+                    foreach (var line in lines)
+                        await writer.WriteLineAsync(line.AsMemory(), token).ConfigureAwait(false);
+                }
+                else
+                    await File.WriteAllLinesAsync(temporaryPath, lines, token).ConfigureAwait(false);
+            },
+            cancellationToken,
+            fileSystem
+        );
 
     /// <summary>Loads the VFS blueprint cache from disk.</summary>
     /// <returns>The deserialized concurrent dictionary representing the blueprint cache.</returns>
@@ -683,6 +705,17 @@ internal static class VfsShared
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+    }
+
+    /// <summary>Asynchronously reads all text from a file using permissive file-sharing flags so concurrent readers/writers do not collide.</summary>
+    /// <param name="path">The file path to read.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>The full text content of the file.</returns>
+    public static async Task<string> ReadAllTextSharedAsync(string path, CancellationToken cancellationToken = default)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, FileOptions.Asynchronous);
+        using var reader = new StreamReader(stream);
+        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>Reads non-empty trimmed lines from a file using permissive file-sharing flags.</summary>

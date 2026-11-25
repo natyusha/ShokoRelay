@@ -226,7 +226,7 @@ public static partial class TextHelper
             {
                 if (
                     targetLang != TitleLanguage.Main
-                    && titles.FirstOrDefault(title => title.Preference == TextPreference.Language && title.Language == targetLang && !string.IsNullOrEmpty(title.Value)) is { } langPref
+                    && titles.FirstOrDefault(title => title.IsEnabled && title.Preference == TextPreference.Language && title.Language == targetLang && !string.IsNullOrEmpty(title.Value)) is { } langPref
                 )
                     return langPref.Value;
 
@@ -311,7 +311,10 @@ public static partial class TextHelper
 
             if (TextManager != null && language.TryGetTitleLanguage(out var targetLang))
             {
-                if (overviews.FirstOrDefault(overview => overview.Preference == TextPreference.Language && overview.Language == targetLang && !string.IsNullOrEmpty(overview.Value)) is { } langPref)
+                if (
+                    overviews.FirstOrDefault(overview => overview.IsEnabled && overview.Preference == TextPreference.Language && overview.Language == targetLang && !string.IsNullOrEmpty(overview.Value)) is
+                    { } langPref
+                )
                     return langPref.Value;
 
                 baseSelection ??= TextManager.GetOverviewSelection();

@@ -171,11 +171,10 @@
         helpModal.classList.remove("open");
         document.body.style.overflow = "";
       }
-    } else {
+    } else
       activeModalClose = openModal(helpModal, () => {
         activeModalClose = null;
       });
-    }
   };
 
   /**

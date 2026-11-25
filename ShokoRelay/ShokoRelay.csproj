@@ -13,12 +13,13 @@
   <!-- Global using directives for things that are used in 16 files or more across the project -->
   <ItemGroup>
     <Using Include="Microsoft.Extensions.Logging" />
-    <Using Include="Shoko.Abstractions.Metadata" />
-    <Using Include="Shoko.Abstractions.Metadata.Enums" />
-    <Using Include="Shoko.Abstractions.Metadata.Shoko" />
+    <Using Include="Shoko.Abstractions.FileSystem.Services" />
     <Using Include="Shoko.Abstractions.Metadata.Services" />
-    <Using Include="ShokoRelay.Config" />
+    <Using Include="Shoko.Abstractions.Metadata.Shoko" />
+    <Using Include="Shoko.Abstractions.Metadata.Enums" />
+    <Using Include="Shoko.Abstractions.Metadata" />
     <Using Include="ShokoRelay.Helpers" />
+    <Using Include="ShokoRelay.Config" />
     <Using Include="ShokoRelay.Plex" />
     <Using Include="ShokoRelay.Vfs" />
     <Using Include="ShokoRelay.ShokoRelay" Static="true" />

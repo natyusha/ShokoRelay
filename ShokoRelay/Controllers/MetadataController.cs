@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json;
 using Shoko.Abstractions.Video.Services;
 using static ShokoRelay.Plex.PlexMapping;
-using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
 
@@ -13,6 +12,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="plexLibrary">Plex client.</param>
 /// <param name="videoService">Shoko video service.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
 [Route(ShokoRelayConstants.BasePath)]
@@ -20,8 +20,15 @@ namespace ShokoRelay.Controllers;
 [Route(ShokoRelayConstants.BasePath + "/options/{overrides}")]
 [Route(ShokoRelayConstants.BasePath + "/movie/options/{overrides}")]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
-public class MetadataController(IMetadataService metadataService, PlexMetadata mapper, ConfigProvider configProvider, PlexClient plexLibrary, IVideoService videoService, ILogger<MetadataController> logger)
-    : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
+public class MetadataController(
+    IMetadataService metadataService,
+    PlexMetadata mapper,
+    ConfigProvider configProvider,
+    PlexClient plexLibrary,
+    IVideoService videoService,
+    IFileSystem fileSystem,
+    ILogger<MetadataController> logger
+) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
 {
     #region Provider Descriptor
 
@@ -313,32 +320,46 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     public IActionResult GetMetadataImages(string ratingKey) =>
         SafeRequest(() =>
         {
-            object[] images;
-            if (PlexHelper.IsMovieKey(ratingKey))
-            {
-                var (episode, movieContext, tmdbMovie) = TryResolveMovieContext(ratingKey);
-                if (episode == null || movieContext == null)
-                    return NotFound();
-
-                images = ExtractImages(mapper.MapMovie(episode, movieContext, tmdbMovie));
-                return Ok(
+            IActionResult OkImages(object[] imageList, string identifier) =>
+                Ok(
                     new
                     {
                         MediaContainer = new
                         {
                             offset = 0,
-                            totalSize = images.Length,
-                            identifier = ShokoRelayConstants.MovieAgentScheme,
-                            size = images.Length,
-                            Image = images,
+                            totalSize = imageList.Length,
+                            identifier,
+                            size = imageList.Length,
+                            Image = imageList,
                         },
                     }
                 );
+
+            object[] images;
+            bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
+            if (
+                PlexHelper.IsMovieKey(ratingKey)
+                || (
+                    isMovieEndpoint
+                    && int.TryParse(ratingKey, out int movieEpisodeId)
+                    && MetadataService.GetShokoEpisodeByID(movieEpisodeId) is { ShokoSeriesID: var movieSeriesId }
+                    && mapper.GetSeriesContext(movieSeriesId.ToString()) is not null
+                )
+            )
+            {
+                var (episode, movieContext, tmdbMovie) = TryResolveMovieContext(ratingKey, allowNumeric: isMovieEndpoint);
+                return episode == null || movieContext == null ? NotFound() : OkImages(ExtractImages(mapper.MapMovie(episode, movieContext, tmdbMovie)), ShokoRelayConstants.MovieAgentScheme);
             }
 
             var context = mapper.GetSeriesContext(ratingKey);
             if (context == null)
-                return NotFound();
+            {
+                var (fallbackEpisode, fallbackContext, fallbackTmdbMovie) = TryResolveMovieContext(ratingKey, allowNumeric: true);
+                return fallbackEpisode == null || fallbackContext == null
+                    ? NotFound()
+                    : OkImages(ExtractImages(mapper.MapMovie(fallbackEpisode, fallbackContext, fallbackTmdbMovie)), ShokoRelayConstants.MovieAgentScheme);
+            }
+
             if (PlexHelper.IsEpisodeKey(ratingKey))
             {
                 var (episode, partIndex, mapping) = TryResolveEpisodeContext(context, ratingKey);
@@ -352,19 +373,8 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
             }
             else
                 images = ExtractImages(mapper.MapSeries(context));
-            return Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        offset = 0,
-                        totalSize = images.Length,
-                        identifier = ShokoRelayConstants.AgentScheme,
-                        size = images.Length,
-                        Image = images,
-                    },
-                }
-            );
+
+            return OkImages(images, ShokoRelayConstants.AgentScheme);
         });
 
     /// <summary>Returns an empty extras container to satisfy Plex's automated metadata queries.</summary>
@@ -391,7 +401,7 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
     /// <param name="groupId">The Shoko group ID (prefixed with 'sc' for smart collections) or Plex collection ID.</param>
     /// <param name="name">Optional collection name.</param>
     /// <param name="suffix">Optional image type suffix (e.g. -logo, -backdrop, -square).</param>
-    /// <returns>Physical file result.</returns>
+    /// <returns>File stream result.</returns>
     [HttpGet("collections/user/{groupId}")]
     public IActionResult GetCollectionImage(string groupId, [FromQuery] string? name = null, [FromQuery] string? suffix = null) =>
         SafeRequest(() =>
@@ -402,21 +412,24 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
             // If prefixed with 'sc', it's a Plex smart collection with a parsed ID (bypassing Shoko Group lookup)
             if (groupId.StartsWith(PlexConstants.SmartCollectionPrefix, StringComparison.OrdinalIgnoreCase) && int.TryParse(groupId[2..], out int smartCollectionId))
-                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, smartCollectionId, [actualSuffix], MetadataService, globalRoots);
+                posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, smartCollectionId, [actualSuffix], MetadataService, globalRoots, fileSystem);
             else if (int.TryParse(groupId, out int shokoGroupId))
             {
                 var group = MetadataService.GetShokoGroupByID(shokoGroupId);
                 var primarySeries = group?.MainSeries ?? group?.Series?.FirstOrDefault();
                 if (primarySeries != null)
-                    posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, shokoGroupId, actualSuffix, MetadataService);
+                    posterPath = PlexHelper.FindCollectionImagePathByGroup(primarySeries, shokoGroupId, actualSuffix, MetadataService, fileSystem);
 
-                if (string.IsNullOrEmpty(posterPath) || !IoFile.Exists(posterPath))
-                    posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, shokoGroupId, [actualSuffix], MetadataService, globalRoots);
+                if (string.IsNullOrEmpty(posterPath) || !fileSystem.FileExists(posterPath))
+                    posterPath = PlexHelper.FindCollectionImagePath(null, name ?? string.Empty, shokoGroupId, [actualSuffix], MetadataService, globalRoots, fileSystem);
             }
 
-            return string.IsNullOrWhiteSpace(posterPath) || !IoFile.Exists(posterPath)
+            return string.IsNullOrWhiteSpace(posterPath) || !fileSystem.FileExists(posterPath)
                 ? NotFound()
-                : PhysicalFile(posterPath, ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream");
+                : File(
+                    fileSystem.OpenFile(posterPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete),
+                    ImageHelper.GetMimeType(Path.GetExtension(posterPath)) ?? "application/octet-stream"
+                );
         });
 
     #endregion
@@ -474,13 +487,15 @@ public class MetadataController(IMetadataService metadataService, PlexMetadata m
 
     /// <summary>Parses the ratingKey and resolves the corresponding episode, series context, and TMDB movie metadata for a standalone movie.</summary>
     /// <param name="ratingKey">The custom Plex rating key for the movie.</param>
+    /// <param name="allowNumeric">When <c>true</c>, also accepts bare numeric episode rating keys.</param>
     /// <returns>A tuple containing the resolved episode, series context, and TMDB movie metadata.</returns>
-    private (IShokoEpisode? Episode, PlexMetadata.SeriesContext? Context, IMovie? TmdbMovie) TryResolveMovieContext(string ratingKey)
+    private (IShokoEpisode? Episode, PlexMetadata.SeriesContext? Context, IMovie? TmdbMovie) TryResolveMovieContext(string ratingKey, bool allowNumeric = false)
     {
-        if (!PlexHelper.IsMovieKey(ratingKey))
+        bool isMovieKey = PlexHelper.IsMovieKey(ratingKey);
+        if (!isMovieKey && !allowNumeric)
             return (null, null, null);
 
-        var idPart = ratingKey[PlexConstants.MoviePrefix.Length..];
+        var idPart = isMovieKey ? ratingKey[PlexConstants.MoviePrefix.Length..] : ratingKey;
         int partSplit = idPart.IndexOf(PlexConstants.PartPrefix, StringComparison.OrdinalIgnoreCase);
         string idText = partSplit >= 0 ? idPart[..partSplit] : idPart;
 

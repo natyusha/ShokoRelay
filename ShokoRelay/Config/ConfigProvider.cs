@@ -259,53 +259,60 @@ public partial class ConfigProvider : IDisposable
         if (httpContext == null)
             return settings;
 
-        try
+        // Synchronize access to HttpContext.Items and Request metadata across parallel worker threads
+        lock (httpContext.Items)
         {
-            if (httpContext.Request.Method != HttpMethods.Get)
+            if (httpContext.Items.TryGetValue("EffectiveRelayConfig", out var cached) && cached is RelayConfig cachedConfig)
+                return cachedConfig;
+
+            try
+            {
+                if (httpContext.Request.Method != HttpMethods.Get)
+                    return settings;
+            }
+            catch (ObjectDisposedException)
+            {
                 return settings;
+            }
+
+            var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            // Extract from Path Segment (options/{overrides})
+            var overridePath = httpContext.Request.RouteValues["overrides"]?.ToString();
+            if (!string.IsNullOrWhiteSpace(overridePath))
+                foreach (var pair in overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries))
+                    if (pair.Split('=', 2) is { Length: 2 } pairTokens)
+                        overrides[pairTokens[0].Trim()] = pairTokens[1].Trim();
+
+            // Extract from Query String (fallback for testing)
+            foreach (var queryParam in httpContext.Request.Query)
+                overrides[queryParam.Key] = queryParam.Value.ToString();
+
+            if (overrides.Count == 0 || !s_overridableProps.Any(prop => overrides.ContainsKey(prop.Name)))
+            {
+                httpContext.Items["EffectiveRelayConfig"] = settings;
+                return settings;
+            }
+
+            var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, s_options), s_options)!;
+            foreach (var prop in s_overridableProps)
+                if (overrides.TryGetValue(prop.Name, out var rawValue) && !string.IsNullOrWhiteSpace(rawValue))
+                    try
+                    {
+                        if (prop.PropertyType == typeof(string))
+                            prop.SetValue(cloned, rawValue);
+                        else if (prop.PropertyType == typeof(bool))
+                            prop.SetValue(cloned, string.Equals(rawValue, "1") || string.Equals(rawValue, "true", StringComparison.OrdinalIgnoreCase));
+                        else if (prop.PropertyType.IsEnum)
+                            prop.SetValue(cloned, Enum.Parse(prop.PropertyType, rawValue, true));
+                    }
+                    catch
+                    { /* Ignore invalid override values */
+                    }
+
+            httpContext.Items["EffectiveRelayConfig"] = cloned;
+            return cloned;
         }
-        catch (ObjectDisposedException)
-        {
-            return settings;
-        }
-
-        if (httpContext.Items.TryGetValue("EffectiveRelayConfig", out var cached) && cached is RelayConfig cachedConfig)
-            return cachedConfig;
-
-        var overrides = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-        // Extract from Path Segment (options/{overrides})
-        var overridePath = httpContext.Request.RouteValues["overrides"]?.ToString();
-        if (!string.IsNullOrWhiteSpace(overridePath))
-            foreach (var pair in overridePath.Split(';', StringSplitOptions.RemoveEmptyEntries))
-                if (pair.Split('=', 2) is { Length: 2 } pairTokens)
-                    overrides[pairTokens[0].Trim()] = pairTokens[1].Trim();
-
-        // Extract from Query String (fallback for testing)
-        foreach (var queryParam in httpContext.Request.Query)
-            overrides[queryParam.Key] = queryParam.Value.ToString();
-
-        if (overrides.Count == 0 || !s_overridableProps.Any(prop => overrides.ContainsKey(prop.Name)))
-            return settings;
-
-        var cloned = JsonSerializer.Deserialize<RelayConfig>(JsonSerializer.Serialize(settings, s_options), s_options)!;
-        foreach (var prop in s_overridableProps)
-            if (overrides.TryGetValue(prop.Name, out var rawValue) && !string.IsNullOrWhiteSpace(rawValue))
-                try
-                {
-                    if (prop.PropertyType == typeof(string))
-                        prop.SetValue(cloned, rawValue);
-                    else if (prop.PropertyType == typeof(bool))
-                        prop.SetValue(cloned, string.Equals(rawValue, "1") || string.Equals(rawValue, "true", StringComparison.OrdinalIgnoreCase));
-                    else if (prop.PropertyType.IsEnum)
-                        prop.SetValue(cloned, Enum.Parse(prop.PropertyType, rawValue, true));
-                }
-                catch
-                { /* Ignore invalid override values */
-                }
-
-        httpContext.Items["EffectiveRelayConfig"] = cloned;
-        return cloned;
     }
 
     /// <summary>Construct a sanitized payload of settings plus minimal Plex auth information for the dashboard.</summary>

@@ -224,7 +224,6 @@ public class PlexController(
                 {
                     var ratingKeys = await PlexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
                     if (ratingKeys.Count > 0)
-                    {
                         foreach (var ratingKey in ratingKeys)
                         {
                             if (await PlexLibrary.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
@@ -241,7 +240,6 @@ public class PlexController(
                             else
                                 errors.Add($"Failed to refresh metadata for series -> {series.GetDisplayTitle()} [{series.LocalID}] (RatingKey: {ratingKey}) on {target.ServerName}");
                         }
-                    }
                     else
                         errors.Add($"Rating keys not found in Plex for series -> {series.GetDisplayTitle()} [{series.LocalID}] on {target.ServerName}");
                 }

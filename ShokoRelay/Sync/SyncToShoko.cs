@@ -214,7 +214,7 @@ public class SyncToShoko(
 
                     result = SyncHelper.IncProcessed(result, result.PerUser, userName);
 
-                    if (GetCachedEpisode(item) is not { } episode || appliedWatchedIds.Contains((targetShokoUser.LocalID, episode.LocalID)))
+                    if (GetCachedEpisode(item) is not { } episode)
                     {
                         result = SyncHelper.IncSkipped(result, result.PerUser, userName);
                         continue;
@@ -222,14 +222,22 @@ public class SyncToShoko(
 
                     var episodeUserData = GetCachedUserData(episode, targetShokoUser);
                     bool alreadyWatched = episodeUserData?.IsWatched == true;
+                    bool alreadyProcessedWatch = appliedWatchedIds.Contains((targetShokoUser.LocalID, episode.LocalID));
 
                     bool isWatchedInPlex = item.ViewCount > 0;
                     bool hasProgressInPlex = item.ViewOffset > 0;
 
-                    bool wouldMark = isWatchedInPlex && !alreadyWatched && (episode.Videos?.Count > 0);
+                    bool wouldMark = !alreadyProcessedWatch && isWatchedInPlex && !alreadyWatched && (episode.Videos?.Count > 0);
                     bool wouldUpdateProgress = false;
 
-                    if (!isWatchedInPlex && hasProgressInPlex && !alreadyWatched && !appliedProgressIds.Contains((targetShokoUser.LocalID, episode.LocalID)) && episode.Videos?.Count > 0)
+                    if (
+                        !alreadyProcessedWatch
+                        && !isWatchedInPlex
+                        && hasProgressInPlex
+                        && !alreadyWatched
+                        && !appliedProgressIds.Contains((targetShokoUser.LocalID, episode.LocalID))
+                        && episode.Videos?.Count > 0
+                    )
                         wouldUpdateProgress =
                             userDataService.GetVideoUserData(episode.Videos.First(), targetShokoUser) is not { } existingData
                             || Math.Abs(existingData.ProgressPosition.TotalMilliseconds - item.ViewOffset!.Value) >= 5000;
@@ -289,7 +297,26 @@ public class SyncToShoko(
                             TimeSpan.FromMilliseconds(item.ViewOffset!.Value)
                         );
                     }
-                    else
+
+                    bool rated = false;
+                    double? appliedRating = null;
+                    if (actualVotes && item.UserRating is > 0 && appliedRatedIds.Add((targetShokoUser.LocalID, episode.LocalID)))
+                    {
+                        result = SyncHelper.IncVotesFound(result);
+                        double clampedRating = Math.Clamp(item.UserRating.Value, 1.0, 10.0);
+                        if (episodeUserData?.UserRating == null || Math.Abs(episodeUserData.UserRating.Value - clampedRating) > 0.05)
+                        {
+                            if (!dryRun)
+                                await userDataService.RateEpisode(episode, targetShokoUser, clampedRating).ConfigureAwait(false);
+                            rated = true;
+                            appliedRating = clampedRating;
+                            result = SyncHelper.IncVotesUpdated(result);
+                        }
+                        else
+                            result = SyncHelper.IncVotesSkipped(result);
+                    }
+
+                    if (!wouldMark && !wouldUpdateProgress && !rated)
                         result = SyncHelper.IncSkipped(result, result.PerUser, userName);
 
                     SyncHelper.AddPerUserChange(
@@ -307,25 +334,17 @@ public class SyncToShoko(
                             item.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
                             null,
                             watchedAt,
-                            wouldMark || wouldUpdateProgress,
+                            wouldMark || wouldUpdateProgress || rated,
                             alreadyWatched,
-                            wouldUpdateProgress ? "progress_updated" : (wouldMark ? null : (alreadyWatched ? "already_watched" : "no_files"))
+                            wouldUpdateProgress ? "progress_updated"
+                                : wouldMark ? null
+                                : rated ? "rating_updated"
+                                : alreadyWatched ? "already_watched"
+                                : "no_files",
+                            plexUserRating: appliedRating ?? item.UserRating,
+                            shokoUserRating: episodeUserData?.UserRating
                         )
                     );
-
-                    if (actualVotes && item.UserRating.HasValue && appliedRatedIds.Add((targetShokoUser.LocalID, episode.LocalID)))
-                    {
-                        result = SyncHelper.IncVotesFound(result);
-                        double clampedRating = Math.Clamp(item.UserRating.Value, 1.0, 10.0);
-                        if (episodeUserData?.UserRating == null || Math.Abs(episodeUserData.UserRating.Value - clampedRating) > 0.05)
-                        {
-                            if (!dryRun)
-                                await userDataService.RateEpisode(episode, targetShokoUser, clampedRating).ConfigureAwait(false);
-                            result = SyncHelper.IncVotesUpdated(result);
-                        }
-                        else
-                            result = SyncHelper.IncVotesSkipped(result);
-                    }
                 }
 
                 if (!dryRun)

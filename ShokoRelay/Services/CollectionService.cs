@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Shoko.Abstractions.Extensions;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;
@@ -228,7 +227,7 @@ public class CollectionService(
                                     continue;
 
                                 var fallback = defaultFallback && Settings.CollectionImages;
-                                var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, collectionId, suffix, suffixes, metadataService, fallback);
+                                var imagePath = PlexHelper.GetCollectionImage(series!, collectionName, collectionId, suffix, suffixes, metadataService, fallback, fileSystem);
                                 // If checking poster, verify that the collection in Plex actually has a custom poster set (not empty or composite)
                                 bool plexHasPoster =
                                     prefix != "posters"
@@ -265,7 +264,7 @@ public class CollectionService(
                     if (PlexHelper.IsPlexTrue(collection.Smart) && int.TryParse(collection.RatingKey, out int collectionId) && !string.IsNullOrEmpty(collection.Title))
                         foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
                         {
-                            var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots);
+                            var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots, fileSystem);
                             bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
                             RecordUploadOutcome(
                                 await TryUploadCollectionImageAsync(
@@ -291,7 +290,13 @@ public class CollectionService(
             var deletedList = applyAssignment ? await plexCollections.DeleteEmptyCollectionsAsync(cancellationToken).ConfigureAwait(false) : [];
             if (deletedList.Count > 0)
                 foreach (var deletion in deletedList)
-                foreach (var cacheKey in cache.Keys.Where(key => key.Contains($"|{deletion.RatingKey}|") || key.Contains($"|sc{deletion.RatingKey}|")).ToList())
+                foreach (
+                    var cacheKey in cache
+                        .Keys.Where(key =>
+                            key.StartsWith($"{deletion.SectionId}|{deletion.RatingKey}|", StringComparison.Ordinal) || key.StartsWith($"{deletion.SectionId}|sc{deletion.RatingKey}|", StringComparison.Ordinal)
+                        )
+                        .ToList()
+                )
                 {
                     cache.Remove(cacheKey);
                     cacheModified = true;
@@ -323,9 +328,9 @@ public class CollectionService(
         }
         finally
         {
-            _buildLock.Release();
             if (startedTask)
                 TaskHelper.FinishTask(TaskName);
+            _buildLock.Release();
         }
     }
 

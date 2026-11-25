@@ -317,9 +317,7 @@
         const actualName = parts.slice(1).join("/");
         if (!subfolders.has(subName)) subfolders.set(subName, []);
         subfolders.get(subName).push({ ...file, name: actualName });
-      } else {
-        directFiles.push(file);
-      }
+      } else directFiles.push(file);
     });
 
     directFiles.forEach((file) => seasonUl.appendChild(createFileLeaf(file)));

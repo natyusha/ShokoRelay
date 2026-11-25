@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.FileSystem.Services;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.Services;
 
@@ -425,6 +424,7 @@ public class AnimeThemesMp3Generator(
             return new(folder, "skipped", "Theme.mp3 already exists.");
 
         string? temp = null;
+        string? tempMp3 = null;
         try
         {
             if (!query.Batch)
@@ -528,7 +528,9 @@ public class AnimeThemesMp3Generator(
             string title = duration.TotalSeconds < 100 && !string.IsNullOrEmpty(songTitle) ? songTitle + " (TV Size)" : songTitle;
 
             logger.LogDebug("AnimeThemes MP3: Converting audio for -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
-            await ffmpegService.ConvertToMp3FileAsync(temp, "Theme.mp3", title, slugDisplay, artist, animeTitle, cancellationToken, folder).ConfigureAwait(false);
+            tempMp3 = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}.mp3");
+            await ffmpegService.ConvertToMp3FileAsync(temp, tempMp3, title, slugDisplay, artist, animeTitle, cancellationToken).ConfigureAwait(false);
+            fileSystem.MoveFile(tempMp3, themePath, overwrite: true);
 
             // Create a relative symbolic link for the Theme.mp3 in the Shoko VFS directories
             string? vfsLink = null;
@@ -582,6 +584,13 @@ public class AnimeThemesMp3Generator(
                     File.Delete(temp);
                 }
                 catch { }
+            if (!string.IsNullOrEmpty(tempMp3) && File.Exists(tempMp3))
+                try
+                {
+                    logger.LogTrace("AnimeThemes MP3: Cleaning up temporary MP3 file -> {TempFile}", tempMp3);
+                    File.Delete(tempMp3);
+                }
+                catch { }
         }
     }
 
@@ -623,7 +632,7 @@ public class AnimeThemesMp3Generator(
             if (string.IsNullOrEmpty(slug))
                 try
                 {
-                    var tags = AnimeThemesHelper.ReadId3v2Tags(themePath);
+                    var tags = AnimeThemesHelper.ReadId3v2Tags(themePath, fileSystem);
                     if (tags.TryGetValue("Slug", out var rawSlug) && !string.IsNullOrEmpty(rawSlug))
                     {
                         slug = AnimeThemesHelper.StandardizeSlug(rawSlug);
