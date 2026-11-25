@@ -151,10 +151,14 @@ internal sealed record AnimeThemesVideoLookup(
         ) { }
 }
 
-/// <summary>Represents a mapped theme item resolved for VFS linking.</summary>
-/// <param name="FinalName">The expected final filename inside the VFS.</param>
-/// <param name="RelativePath">The source file relative path inside the !AnimeThemes folder.</param>
-public sealed record ThemeMapItem(string FinalName, string RelativePath);
+/// <summary>Represents a resolved, deduplicated theme entry ready for VFS linking or blueprint registration.</summary>
+/// <param name="Entry">The underlying mapping entry.</param>
+/// <param name="FinalName">The resolved VFS filename inside the Shorts folder.</param>
+/// <param name="RelativePath">The relative path inside the AnimeThemes root without leading slashes.</param>
+/// <param name="SourcePath">The resolved physical source file path.</param>
+/// <param name="OriginalSeriesId">The Shoko series ID that contributed this theme.</param>
+/// <param name="ExistsLocally">Whether the source file already exists in the target root.</param>
+internal sealed record ResolvedThemeCandidate(AnimeThemesMappingEntry Entry, string FinalName, string RelativePath, string SourcePath, int OriginalSeriesId, bool ExistsLocally);
 
 #endregion
 
@@ -458,6 +462,75 @@ internal static partial class AnimeThemesHelper
                 return year;
         }
         return 9999;
+    }
+
+    /// <summary>Resolves, deduplicates, and formats VFS theme links for an override group of series against a target root.</summary>
+    /// <param name="overrideSeries">The ordered list of Shoko series in the override group (primary first).</param>
+    /// <param name="entriesByAniDb">Parsed mapping entries indexed by AniDB anime ID.</param>
+    /// <param name="resolveSource">Resolver returning the local existence flag and physical source path (or <c>null</c> to skip) for a relative theme path.</param>
+    /// <returns>The deduplicated list of resolved theme link candidates.</returns>
+    internal static List<ResolvedThemeCandidate> ResolveSeriesThemeLinks(
+        IReadOnlyList<IShokoSeries> overrideSeries,
+        ILookup<int, AnimeThemesMappingEntry> entriesByAniDb,
+        Func<string, (bool ExistsLocally, string? SourcePath)> resolveSource
+    )
+    {
+        var results = new List<ResolvedThemeCandidate>();
+        var potentialLinks = overrideSeries
+            .SelectMany(
+                (series, seriesIndex) =>
+                    entriesByAniDb[series.AnidbAnimeID]
+                        // Determine if a theme mapping's overlap level is allowed based on the configured overlap restriction
+                        .Where(entry =>
+                            Settings.Advanced.AnimeThemesOverlapLevel == AnimeThemesOverlapLevel.All
+                            || entry.Overlap.Equals("None", StringComparison.Ordinal)
+                            || (Settings.Advanced.AnimeThemesOverlapLevel == AnimeThemesOverlapLevel.TransitionOnly && entry.Overlap.Equals("Transition", StringComparison.Ordinal))
+                        )
+                        .Select(entry =>
+                        {
+                            string relativePath = entry.FilePath.TrimLeadingSlashes();
+                            var (existsLocally, sourcePath) = resolveSource(relativePath);
+                            if (string.IsNullOrEmpty(sourcePath))
+                                return null;
+
+                            var lookup = new AnimeThemesVideoLookup(entry);
+                            return new
+                            {
+                                Entry = entry,
+                                Lookup = lookup,
+                                Signature = Path.GetFileNameWithoutExtension(BuildNewFileName(lookup with { Nc = false }, "")),
+                                SourcePath = sourcePath,
+                                Extension = Path.GetExtension(sourcePath),
+                                RelativePath = relativePath,
+                                SeriesIndex = seriesIndex,
+                                OriginalId = series.LocalID,
+                                ExistsLocally = existsLocally,
+                            };
+                        })
+            )
+            .Where(candidate => candidate != null)
+            .GroupBy(candidate => candidate!.Signature);
+
+        foreach (var signatureGroup in potentialLinks)
+        {
+            // If any BD source exists, discard non-BD sources. Otherwise, keep all (TV/WEB/etc).
+            bool hasBD = signatureGroup.Any(candidate => candidate!.Entry.Source == "BD");
+            var sourceSurvivors = hasBD ? [.. signatureGroup.Where(candidate => candidate!.Entry.Source == "BD")] : signatureGroup.ToList();
+
+            // NC Filtering: If enabled, prefer versions without credits over those with credits
+            var finalSurvivors =
+                (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(candidate => candidate!.Entry.Nc)) ? [.. sourceSurvivors.Where(candidate => candidate!.Entry.Nc)] : sourceSurvivors;
+
+            int counter = 1;
+            foreach (var item in finalSurvivors)
+            {
+                string finalName = BuildNewFileName(item!.Lookup, (counter > 1 ? $" ({counter})" : "") + item.Extension, item.SeriesIndex);
+                results.Add(new ResolvedThemeCandidate(item.Entry, finalName, item.RelativePath, item.SourcePath, item.OriginalId, item.ExistsLocally));
+                counter++;
+            }
+        }
+
+        return results;
     }
 
     /// <summary>Constructs a sanitized filename from theme metadata.</summary>

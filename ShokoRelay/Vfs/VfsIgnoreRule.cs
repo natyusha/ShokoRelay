@@ -5,6 +5,9 @@ using Shoko.Abstractions.Video.Services;
 namespace ShokoRelay.Vfs;
 
 /// <summary>Automatically ignores Shoko Relay's internal VFS and local asset directories during Shoko's import scans.</summary>
+/// <param name="videoService">Shoko video service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
 public class VfsIgnoreRule(IVideoService videoService, ConfigProvider configProvider, IFileSystem fileSystem) : IManagedFolderIgnoreRule
 {
     #region Ignore Rule

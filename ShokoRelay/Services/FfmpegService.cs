@@ -62,6 +62,7 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     /// <param name="album">Album metadata tag.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="workingDir">Optional working directory for the process.</param>
+    /// <returns>A task representing the asynchronous conversion operation.</returns>
     public async Task ConvertToMp3FileAsync(string inputPath, string outputPath, string title, string slugDisplay, string artist, string album, CancellationToken cancellationToken, string? workingDir = null)
     {
         EnsureFfmpegConfigured();
@@ -199,6 +200,7 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     /// <param name="stdOut">Optional output stream to capture process output.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="workingDir">Optional working directory for the process.</param>
+    /// <returns>A task representing the asynchronous process execution.</returns>
     private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken cancellationToken, string? workingDir = null)
     {
         var startInfo = CreateProcessStartInfo(fileName, args, workingDir);

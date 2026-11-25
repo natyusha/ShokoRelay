@@ -202,7 +202,6 @@ public class VfsWatcher(
                 seriesIds.Add(series.GetPrimaryId(metadataService));
 
         if (seriesIds.Count == 0 && @event.ReleaseInfo?.CrossReferences is { Count: > 0 } xrefs)
-        {
             foreach (var xref in xrefs)
             {
                 if (xref.AnidbAnimeID is { } animeId && animeId > 0 && metadataService.GetShokoSeriesByAnidbID(animeId) is { } series)
@@ -210,7 +209,6 @@ public class VfsWatcher(
                 else if (xref.AnidbEpisodeID > 0 && metadataService.GetShokoEpisodeByAnidbID(xref.AnidbEpisodeID) is { } episode)
                     seriesIds.Add(OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService));
             }
-        }
 
         if (seriesIds.Count == 0)
             return;

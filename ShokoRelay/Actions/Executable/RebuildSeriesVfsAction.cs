@@ -6,6 +6,12 @@ using ShokoRelay.AnimeThemes;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Series-scoped action to rebuild VFS links and restore AnimeThemes links for the selected Shoko series.</summary>
+/// <param name="vfsBuilder">VFS builder.</param>
+/// <param name="atMapping">AnimeThemes mapping service.</param>
+/// <param name="vfsWatcher">VFS filesystem event watcher.</param>
+/// <param name="plexMetadata">Plex metadata mapper.</param>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
 public class RebuildSeriesVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping, VfsWatcher vfsWatcher, PlexMetadata plexMetadata, PlexClient plexClient, IMetadataService metadataService)
     : SeriesAction,
         IProgressReportingAction

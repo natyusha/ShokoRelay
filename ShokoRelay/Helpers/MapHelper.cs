@@ -127,16 +127,14 @@ public static class MapHelper
         var seriesList = series.GetOverrideGroup(metadataService).Select(metadataService.GetShokoSeriesByID).OfType<ISeries>();
         var seenVideoIds = new HashSet<int>();
         foreach (var seriesItem in seriesList)
+        foreach (var episode in seriesItem.Episodes)
         {
-            foreach (var episode in seriesItem.Episodes)
-            {
-                if (IsHidden(episode) || episode.Videos == null)
-                    continue;
+            if (IsHidden(episode) || episode.Videos == null)
+                continue;
 
-                foreach (var video in episode.Videos)
-                    if (!video.IsIgnored && seenVideoIds.Add(video.LocalID))
-                        yield return video;
-            }
+            foreach (var video in episode.Videos)
+                if (!video.IsIgnored && seenVideoIds.Add(video.LocalID))
+                    yield return video;
         }
     }
 

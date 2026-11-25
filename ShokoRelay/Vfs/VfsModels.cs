@@ -119,7 +119,7 @@ public sealed class VfsBuildSession(IVideoService? videoService = null)
     public ConcurrentDictionary<string, byte> CreatedDirs { get; } = new(VfsShared.PathComparer);
 
     /// <summary>Holds the loaded AnimeThemes mapping entries parsed from the local CSV configuration.</summary>
-    public Dictionary<int, List<ThemeMapItem>> ThemeMappings { get; } = AnimeThemesMapping.LoadThemeMappings(ConfigDirectory);
+    public ILookup<int, AnimeThemesMappingEntry> ThemeMappings { get; } = AnimeThemesMapping.LoadMappingLookup(ConfigDirectory);
 
     /// <summary>Caches the enumeration of physically present WebM files in the AnimeThemes directory to speed up path resolution.</summary>
     public ConcurrentDictionary<string, Lazy<Dictionary<string, string>>> PhysicalThemeCaches { get; } = new(VfsShared.PathComparer);

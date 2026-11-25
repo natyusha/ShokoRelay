@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.Video.Services;
+using ShokoRelay.AnimeThemes;
 
 namespace ShokoRelay.Vfs;
 
@@ -335,7 +336,7 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             BuildMovieVfs(state);
 
         // Dynamically register physically present AnimeThemes mapping files inside the blueprint Shorts directory to protect them from cleanup
-        var anidbIds = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().Select(shokoSeries => shokoSeries.AnidbAnimeID).ToList();
+        var overrideSeries = OverrideHelper.GetGroup(folderId, metadataService).Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
 
         foreach (var seriesPath in state.ResolvedVfsSeriesPaths)
         {
@@ -345,24 +346,21 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
             bool isMoviePath = string.Equals(Path.GetFileName(vfsRootDir), movieRootName, VfsShared.PathComparison);
             string folderName = Path.GetFileName(seriesPath);
 
-            foreach (var anidbId in anidbIds)
+            var resolvedThemes = AnimeThemesHelper.ResolveSeriesThemeLinks(overrideSeries, session.ThemeMappings, relativePath =>
             {
-                if (session.ThemeMappings.TryGetValue(anidbId, out var themes))
-                {
-                    foreach (var theme in themes)
-                    {
-                        if (VfsHelper.GetThemeSourcePath(theme.RelativePath, root, themeRootName, session, fileSystem) is string sourcePath)
-                        {
-                            string destinationFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
-                            state.ExpectedFiles.Add(destinationFilePath);
+                string? sourcePath = VfsHelper.GetThemeSourcePath(relativePath, root, themeRootName, session, fileSystem);
+                return (sourcePath != null, sourcePath);
+            });
 
-                            string seasonArg = isMoviePath ? $"Movie ❯ {folderName}" : "Shorts";
-                            string fileArg = isMoviePath ? $"Shorts/{theme.FinalName}" : theme.FinalName;
+            foreach (var theme in resolvedThemes)
+            {
+                string destinationFilePath = Path.Combine(seriesPath, "Shorts", theme.FinalName);
+                state.ExpectedFiles.Add(destinationFilePath);
 
-                            onLink?.Invoke(vfsRootDir, seasonArg, fileArg, sourcePath);
-                        }
-                    }
-                }
+                string seasonArg = isMoviePath ? $"Movie ❯ {folderName}" : "Shorts";
+                string fileArg = isMoviePath ? $"Shorts/{theme.FinalName}" : theme.FinalName;
+
+                onLink?.Invoke(vfsRootDir, seasonArg, fileArg, theme.SourcePath);
             }
         }
 

@@ -40,6 +40,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         (["clearlogo", "logo"], ImageEntityType.Logo, "logo"),
     ];
 
+    /// <summary>Listing options restricting directory enumeration to supported artwork file extensions.</summary>
+    private static readonly FileSystemListingOptions s_artworkListingOptions = new() { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
+
     private readonly SemaphoreSlim _syncLock = new(1, 1);
 
     /// <summary>Serializes Shoko image manager write operations across parallel thumbnail and asset tasks.</summary>
@@ -166,7 +169,6 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         var processedInRun = new ConcurrentDictionary<int, byte>();
         var fileDataCache = new ConcurrentDictionary<int, MapHelper.SeriesFileData?>();
         var dirArtCache = new ConcurrentDictionary<string, Lazy<string[]>>(VfsShared.PathComparer);
-        var artworkListingOptions = new FileSystemListingOptions { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
         var orderedTargets = targets.OrderBy(target => target.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
         bool sectionScanFailed = false;
 
@@ -277,7 +279,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         .Where(entry => !string.IsNullOrEmpty(entry.Dir))
                         .SelectMany(entry =>
                             dirArtCache
-                                .GetOrAdd(entry.Dir!, dir => new Lazy<string[]>(() => fileSystem.GetFilePaths(dir, artworkListingOptions, cancellationToken)))
+                                .GetOrAdd(entry.Dir!, dir => new Lazy<string[]>(() => fileSystem.GetFilePaths(dir, s_artworkListingOptions, cancellationToken)))
                                 .Value.Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase))
                         )
                         .FirstOrDefault();
@@ -435,15 +437,13 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
         CancellationToken cancellationToken
-    )
-    {
+    ) =>
         await Parallel
             .ForEachAsync(allSeries, DefaultParallelOptions(cancellationToken), async (series, token) =>
             {
-                foreach (var config in s_seriesImageConfigs)
+                if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
                 {
-                    if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
-                    {
+                    foreach (var config in s_seriesImageConfigs)
                         if (
                             series
                                 .GetImageCrossReferences(
@@ -460,14 +460,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             await PurgeEntityImagesAsync(series, config.Type, ServiceRegistration.RelaySource).ConfigureAwait(false);
                             addStats(false, false, false, false);
                         }
-                        continue;
-                    }
+                    return;
+                }
 
+                var candidateFiles = VfsShared.ResolveSeriesVfsPaths(series, metadataService).SelectMany(path => fileSystem.GetFilePaths(path, s_artworkListingOptions, token)).ToList();
+
+                foreach (var config in s_seriesImageConfigs)
+                {
                     // Find a local artwork file for a series based on a prioritized list of allowed filenames
-                    var artworkListingOptions = new FileSystemListingOptions { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
-                    string? foundFile = VfsShared
-                        .ResolveSeriesVfsPaths(series, metadataService)
-                        .SelectMany(path => fileSystem.GetFilePaths(path, artworkListingOptions, token))
+                    string? foundFile = candidateFiles
                         .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
                         .Where(item => item.Index >= 0)
                         .OrderBy(item => item.Index)
@@ -490,7 +491,6 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 }
             })
             .ConfigureAwait(false);
-    }
 
     #endregion
 

@@ -32,6 +32,10 @@ public sealed record CollectionDeletionDetail(string TargetTitle, bool IsMovie, 
 #endregion
 
 /// <summary>Provides utilities for working with Plex collections.</summary>
+/// <param name="httpClient">HTTP client.</param>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="fileSystem">Shoko file system service.</param>
+/// <param name="logger">Logger instance.</param>
 public class PlexCollections(HttpClient httpClient, PlexClient plexClient, IFileSystem fileSystem, ILogger<PlexCollections> logger)
 {
     #region State

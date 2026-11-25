@@ -93,6 +93,9 @@ public class AnimeThemesMp3Generator(
     /// <summary>Lock object used to synchronize access to the MP3 cache.</summary>
     private readonly Lock _cacheLock = new();
 
+    /// <summary>Lock object used to synchronize VFS Theme.mp3 symlink updates across parallel batch workers.</summary>
+    private readonly Lock _vfsLinkLock = new();
+
     /// <summary>Gets the absolute file path to the persistent Theme.mp3 cache on disk.</summary>
     private string ThemeCacheFilePath => Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FileAtMp3Cache);
 
@@ -533,17 +536,24 @@ public class AnimeThemesMp3Generator(
             fileSystem.MoveFile(tempMp3, themePath, overwrite: true);
 
             // Create a relative symbolic link for the Theme.mp3 in the Shoko VFS directories
+            int primaryId = series.GetPrimaryId(metadataService);
+            var vfsPaths = VfsShared.ResolveSeriesVfsPaths(series, metadataService).ToList();
             string? vfsLink = null;
-            foreach (var vfsPath in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
-            {
-                if (!Settings.Advanced.DisableVfsGeneration)
-                    fileSystem.CreateDirectory(vfsPath);
-                string dest = Path.Combine(vfsPath, "Theme.mp3");
+            lock (_vfsLinkLock)
+                foreach (var vfsPath in vfsPaths)
+                {
+                    if (!Settings.Advanced.DisableVfsGeneration)
+                        fileSystem.CreateDirectory(vfsPath);
+                    string destination = Path.Combine(vfsPath, "Theme.mp3");
 
-                logger.LogDebug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {Destination}", dest);
-                if (VfsShared.TryCreateLink(themePath, dest, logger, fileSystem))
-                    vfsLink = dest; // Track the last successful link to trigger the Plex refresh
-            }
+                    // In batch runs, avoid overwriting an existing primary Theme.mp3 symlink from a secondary override series
+                    if (query.Batch && series.LocalID != primaryId && fileSystem.GetFileStat(destination) is not null)
+                        continue;
+
+                    logger.LogDebug("AnimeThemes MP3: Linking Theme.mp3 to VFS -> {Destination}", destination);
+                    if (VfsShared.TryCreateLink(themePath, destination, logger, fileSystem))
+                        vfsLink = destination; // Track the last successful link to trigger the Plex refresh
+                }
 
             // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
             if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled && !Settings.Advanced.DisableVfsGeneration)

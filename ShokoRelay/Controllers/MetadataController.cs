@@ -38,7 +38,7 @@ public class MetadataController(
     public IActionResult GetMediaProvider() =>
         SafeRequest(() =>
         {
-            bool isMovie = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || string.Equals(Request.Query["type"], "1");
+            bool isMovie = IsMovieRoute() || string.Equals(Request.Query["type"], "1");
             return Ok(
                 new
                 {
@@ -97,7 +97,7 @@ public class MetadataController(
             };
 
             bool isMoviePath = rawPath?.Contains(VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase) == true;
-            if (typeInt == PlexConstants.TypeMovie || Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true || isMoviePath)
+            if (typeInt == PlexConstants.TypeMovie || IsMovieRoute() || isMoviePath)
                 typeInt = PlexConstants.TypeMovie;
 
             var episode = manual != 1 && (isMoviePath || MetadataService.GetShokoSeriesByID(id.Value) == null) ? MetadataService.GetShokoEpisodeByID(id.Value) : null; // In case the extracted ID was a movie episode ID
@@ -240,7 +240,7 @@ public class MetadataController(
     public IActionResult GetMetadata(string ratingKey, [FromQuery] int includeChildren = 0) =>
         SafeRequest(() =>
         {
-            bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
+            bool isMovieEndpoint = IsMovieRoute();
             if (
                 PlexHelper.IsMovieKey(ratingKey)
                 || (
@@ -336,7 +336,7 @@ public class MetadataController(
                 );
 
             object[] images;
-            bool isMovieEndpoint = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true;
+            bool isMovieEndpoint = IsMovieRoute();
             if (
                 PlexHelper.IsMovieKey(ratingKey)
                 || (

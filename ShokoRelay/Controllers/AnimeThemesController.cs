@@ -38,6 +38,9 @@ public class AnimeThemesController(
     /// <summary>Semaphore to prevent concurrent WebM download operations.</summary>
     private static readonly SemaphoreSlim s_webmDownloadLock = new(1, 1);
 
+    /// <summary>Semaphore to prevent concurrent AnimeThemes mapping build runs without blocking VFS operations.</summary>
+    private static readonly SemaphoreSlim s_mapBuildLock = new(1, 1);
+
     /// <summary>Lock object synchronizing reads and writes to the AnimeThemes favourites file.</summary>
     private static readonly Lock s_favsLock = new();
 
@@ -87,7 +90,7 @@ public class AnimeThemesController(
                 );
         }
 
-        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMapBuild, ReportHelper.BuildAtVfsMapReport, () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None), VfsShared.VfsLock)
+        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMapBuild, ReportHelper.BuildAtVfsMapReport, () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None), s_mapBuildLock)
             .ConfigureAwait(false);
     }
 

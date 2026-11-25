@@ -294,7 +294,7 @@ public class SyncToPlex(
             }
         }
         var notFoundCount = activeSourceEpisodes.Count(key => !matchedGlobal.Contains(key));
-        foreach (var (plexUser, episodeId) in activeSourceEpisodes.Where(key => !matchedGlobal.Contains(key)))
+        foreach (var (plexUser, _) in activeSourceEpisodes.Where(key => !matchedGlobal.Contains(key)))
             result = SyncHelper.IncSkipped(result, result.PerUser, plexUser);
 
         return result with

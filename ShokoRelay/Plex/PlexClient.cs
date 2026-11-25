@@ -58,14 +58,16 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         string normalizedMappedPath = PlexHelper.NormalizePathForPlex(mapped);
         var allTargets = GetConfiguredTargets();
 
-        var exactMatches = allTargets.Where(target =>
-            target.Locations.Any(location =>
-            {
-                string normalizedLocation = PlexHelper.NormalizePathForPlex(location);
-                return normalizedMappedPath.Equals(normalizedLocation, StringComparison.OrdinalIgnoreCase) || normalizedMappedPath.StartsWith(normalizedLocation + "/", StringComparison.OrdinalIgnoreCase);
-            })
-        );
-        if (exactMatches.Any())
+        var exactMatches = allTargets
+            .Where(target =>
+                target.Locations.Any(location =>
+                {
+                    string normalizedLocation = PlexHelper.NormalizePathForPlex(location);
+                    return normalizedMappedPath.Equals(normalizedLocation, StringComparison.OrdinalIgnoreCase) || normalizedMappedPath.StartsWith(normalizedLocation + "/", StringComparison.OrdinalIgnoreCase);
+                })
+            )
+            .ToList();
+        if (exactMatches.Count > 0)
             return [.. exactMatches.Select(target => (target, mapped))];
 
         // If Path Mappings aren't configured, safely infer the correct Plex path by matching the VFS root name to Plex's configured library locations.
@@ -711,7 +713,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             return path;
 
         string inputPath = PlexHelper.NormalizePathForPlex(path);
-        var (matchIn, matchOut) = list.FirstOrDefault(pair => inputPath.StartsWith(pair.In, StringComparison.OrdinalIgnoreCase));
+        var (matchIn, matchOut) = list.FirstOrDefault(pair => !string.IsNullOrEmpty(pair.In) && inputPath.StartsWith(pair.In, StringComparison.OrdinalIgnoreCase));
         if (matchIn == null)
             return path;
 

@@ -6,6 +6,10 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Actions.Scheduled;
 
 /// <summary>Scheduled action to automate Plex Collections, Critic Ratings, Image Sync, and Trash emptying.</summary>
+/// <param name="plexAutomationService">Plex automation service.</param>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class PlexAutomationAction(PlexAutomationService plexAutomationService, PlexClient plexClient, ConfigProvider configProvider, ILogger<PlexAutomationAction> logger) : IScheduledAction
 {
     #region Action Metadata

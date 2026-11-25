@@ -5,6 +5,10 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Actions.Scheduled;
 
 /// <summary>Scheduled action to synchronize watched states and progress from Plex into Shoko.</summary>
+/// <param name="watchedSyncService">Watched state sync service (Plex to Shoko).</param>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, PlexClient plexClient, ConfigProvider configProvider, ILogger<PlexWatchedSyncAction> logger) : IScheduledAction
 {
     #region Action Metadata

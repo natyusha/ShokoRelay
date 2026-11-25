@@ -423,22 +423,27 @@ public partial class ConfigProvider : IDisposable
         if (settings.Advanced.PathMappings.Count == 0)
             return;
 
-        var mapped = settings.Advanced.PathMappings.Select(mappingPair =>
-        {
-            string normKey = VfsShared.NormalizeSeparators(mappingPair.Key).Trim();
-            string key = normKey;
-            try
+        var mapped = settings
+            .Advanced.PathMappings.Where(mappingPair => !string.IsNullOrWhiteSpace(mappingPair.Key) && !string.IsNullOrWhiteSpace(mappingPair.Value))
+            .Select(mappingPair =>
             {
-                key = Path.IsPathRooted(normKey) ? Path.GetFullPath(normKey).TrimEnd(Path.DirectorySeparatorChar) : normKey.TrimEnd(Path.DirectorySeparatorChar);
-            }
-            catch { }
+                string normKey = VfsShared.NormalizeSeparators(mappingPair.Key).Trim();
+                string key = normKey;
+                try
+                {
+                    string fullKey = Path.IsPathRooted(normKey) ? Path.GetFullPath(normKey) : normKey;
+                    string? pathRoot = Path.GetPathRoot(fullKey);
+                    key = !string.IsNullOrEmpty(pathRoot) && string.Equals(fullKey, pathRoot, VfsShared.PathComparison) ? fullKey : fullKey.TrimEnd(Path.DirectorySeparatorChar);
+                }
+                catch { }
 
-            string value =
-                (PlexHelper.NormalizePathForPlex(mappingPair.Value.Trim()) is var plexPath && !plexPath.StartsWith('/') && !plexPath.Contains(':') && !plexPath.StartsWith("//", StringComparison.Ordinal))
-                    ? "/" + plexPath
-                    : plexPath;
-            return (Key: key, Value: value);
-        });
+                string value =
+                    (PlexHelper.NormalizePathForPlex(mappingPair.Value.Trim()) is var plexPath && !plexPath.StartsWith('/') && !plexPath.Contains(':') && !plexPath.StartsWith("//", StringComparison.Ordinal))
+                        ? "/" + plexPath
+                        : plexPath;
+                return (Key: key, Value: value);
+            })
+            .Where(mapping => !string.IsNullOrEmpty(mapping.Key) && !string.IsNullOrEmpty(mapping.Value));
 
         // Deduplicate keys before dictionary creation to prevent ArgumentException if duplicate paths were entered
         settings.Advanced.PathMappings = mapped.DistinctBy(mapping => mapping.Key, VfsShared.PathComparer).ToDictionary(mapping => mapping.Key, mapping => mapping.Value, VfsShared.PathComparer);

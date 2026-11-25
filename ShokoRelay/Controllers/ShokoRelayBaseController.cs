@@ -322,6 +322,22 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Response Formatting
 
+    /// <summary>Determines whether the current HTTP request targets the <c>/movie</c> metadata provider route.</summary>
+    /// <returns><c>true</c> if the request subpath begins with <c>/movie</c>; otherwise, <c>false</c>.</returns>
+    protected bool IsMovieRoute()
+    {
+        string? path = Request.Path.Value;
+        if (string.IsNullOrEmpty(path))
+            return false;
+
+        int baseIndex = path.IndexOf(ShokoRelayConstants.BasePath, StringComparison.OrdinalIgnoreCase);
+        if (baseIndex < 0)
+            return false;
+
+        ReadOnlySpan<char> subPath = path.AsSpan(baseIndex + ShokoRelayConstants.BasePath.Length);
+        return subPath.Equals("/movie", StringComparison.OrdinalIgnoreCase) || subPath.StartsWith("/movie/", StringComparison.OrdinalIgnoreCase);
+    }
+
     /// <summary>Applies response headers preventing browser and proxy caching of dynamic responses.</summary>
     protected void SetNoCacheHeaders()
     {
@@ -343,7 +359,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                     size = 1,
                     totalSize = 1,
                     offset = 0,
-                    identifier = identifier ?? (Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme),
+                    identifier = identifier ?? (IsMovieRoute() ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme),
                     Metadata = new[] { metadata },
                 },
             }
@@ -358,7 +374,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         var (start, size) = GetPaging();
         var allItems = metadataList.ToList();
         var pagedData = allItems.Skip(start).Take(size).ToArray();
-        string defaultIdentifier = Request.Path.Value?.Contains("/movie", StringComparison.OrdinalIgnoreCase) == true ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
+        string defaultIdentifier = IsMovieRoute() ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
 
         return Ok(
             new

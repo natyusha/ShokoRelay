@@ -3,6 +3,8 @@ using Shoko.Abstractions.Actions;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Executable action to audit VFS directories and remove broken symlinks and orphaned folders.</summary>
+/// <param name="vfsBuilder">VFS builder.</param>
+/// <param name="logger">Logger instance.</param>
 public class AuditVfsAction(VfsBuilder vfsBuilder, ILogger<AuditVfsAction> logger) : IExecutableAction, IProgressReportingAction
 {
     #region Setup & Metadata

@@ -5,6 +5,11 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Executable action to synchronize watched states, ratings, and playback progress between Plex and Shoko with optional parameters.</summary>
+/// <param name="syncToShoko">Watched state sync service (Plex to Shoko).</param>
+/// <param name="syncToPlex">Watched state sync service (Shoko to Plex).</param>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class SyncWatchedAction(SyncToShoko syncToShoko, SyncToPlex syncToPlex, PlexClient plexClient, ConfigProvider configProvider, ILogger<SyncWatchedAction> logger)
     : IExecutableAction,
         IProgressReportingAction

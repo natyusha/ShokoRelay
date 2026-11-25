@@ -6,6 +6,12 @@ using ShokoRelay.Sync;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Series-scoped action to refresh Plex metadata and optionally run collections, ratings, and image sync for the selected series.</summary>
+/// <param name="plexClient">Plex client.</param>
+/// <param name="plexMetadata">Plex metadata mapper.</param>
+/// <param name="collectionService">Plex collection service.</param>
+/// <param name="criticRatingService">Plex critic rating service.</param>
+/// <param name="imageSyncService">Shoko image sync service.</param>
+/// <param name="metadataService">Shoko metadata service.</param>
 public class RefreshSeriesPlexAction(
     PlexClient plexClient,
     PlexMetadata plexMetadata,

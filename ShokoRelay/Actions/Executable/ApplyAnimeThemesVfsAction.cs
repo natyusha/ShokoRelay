@@ -4,6 +4,9 @@ using ShokoRelay.AnimeThemes;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Executable action to apply the AnimeThemes cross-reference mapping CSV to VFS Shorts folders.</summary>
+/// <param name="atMapping">AnimeThemes mapping service.</param>
+/// <param name="configProvider">Configuration provider.</param>
+/// <param name="logger">Logger instance.</param>
 public class ApplyAnimeThemesVfsAction(AnimeThemesMapping atMapping, ConfigProvider configProvider, ILogger<ApplyAnimeThemesVfsAction> logger) : IExecutableAction, IProgressReportingAction
 {
     #region Setup & Metadata

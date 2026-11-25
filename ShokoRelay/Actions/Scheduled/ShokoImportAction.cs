@@ -5,6 +5,8 @@ using ShokoRelay.Services;
 namespace ShokoRelay.Actions.Scheduled;
 
 /// <summary>Scheduled action to trigger Shoko to scan managed folders for new or unrecognized files.</summary>
+/// <param name="shokoImportService">Shoko import service.</param>
+/// <param name="logger">Logger instance.</param>
 public class ShokoImportAction(ShokoImportService shokoImportService, ILogger<ShokoImportAction> logger) : IScheduledAction
 {
     #region Action Metadata

@@ -30,33 +30,23 @@ public partial class AnimeThemesMapping(
 
     #region Public API
 
-    /// <summary>Loads and groups the AnimeThemes mapping entries, resolving their expected VFS filenames.</summary>
+    /// <summary>Loads the AnimeThemes mapping entries indexed by AniDB anime ID.</summary>
     /// <param name="configDirectory">The plugin configuration directory path.</param>
-    /// <returns>A dictionary mapping AniDB ID to their expected VFS theme items.</returns>
-    public static Dictionary<int, List<ThemeMapItem>> LoadThemeMappings(string configDirectory)
+    /// <returns>A lookup mapping AniDB anime IDs to their parsed mapping entries.</returns>
+    public static ILookup<int, AnimeThemesMappingEntry> LoadMappingLookup(string configDirectory)
     {
-        var mappings = new Dictionary<int, List<ThemeMapItem>>();
         string mapPath = Path.Combine(configDirectory, ShokoRelayConstants.FileAtMapping);
         if (!File.Exists(mapPath))
-            return mappings;
+            return Enumerable.Empty<AnimeThemesMappingEntry>().ToLookup(entry => entry.AniDbId);
 
         try
         {
-            var entries = AnimeThemesHelper.ParseMappingContentWithComments(VfsShared.ReadAllTextShared(mapPath)).Entries;
-            foreach (var entry in entries)
-            {
-                if (entry.AniDbId <= 0)
-                    continue;
-
-                if (!mappings.TryGetValue(entry.AniDbId, out var list))
-                    mappings[entry.AniDbId] = list = [];
-
-                list.Add(new ThemeMapItem(AnimeThemesHelper.BuildNewFileName(new AnimeThemesVideoLookup(entry), ".webm"), entry.FilePath));
-            }
+            return AnimeThemesHelper.ParseMappingContentWithComments(VfsShared.ReadAllTextShared(mapPath)).Entries.Where(entry => entry.AniDbId > 0).ToLookup(entry => entry.AniDbId);
         }
-        catch { }
-
-        return mappings;
+        catch
+        {
+            return Enumerable.Empty<AnimeThemesMappingEntry>().ToLookup(entry => entry.AniDbId);
+        }
     }
 
     /// <summary>Download the mapping file from a direct raw URL and save it.</summary>
@@ -91,7 +81,7 @@ public partial class AnimeThemesMapping(
         }
     }
 
-    /// <summary>Scan configured import roots for AnimeThemes files and write a mapping CSV.</summary>
+    /// <summary>Scan configured import roots for AnimeThemes files and write a mapping CSV without holding the VFS lock during API queries.</summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A build result with statistics.</returns>
     public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken cancellationToken = default)
@@ -107,7 +97,19 @@ public partial class AnimeThemesMapping(
                 throw new DirectoryNotFoundException("AnimeThemes root folder not found");
 
             string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
-            var (existingComments, parsedEntries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+            List<string> existingComments;
+            List<AnimeThemesMappingEntry> parsedEntries;
+
+            await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                (existingComments, parsedEntries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                VfsShared.VfsLock.Release();
+            }
+
             var entries = new List<AnimeThemesMappingEntry>();
             var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
             var existingByFilename = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
@@ -193,7 +195,28 @@ public partial class AnimeThemesMapping(
                 })
                 .ConfigureAwait(false);
 
-            var finalEntries = await SaveMappingFileAsync(mapPath, existingComments, entries, cancellationToken).ConfigureAwait(false);
+            List<AnimeThemesMappingEntry> finalEntries;
+            await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // Re-read the mapping CSV before writing so entries added or updated during the crawl are preserved
+                var (latestComments, latestEntries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+                var mergedByPath = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var entry in entries)
+                    mergedByPath[entry.FilePath] = entry;
+
+                foreach (var latestEntry in latestEntries)
+                    if (!mergedByPath.TryGetValue(latestEntry.FilePath, out var currentEntry) || (latestEntry.AniDbId > 0 && currentEntry.AniDbId <= 0))
+                        mergedByPath[latestEntry.FilePath] = latestEntry;
+
+                finalEntries = await SaveMappingFileAsync(mapPath, latestComments.Count > 0 ? latestComments : existingComments, mergedByPath.Values, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                VfsShared.VfsLock.Release();
+            }
+
             logger.LogInformation("AnimeThemes Map: Finished mapping task -> {Count} entries written.", finalEntries.Count);
             List<string> finalMessages =
             [
@@ -218,51 +241,76 @@ public partial class AnimeThemesMapping(
         if (newFiles.Count == 0)
             return 0;
 
+        string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
+        var existingPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            string mapPath = Path.Combine(configProvider.ConfigDirectory, ShokoRelayConstants.FileAtMapping);
-            var (existingComments, entries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
-            var existing = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
+            var (_, initialEntries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+            foreach (var entry in initialEntries)
+                if (entry.AniDbId > 0)
+                    existingPaths.Add(entry.FilePath);
+        }
+        finally
+        {
+            VfsShared.VfsLock.Release();
+        }
 
-            foreach (var entry in entries)
-                existing.TryAdd(entry.FilePath, entry);
+        var resolvedEntries = new List<AnimeThemesMappingEntry>();
+        foreach (var (relativePath, fileName) in newFiles)
+        {
+            if (existingPaths.Contains(relativePath))
+                continue;
 
-            int addedCount = 0;
-            foreach (var (relativePath, fileName) in newFiles)
+            try
             {
-                if (existing.TryGetValue(relativePath, out var oldEntry) && oldEntry.AniDbId > 0)
-                    continue;
-
-                try
+                var (lookup, _) = await FetchMetadataAsync(fileName, null, cancellationToken).ConfigureAwait(false);
+                if (lookup != null)
                 {
-                    var (lookup, idMissing) = await FetchMetadataAsync(fileName, null, cancellationToken).ConfigureAwait(false);
-                    if (lookup != null)
-                    {
-                        var entry = new AnimeThemesMappingEntry(relativePath, lookup);
-                        if (oldEntry != null)
-                            entries.Remove(oldEntry);
-
-                        entries.Add(entry);
-                        existing[relativePath] = entry;
-                        addedCount++;
-                        if (lookup.AniDbId > 0)
-                            logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relativePath, lookup.VideoId, lookup.AniDbId);
-                        else
-                            logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", relativePath);
-                    }
+                    resolvedEntries.Add(new AnimeThemesMappingEntry(relativePath, lookup));
+                    existingPaths.Add(relativePath);
+                    if (lookup.AniDbId > 0)
+                        logger.LogInformation("AnimeThemes Map: Auto-mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relativePath, lookup.VideoId, lookup.AniDbId);
                     else
-                        logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> Metadata missing", relativePath);
+                        logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", relativePath);
                 }
-                catch (Exception exception)
+                else
+                    logger.LogWarning("AnimeThemes Map: Failed to auto-map '{Path}' -> Metadata missing", relativePath);
+            }
+            catch (Exception exception)
+            {
+                logger.LogWarning(exception, "AnimeThemes Map: Exception auto-mapping '{Path}'", relativePath);
+            }
+        }
+
+        if (resolvedEntries.Count == 0)
+            return 0;
+
+        await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var (latestComments, entries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+            var existingByPath = entries.ToDictionary(entry => entry.FilePath, StringComparer.OrdinalIgnoreCase);
+            int addedCount = 0;
+
+            foreach (var entry in resolvedEntries)
+            {
+                if (existingByPath.TryGetValue(entry.FilePath, out var existingEntry))
                 {
-                    logger.LogWarning(exception, "AnimeThemes Map: Exception auto-mapping '{Path}'", relativePath);
+                    if (existingEntry.AniDbId > 0)
+                        continue;
+                    entries.Remove(existingEntry);
                 }
+
+                entries.Add(entry);
+                existingByPath[entry.FilePath] = entry;
+                addedCount++;
             }
 
             if (addedCount > 0)
             {
-                await SaveMappingFileAsync(mapPath, existingComments, entries, cancellationToken).ConfigureAwait(false);
+                await SaveMappingFileAsync(mapPath, latestComments, entries, cancellationToken).ConfigureAwait(false);
                 logger.LogInformation("AnimeThemes Map: Appended {Count} new entries to mapping file.", addedCount);
             }
 

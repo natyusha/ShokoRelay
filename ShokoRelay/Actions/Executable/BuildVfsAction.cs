@@ -6,6 +6,9 @@ using ShokoRelay.AnimeThemes;
 namespace ShokoRelay.Actions.Executable;
 
 /// <summary>Executable action to build or rebuild the Shoko Relay Virtual File System across all eligible managed folders.</summary>
+/// <param name="vfsBuilder">VFS builder.</param>
+/// <param name="atMapping">AnimeThemes mapping service.</param>
+/// <param name="logger">Logger instance.</param>
 public class BuildVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping, ILogger<BuildVfsAction> logger) : IExecutableAction, IProgressReportingAction
 {
     #region Setup & Metadata

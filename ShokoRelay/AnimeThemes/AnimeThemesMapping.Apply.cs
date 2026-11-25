@@ -81,100 +81,53 @@ public partial class AnimeThemesMapping
                 var isFilteredRun = seriesFilter?.Any() == true;
                 var myPrefixes = folderGroup.Select(series => overrideOrder.IndexOf(series!.LocalID) is var index && index > 0 ? $"P{index + 1} ❯ " : null).ToHashSet();
 
+                var overrideSeries = overrideOrder.Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>().ToList();
+
                 foreach (var vfsPath in vfsPaths)
                 {
                     string shortsDir = Path.Combine(vfsPath, "Shorts");
                     string root = Path.GetDirectoryName(Path.GetDirectoryName(vfsPath))!;
                     var plannedFilenames = new HashSet<string>(VfsShared.PathComparer);
 
-                    var potentialLinks = overrideOrder
-                        .Select(metadataService.GetShokoSeriesByID)
-                        .OfType<IShokoSeries>()
-                        .SelectMany(series =>
-                        {
-                            int seriesIndex = overrideOrder.IndexOf(series.LocalID);
-                            return entriesByAniDb[series.AnidbAnimeID]
-                                // Determine if a theme mapping's overlap level is allowed based on the configured overlap restriction
-                                .Where(entry =>
-                                    Settings.Advanced.AnimeThemesOverlapLevel == AnimeThemesOverlapLevel.All
-                                    || entry.Overlap.Equals("None", StringComparison.Ordinal)
-                                    || (Settings.Advanced.AnimeThemesOverlapLevel == AnimeThemesOverlapLevel.TransitionOnly && entry.Overlap.Equals("Transition", StringComparison.Ordinal))
-                                )
-                                .Select(entry =>
-                                {
-                                    string relativePath = entry.FilePath.TrimLeadingSlashes();
-                                    string candidateSource = Path.Combine(root, themeRootName, VfsShared.NormalizeSeparators(relativePath));
-                                    bool existsLocally = fileSystem.FileExists(candidateSource);
-                                    if (!existsLocally && crossRootContext?.HasSourceFor(relativePath) != true)
-                                        return null;
-                                    string sourcePath = Path.GetFullPath(candidateSource);
-                                    var lookup = new AnimeThemesVideoLookup(entry);
-                                    return new
-                                    {
-                                        Entry = entry,
-                                        Lookup = lookup,
-                                        Signature = Path.GetFileNameWithoutExtension(AnimeThemesHelper.BuildNewFileName(lookup with { Nc = false }, "")),
-                                        SourcePath = sourcePath,
-                                        Extension = Path.GetExtension(sourcePath),
-                                        RelativePath = relativePath,
-                                        SeriesIndex = seriesIndex,
-                                        OriginalId = series.LocalID,
-                                        ExistsLocally = existsLocally,
-                                    };
-                                });
-                        })
-                        .Where(candidate => candidate != null)
-                        .GroupBy(candidate => candidate!.Signature);
-
-                    foreach (var signatureGroup in potentialLinks)
+                    var resolvedLinks = AnimeThemesHelper.ResolveSeriesThemeLinks(overrideSeries, entriesByAniDb, relativePath =>
                     {
-                        // If any BD source exists, discard non-BD sources. Otherwise, keep all (TV/WEB/etc).
-                        bool hasBD = signatureGroup.Any(candidate => candidate!.Entry.Source == "BD");
-                        var sourceSurvivors = hasBD ? [.. signatureGroup.Where(candidate => candidate!.Entry.Source == "BD")] : signatureGroup.ToList();
+                        string candidateSource = Path.Combine(root, themeRootName, VfsShared.NormalizeSeparators(relativePath));
+                        bool existsLocally = fileSystem.FileExists(candidateSource);
+                        return !existsLocally && crossRootContext?.HasSourceFor(relativePath) != true ? (false, null) : (existsLocally, Path.GetFullPath(candidateSource));
+                    });
 
-                        // NC Filtering: If enabled, prefer versions without credits over those with credits
-                        var finalSurvivors =
-                            (Settings.Advanced.AnimeThemesPreferNc && sourceSurvivors.Any(candidate => candidate!.Entry.Nc)) ? [.. sourceSurvivors.Where(candidate => candidate!.Entry.Nc)] : sourceSurvivors;
+                    foreach (var item in resolvedLinks)
+                    {
+                        string destinationPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, item.FinalName));
+                        plannedFilenames.Add(item.FinalName);
 
-                        int counter = 1;
-                        foreach (var item in finalSurvivors)
+                        if (!isFilteredRun || folderGroup.Any(series => series!.LocalID == item.OriginalSeriesId))
                         {
-                            string finalName = AnimeThemesHelper.BuildNewFileName(item!.Lookup, (counter > 1 ? $" ({counter})" : "") + item.Extension, item.SeriesIndex);
-                            string destinationPath = VfsShared.NormalizeSeparators(Path.Combine(shortsDir, finalName));
-                            plannedFilenames.Add(finalName);
+                            if (!item.ExistsLocally && crossRootContext != null && !EnsureThemeInTargetRoot(root, item.RelativePath, item.SourcePath, transferMode, crossRootContext, state))
+                                continue;
 
-                            if (!isFilteredRun || folderGroup.Any(series => series!.LocalID == item.OriginalId))
+                            if (!Settings.Advanced.DisableVfsGeneration)
+                                fileSystem.CreateDirectory(shortsDir);
+                            string relativeTarget = VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootName, item.RelativePath));
+                            if (VfsShared.TryCreateLink(item.SourcePath, destinationPath, logger, fileSystem, targetOverride: relativeTarget))
                             {
-                                if (!item.ExistsLocally && crossRootContext != null && !EnsureThemeInTargetRoot(root, item.RelativePath, item.SourcePath, transferMode, crossRootContext, state))
-                                {
-                                    counter++;
-                                    continue;
-                                }
-
-                                if (!Settings.Advanced.DisableVfsGeneration)
-                                    fileSystem.CreateDirectory(shortsDir);
-                                string relativeTarget = VfsShared.NormalizeSeparators(Path.Combine("..", "..", "..", themeRootName, item.RelativePath));
-                                if (VfsShared.TryCreateLink(item.SourcePath, destinationPath, logger, fileSystem, targetOverride: relativeTarget))
-                                {
-                                    int bitmask =
-                                        (item.Entry.Nc ? 1 : 0)
-                                        | (item.Entry.Lyrics ? 2 : 0)
-                                        | (item.Entry.Subbed ? 4 : 0)
-                                        | (item.Entry.Uncen ? 8 : 0)
-                                        | (item.Entry.NSFW ? 16 : 0)
-                                        | (item.Entry.Spoiler ? 32 : 0)
-                                        | (
-                                            item.Entry.Overlap == "Transition" ? 64
-                                            : item.Entry.Overlap == "Over" ? 128
-                                            : 0
-                                        );
-                                    Interlocked.Increment(ref state.Created);
-                                    state.CacheEntries.Add(new WebmCacheEntry(destinationPath, item.Entry.VideoId, bitmask));
-                                }
-                                else
-                                    state.Errors.Add($"Link failed: {destinationPath}");
+                                int bitmask =
+                                    (item.Entry.Nc ? 1 : 0)
+                                    | (item.Entry.Lyrics ? 2 : 0)
+                                    | (item.Entry.Subbed ? 4 : 0)
+                                    | (item.Entry.Uncen ? 8 : 0)
+                                    | (item.Entry.NSFW ? 16 : 0)
+                                    | (item.Entry.Spoiler ? 32 : 0)
+                                    | (
+                                        item.Entry.Overlap == "Transition" ? 64
+                                        : item.Entry.Overlap == "Over" ? 128
+                                        : 0
+                                    );
+                                Interlocked.Increment(ref state.Created);
+                                state.CacheEntries.Add(new WebmCacheEntry(destinationPath, item.Entry.VideoId, bitmask));
                             }
-                            counter++;
+                            else
+                                state.Errors.Add($"Link failed: {destinationPath}");
                         }
                     }
 
@@ -397,7 +350,7 @@ public partial class AnimeThemesMapping
                     foreach (var series in seriesDict.Values)
                     foreach (var season in series.Seasons)
                     foreach (var file in season.Files)
-                        if (VfsShared.IsPathUnderDirectory(file.Source, themePrefix))
+                        if (Path.IsPathRooted(file.Source) && VfsShared.IsPathUnderDirectory(file.Source, themePrefix))
                             context.NeededInRoots.Add((root, NormalizeRelativeThemeKey(Path.GetRelativePath(themePrefix, file.Source))));
                 }
 
