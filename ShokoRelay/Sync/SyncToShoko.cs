@@ -47,28 +47,16 @@ public class SyncToShoko(
         CancellationToken cancellationToken = default
     )
     {
-        OverrideHelper.Reload();
-        var result = new PlexWatchedSyncResult { Direction = "Plex->Shoko" };
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
+        var (syncContext, earlyResult) = await SyncHelper.InitializeSyncRunAsync("Plex->Shoko", dryRun, userType, plexClient, userService, configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
+        if (syncContext == null)
+            return earlyResult;
 
-        if (userType == SyncUserType.None)
-            return result;
-
-        var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
+        var (result, defaultUser, includeAdmin, adminShokoUser, extraUsers, logPrefix) = syncContext;
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
         bool actualProgress = includeProgress ?? auto.ShokoSyncWatchedIncludeProgress;
 
-        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault() is not { } defaultUser)
-            return result;
-
-        string? adminUsername = await SyncHelper.GetOrRefreshAdminUsernameAsync(configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
-
-        var (includeAdmin, adminShokoUser, extraUsers) = SyncHelper.ResolveActiveSyncUsers(configProvider, userType, adminUsername);
-        if (!includeAdmin && extraUsers.Count == 0)
-            return result;
-
-        result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(extraUser => extraUser.Name), includeAdmin) };
         var appliedWatchedIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
         var appliedProgressIds = new HashSet<(int ShokoUserId, int EpisodeId)>();
         var appliedRatedIds = new HashSet<(int ShokoUserId, int EpisodeId)>();

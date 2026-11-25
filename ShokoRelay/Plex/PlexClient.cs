@@ -168,29 +168,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the refresh request was successful.</returns>
-    public async Task<bool> RefreshMetadataAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
-    {
-        if (!IsEnabled || ratingKey <= 0 || target == null)
-            return false;
-
-        try
-        {
-            using var request = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/refresh", target.ServerUrl);
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-
-            if (response.IsSuccessStatusCode)
-                logger.LogDebug("PlexClient: Metadata refresh triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
-            else
-                logger.LogWarning("PlexClient: Metadata refresh failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", response.StatusCode, ratingKey, target.ServerName);
-
-            return response.IsSuccessStatusCode;
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
-        {
-            logger.LogWarning("PlexClient: Network timeout triggering metadata refresh for RatingKey {RatingKey}", ratingKey);
-            return false;
-        }
-    }
+    public Task<bool> RefreshMetadataAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        PutMetadataCommandAsync(ratingKey, "refresh", "Metadata refresh", target, cancellationToken);
 
     /// <summary>Triggers a Plex metadata refresh across all configured library targets for the specified Shoko series ID.</summary>
     /// <param name="shokoSeriesId">The Shoko series ID.</param>
@@ -218,26 +197,36 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     /// <param name="target">The target Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True if the analyze request was successful.</returns>
-    public async Task<bool> AnalyzeItemAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default)
+    public Task<bool> AnalyzeItemAsync(int ratingKey, PlexLibraryTarget target, CancellationToken cancellationToken = default) =>
+        PutMetadataCommandAsync(ratingKey, "analyze", "Media analysis", target, cancellationToken);
+
+    /// <summary>Sends a PUT command to a Plex metadata item endpoint (such as <c>refresh</c> or <c>analyze</c>).</summary>
+    /// <param name="ratingKey">The Plex rating key.</param>
+    /// <param name="command">The metadata sub-command segment.</param>
+    /// <param name="commandLabel">Human-readable label used in log messages.</param>
+    /// <param name="target">The target Plex library.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>True if the command request succeeded.</returns>
+    private async Task<bool> PutMetadataCommandAsync(int ratingKey, string command, string commandLabel, PlexLibraryTarget target, CancellationToken cancellationToken)
     {
         if (!IsEnabled || ratingKey <= 0 || target == null)
             return false;
 
         try
         {
-            using var request = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/analyze", target.ServerUrl);
+            using var request = CreateRequest(HttpMethod.Put, $"/library/metadata/{ratingKey}/{command}", target.ServerUrl);
             using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
 
             if (response.IsSuccessStatusCode)
-                logger.LogDebug("PlexClient: Media analysis triggered for RatingKey {RatingKey} on {ServerName}", ratingKey, target.ServerName);
+                logger.LogDebug("PlexClient: {Command} triggered for RatingKey {RatingKey} on {ServerName}", commandLabel, ratingKey, target.ServerName);
             else
-                logger.LogWarning("PlexClient: Media analysis failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", response.StatusCode, ratingKey, target.ServerName);
+                logger.LogWarning("PlexClient: {Command} failed ({StatusCode}) for RatingKey {RatingKey} on {ServerName}", commandLabel, response.StatusCode, ratingKey, target.ServerName);
 
             return response.IsSuccessStatusCode;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
-            logger.LogWarning("PlexClient: Network timeout triggering media analysis for RatingKey {RatingKey}", ratingKey);
+            logger.LogWarning("PlexClient: Network timeout triggering {Command} for RatingKey {RatingKey}", commandLabel, ratingKey);
             return false;
         }
     }

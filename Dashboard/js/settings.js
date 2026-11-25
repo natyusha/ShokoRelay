@@ -37,6 +37,24 @@
   }
 
   /**
+   * Applies or clears a disabled tooltip hint on a control's wrapper container.
+   * @param {HTMLElement|null} targetElement - The control element to inspect.
+   * @param {boolean} isDisabled - Whether the control is disabled.
+   * @param {string} message - Tooltip text to show while disabled.
+   * @returns {void}
+   */
+  function setControlHint(targetElement, isDisabled, message) {
+    const parent = targetElement?.closest("label, .w100, .dsbld-wrap, div") || targetElement?.parentElement;
+    if (!parent) return;
+    if (isDisabled && message) parent.title = message;
+    else {
+      delete parent.dataset.tooltipText;
+      parent.removeAttribute("title");
+      parent.removeAttribute("aria-describedby");
+    }
+  }
+
+  /**
    * Consolidates dynamic state updates for the dashboard. Evaluates Plex auth, Sync user setting, and TMDB episode numbering constraints to disable controls.
    * @param {Object} [config] - The optional active configuration object to evaluate.
    * @returns {void}
@@ -51,18 +69,7 @@
       const isDisabled = (requiresPlex && !isPlexLinked) || (requiresSync && !isSyncActive);
 
       if (["INPUT", "BUTTON", "SELECT", "TEXTAREA"].includes(targetElement.tagName)) targetElement.disabled = isDisabled;
-
-      const message = isDisabled ? (requiresPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected") : "";
-      const parent = targetElement.closest("label, .w100, .dsbld-wrap") || targetElement.parentElement;
-
-      if (parent) {
-        if (message) parent.title = message;
-        else {
-          delete parent.dataset.tooltipText;
-          parent.removeAttribute("title");
-          parent.removeAttribute("aria-describedby");
-        }
-      }
+      setControlHint(targetElement, isDisabled, requiresPlex && !isPlexLinked ? "Requires Plex Authentication" : "Requires Sync Users to be Selected");
     });
 
     const overridesBtn = element("vfs-overrides");
@@ -70,16 +77,7 @@
     if (overridesBtn && activeConfig) {
       const isDisabled = !(window._sr.getValueByPath(activeConfig, "Advanced.TmdbEpNumbering") || window._sr.getValueByPath(activeConfig, "Advanced.MergeTmdbSeries"));
       overridesBtn.disabled = isDisabled;
-
-      const parent = overridesBtn.closest(".w100, div") || overridesBtn.parentElement;
-      if (parent) {
-        if (isDisabled) parent.title = "Requires TMDB Episode Numbering or Auto-Merge";
-        else {
-          delete parent.dataset.tooltipText;
-          parent.removeAttribute("title");
-          parent.removeAttribute("aria-describedby");
-        }
-      }
+      setControlHint(overridesBtn, isDisabled, "Requires TMDB Episode Numbering or Auto-Merge");
     }
   };
 
@@ -234,30 +232,28 @@
     element("config-form").innerHTML = "";
     if (element("overrides-text")) element("overrides-text").value = rawConfig.overrides || "";
 
-    const primarySection = document.createElement("details");
-    const primaryContent = document.createElement("div");
-    primarySection.id = "config-primary-settings";
-    primarySection.className = "details-anim";
-    primaryContent.className = "details-content";
-    primarySection.open = true;
-    primarySection.innerHTML = "<summary>Metadata</summary>";
-    primaryContent.appendChild(document.createElement("hr"));
+    /**
+     * Creates a collapsible settings section element with an inner content container.
+     * @param {string} sectionId - The DOM element ID for the section.
+     * @param {string} title - The visible summary heading text.
+     * @param {boolean} [isOpen=false] - Whether the section starts expanded.
+     * @returns {{section: HTMLDetailsElement, content: HTMLDivElement}} The constructed section and content elements.
+     */
+    function createFormSection(sectionId, title, isOpen = false) {
+      const section = document.createElement("details");
+      const content = document.createElement("div");
+      section.id = sectionId;
+      section.className = "details-anim";
+      section.open = isOpen;
+      section.innerHTML = `<summary>${esc(title)}</summary>`;
+      content.className = "details-content";
+      content.appendChild(document.createElement("hr"));
+      return { section, content };
+    }
 
-    const langSection = document.createElement("details");
-    const langContent = document.createElement("div");
-    langSection.id = "config-lang-settings";
-    langSection.className = "details-anim";
-    langContent.className = "details-content";
-    langSection.innerHTML = "<summary>Language</summary>";
-    langContent.appendChild(document.createElement("hr"));
-
-    const advSection = document.createElement("details");
-    const advContent = document.createElement("div");
-    advSection.id = "config-adv-settings";
-    advSection.className = "details-anim";
-    advContent.className = "details-content";
-    advSection.innerHTML = "<summary>Advanced</summary>";
-    advContent.appendChild(document.createElement("hr"));
+    const primary = createFormSection("config-primary-settings", "Metadata", true);
+    const language = createFormSection("config-lang-settings", "Language");
+    const advanced = createFormSection("config-adv-settings", "Advanced");
 
     schema.forEach((prop) => {
       const wrap = document.createElement("div");
@@ -380,26 +376,16 @@
           };
         } else bindConfig(input, prop.Path, config, saveSettings, prop.Type === "number" ? "number" : "text");
       }
-      (prop.Advanced ? advContent : prop.Language ? langContent : primaryContent).appendChild(wrap);
+      (prop.Advanced ? advanced.content : prop.Language ? language.content : primary.content).appendChild(wrap);
     });
 
-    if (primaryContent.children.length > 1) {
-      element("config-form").appendChild(primarySection);
-      primarySection.appendChild(primaryContent);
-      initDetailsAnimation(primarySection, primaryContent);
-    }
-
-    if (langContent.children.length > 1) {
-      element("config-form").appendChild(langSection);
-      langSection.appendChild(langContent);
-      initDetailsAnimation(langSection, langContent);
-    }
-
-    if (advContent.children.length > 1) {
-      element("config-form").appendChild(advSection);
-      advSection.appendChild(advContent);
-      initDetailsAnimation(advSection, advContent);
-    }
+    [primary, language, advanced].forEach(({ section, content }) => {
+      if (content.children.length > 1) {
+        element("config-form").appendChild(section);
+        section.appendChild(content);
+        initDetailsAnimation(section, content);
+      }
+    });
 
     const bindField = (id, path, type) => bindConfig(id, path, config, saveSettings, type);
     const autoMap = {

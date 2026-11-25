@@ -96,6 +96,17 @@ public class CollectionService(
             var cache = LoadUploadCache(cachePath);
             bool cacheModified = PruneStaleSectionCacheKeys(cache, targets);
 
+            void RecordUploadOutcome(ImageUploadOutcome uploadOutcome)
+            {
+                if (uploadOutcome == ImageUploadOutcome.Uploaded)
+                {
+                    uploaded++;
+                    cacheModified = true;
+                }
+                else if (uploadOutcome == ImageUploadOutcome.Skipped)
+                    alreadyUploaded++;
+            }
+
             if (clean && !string.IsNullOrWhiteSpace(Settings.Advanced.PlexMetadataPath) && fileSystem.DirectoryExists(Settings.Advanced.PlexMetadataPath))
                 await PrunePlexCollectionImagesAsync(targets, cancellationToken).ConfigureAwait(false);
 
@@ -226,29 +237,24 @@ public class CollectionService(
                                         && plexCollection.Thumb != null
                                         && !plexCollection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase)
                                     );
-                                var uploadOutcome = await TryUploadCollectionImageAsync(
-                                        target,
-                                        collectionId,
-                                        collectionName,
-                                        imagePath,
-                                        prefix,
-                                        label,
-                                        $"{target.SectionId}|{collectionId}|{prefix}",
-                                        plexHasPoster,
-                                        isMovieTarget,
-                                        "Applied",
-                                        cache,
-                                        uploadedDetails,
-                                        cancellationToken
-                                    )
-                                    .ConfigureAwait(false);
-                                if (uploadOutcome == ImageUploadOutcome.Uploaded)
-                                {
-                                    uploaded++;
-                                    cacheModified = true;
-                                }
-                                else if (uploadOutcome == ImageUploadOutcome.Skipped)
-                                    alreadyUploaded++;
+                                RecordUploadOutcome(
+                                    await TryUploadCollectionImageAsync(
+                                            target,
+                                            collectionId,
+                                            collectionName,
+                                            imagePath,
+                                            prefix,
+                                            label,
+                                            $"{target.SectionId}|{collectionId}|{prefix}",
+                                            plexHasPoster,
+                                            isMovieTarget,
+                                            "Applied",
+                                            cache,
+                                            uploadedDetails,
+                                            cancellationToken
+                                        )
+                                        .ConfigureAwait(false)
+                                );
                             }
                         }
                     }
@@ -261,29 +267,24 @@ public class CollectionService(
                         {
                             var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots);
                             bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
-                            var uploadOutcome = await TryUploadCollectionImageAsync(
-                                    target,
-                                    collectionId,
-                                    collection.Title,
-                                    posterPath,
-                                    prefix,
-                                    $"custom {label}",
-                                    $"{target.SectionId}|sc{collectionId}|{prefix}",
-                                    plexHasPoster,
-                                    isMovieTarget,
-                                    "Applied smart collection",
-                                    cache,
-                                    uploadedDetails,
-                                    cancellationToken
-                                )
-                                .ConfigureAwait(false);
-                            if (uploadOutcome == ImageUploadOutcome.Uploaded)
-                            {
-                                uploaded++;
-                                cacheModified = true;
-                            }
-                            else if (uploadOutcome == ImageUploadOutcome.Skipped)
-                                alreadyUploaded++;
+                            RecordUploadOutcome(
+                                await TryUploadCollectionImageAsync(
+                                        target,
+                                        collectionId,
+                                        collection.Title,
+                                        posterPath,
+                                        prefix,
+                                        $"custom {label}",
+                                        $"{target.SectionId}|sc{collectionId}|{prefix}",
+                                        plexHasPoster,
+                                        isMovieTarget,
+                                        "Applied smart collection",
+                                        cache,
+                                        uploadedDetails,
+                                        cancellationToken
+                                    )
+                                    .ConfigureAwait(false)
+                            );
                         }
             }
 

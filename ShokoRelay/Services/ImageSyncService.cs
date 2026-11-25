@@ -297,15 +297,15 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     addStats(fileExists, wasUploaded, wasSkipped, hasError);
 
                     bool purgePlexThumb = fileExists || Settings.TmdbThumbnails;
+                    var plexBackdropFilter = new ImageCrossReferenceFilteringOptions
+                    {
+                        ImageType = ImageEntityType.Backdrop,
+                        XrefSource = ServiceRegistration.RelayPlexSource,
+                        LinkedEntityImages = false,
+                    };
                     if (purgePlexThumb)
                     {
-                        var plexBackdrops = new ImageCrossReferenceFilteringOptions
-                        {
-                            ImageType = ImageEntityType.Backdrop,
-                            XrefSource = ServiceRegistration.RelayPlexSource,
-                            LinkedEntityImages = false,
-                        };
-                        if (episode.GetImageCrossReferences(plexBackdrops).Count > 0)
+                        if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
                         {
                             logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", episodeLogName);
                             await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
@@ -317,13 +317,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         {
                             addStats(true, false, false, true);
                             errorsBag.Add($"[Missing Plex Thumbnail] {episodeLogName} (No thumbnail generated or available in Plex)");
-                            var plexBackdrops = new ImageCrossReferenceFilteringOptions
-                            {
-                                ImageType = ImageEntityType.Backdrop,
-                                XrefSource = ServiceRegistration.RelayPlexSource,
-                                LinkedEntityImages = false,
-                            };
-                            if (episode.GetImageCrossReferences(plexBackdrops).Count > 0)
+                            if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
                                 await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
                         }
                         else
@@ -451,11 +445,18 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     {
                         if (
                             series
-                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = config.Type, LinkedEntityImages = false })
-                                .Any(item => item.Source == ServiceRegistration.RelaySource)
+                                .GetImageCrossReferences(
+                                    new ImageCrossReferenceFilteringOptions
+                                    {
+                                        ImageType = config.Type,
+                                        XrefSource = ServiceRegistration.RelaySource,
+                                        LinkedEntityImages = false,
+                                    }
+                                )
+                                .Count > 0
                         )
                         {
-                            await PurgeEntityImagesAsync(series, config.Type, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
+                            await PurgeEntityImagesAsync(series, config.Type, ServiceRegistration.RelaySource).ConfigureAwait(false);
                             addStats(false, false, false, false);
                         }
                         continue;

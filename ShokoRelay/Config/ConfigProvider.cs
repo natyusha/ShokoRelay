@@ -456,39 +456,28 @@ public partial class ConfigProvider : IDisposable
     /// <param name="settings">The relay configuration instance to normalize.</param>
     private static void NormalizeCsvFields(RelayConfig settings)
     {
-        static string NormalizeDelimitedList(string? rawInput, char separator) =>
-            string.Join(separator + " ", (rawInput ?? "").Split(separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase));
+        static string NormalizeList(string? rawInput, char[] separators, string joinWith, StringComparer comparer, Func<string, string>? transform = null) =>
+            string.Join(
+                joinWith,
+                (rawInput ?? "")
+                    .Split(separators, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(item => transform != null ? transform(item) : item)
+                    .Where(item => item.Length > 0)
+                    .Distinct(comparer)
+            );
 
-        settings.Automation.ExtraPlexUsers = NormalizeDelimitedList(settings.Automation.ExtraPlexUsers, ',');
+        settings.Automation.ExtraPlexUsers = NormalizeList(settings.Automation.ExtraPlexUsers, [','], ", ", StringComparer.OrdinalIgnoreCase);
         settings.Automation.AdvancedUserMappings = string.Join(
             "|",
             ParseAdvancedUserMappings(settings.Automation.AdvancedUserMappings)
                 .Select(group => string.Join(",", group.PlexUsers.Select(plexEntry => plexEntry.Pin != null ? $"{plexEntry.PlexUser};{plexEntry.Pin}" : plexEntry.PlexUser).Prepend(group.ShokoUser)))
         );
 
-        settings.Advanced.FolderExclusions = string.Join(
-            Environment.NewLine,
-            (settings.Advanced.FolderExclusions ?? "")
-                .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(line => line.TrimSlashes())
-                .Where(line => line.Length > 0)
-                .Distinct(VfsShared.PathComparer)
-        );
-
-        settings.Advanced.ManagedFolderExclusions = string.Join(
-            Environment.NewLine,
-            (settings.Advanced.ManagedFolderExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
-        );
-
-        settings.Advanced.CollectionExclusions = string.Join(
-            Environment.NewLine,
-            (settings.Advanced.CollectionExclusions ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
-        );
-
-        settings.TagOverrides = string.Join(
-            Environment.NewLine,
-            (settings.TagOverrides ?? "").Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct(StringComparer.OrdinalIgnoreCase)
-        );
+        char[] lineSeparators = ['\r', '\n'];
+        settings.Advanced.FolderExclusions = NormalizeList(settings.Advanced.FolderExclusions, lineSeparators, Environment.NewLine, VfsShared.PathComparer, line => line.TrimSlashes());
+        settings.Advanced.ManagedFolderExclusions = NormalizeList(settings.Advanced.ManagedFolderExclusions, lineSeparators, Environment.NewLine, StringComparer.OrdinalIgnoreCase);
+        settings.Advanced.CollectionExclusions = NormalizeList(settings.Advanced.CollectionExclusions, lineSeparators, Environment.NewLine, StringComparer.OrdinalIgnoreCase);
+        settings.TagOverrides = NormalizeList(settings.TagOverrides, lineSeparators, Environment.NewLine, StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>Applies default values to string properties on an object hierarchy where [DefaultValue] attributes exist.</summary>

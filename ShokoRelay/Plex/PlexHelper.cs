@@ -1,5 +1,3 @@
-using Shoko.Abstractions.Metadata.Containers;
-
 namespace ShokoRelay.Plex;
 
 /// <summary>Miscellaneous utility routines used by Plex-facing code.</summary>
@@ -201,38 +199,10 @@ public static partial class PlexHelper
     /// <param name="suffix">Optional image type suffix (e.g. -logo, -backdrop, -square).</param>
     /// <param name="metadataService">Metadata service used for root and override resolution.</param>
     /// <returns>Path to poster or null.</returns>
-    public static string? FindCollectionImagePathByGroup(IShokoSeries series, int groupId, string suffix, IMetadataService metadataService)
-    {
-        if (series == null || groupId <= 0)
-            return null;
-        var group = series.TopLevelGroup;
-        string? groupTitle = NormalizeCollectionKey(group?.PreferredTitle?.Value ?? group?.DefaultTitle?.Value);
-        var roots = ResolveImportRoots(series, metadataService);
-        if (roots.Count == 0)
-            return null;
-
-        string postersFolderName = VfsShared.ResolveCollectionImagesFolderName();
-        foreach (var root in roots)
-        {
-            string postersPath = Path.Combine(root, postersFolderName);
-            if (!Directory.Exists(postersPath))
-                continue;
-            foreach (var file in Directory.EnumerateFiles(postersPath))
-            {
-                string extension = Path.GetExtension(file);
-                if (string.IsNullOrWhiteSpace(extension) || !PlexConstants.LocalMediaAssets.Artwork.ContainsKey(extension))
-                    continue;
-                string baseName = Path.GetFileNameWithoutExtension(file);
-                if (string.IsNullOrWhiteSpace(baseName))
-                    continue;
-                if (IsIdMatch(baseName, groupId, suffix))
-                    return file;
-                if (!string.IsNullOrWhiteSpace(groupTitle) && IsNameMatch(baseName, groupTitle, suffix))
-                    return file;
-            }
-        }
-        return null;
-    }
+    public static string? FindCollectionImagePathByGroup(IShokoSeries series, int groupId, string suffix, IMetadataService metadataService) =>
+        series == null || groupId <= 0
+            ? null
+            : FindCollectionImagePath(series, series.TopLevelGroup?.PreferredTitle?.Value ?? series.TopLevelGroup?.DefaultTitle?.Value ?? string.Empty, groupId, [suffix], metadataService);
 
     /// <summary>Build a filesystem path for a collection image (poster, logo, or backdrop).</summary>
     /// <param name="series">The Shoko series metadata.</param>
@@ -268,9 +238,9 @@ public static partial class PlexHelper
                 : suffix is "-art" or "-backdrop" or "-background" or "-fanart" ? ImageEntityType.Backdrop
                 : ImageEntityType.Primary;
 
-            var image = ImageHelper.FilterImagesByLanguage((primarySeries as IWithImages)?.GetAvailableImages(imageType) ?? [], Settings.TmdbImageLanguage, false).FirstOrDefault()
+            var image = ImageHelper.FilterImagesByLanguage(primarySeries.GetAvailableImages(imageType), Settings.TmdbImageLanguage, false).FirstOrDefault()
                 ?? ImageHelper
-                    .FilterImagesByLanguage((primarySeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() as IWithImages)?.GetAvailableImages(imageType) ?? [], Settings.TmdbImageLanguage, false)
+                    .FilterImagesByLanguage(primarySeries.GetLinkedMovies(MetadataSource.TMDB).FirstOrDefault()?.GetAvailableImages(imageType) ?? [], Settings.TmdbImageLanguage, false)
                     .FirstOrDefault();
 
             if (image != null && !string.IsNullOrWhiteSpace(image.LocalPath))

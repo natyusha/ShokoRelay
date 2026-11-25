@@ -288,10 +288,10 @@ public static class CastHelper
 
             // Pre-populate global studio thumbs from this series' TMDB studios so both crew and company listings can reference them
             foreach (var studio in (seriesItem.Studios ?? []).Concat(tmdbSeries?.Studios ?? []))
-                if (studio.ID.Source == MetadataSource.TMDB && studio is IWithImages withImages && !string.IsNullOrWhiteSpace(studio.Name))
+                if (studio.ID.Source == MetadataSource.TMDB && !string.IsNullOrWhiteSpace(studio.Name))
                 {
                     string studioKey = NormalizeCreditKey(ResolvePreferredCreditName(studio.Name, false, 2));
-                    if (!s_globalStudioThumbs.ContainsKey(studioKey) && withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
+                    if (!s_globalStudioThumbs.ContainsKey(studioKey) && studio.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) is { } logoUrl)
                         s_globalStudioThumbs[studioKey] = logoUrl;
                 }
         }
@@ -312,7 +312,7 @@ public static class CastHelper
             var matchedTmdb = index != null ? new HashSet<T>() : null;
             var seenRolePairs = new HashSet<(string Key, string Role)>();
 
-            foreach (var role in anidbRoles)
+            void AddRole(T role, int priority)
             {
                 var creator = getCreator(role)!;
                 bool isPerson = creator.Type == CreatorType.Person;
@@ -320,25 +320,24 @@ public static class CastHelper
                 string? roleName = getRole(role);
 
                 if (string.IsNullOrWhiteSpace(rawTag) || IsCreditBlacklisted(rawTag))
-                    continue;
+                    return;
 
-                string tag = ResolvePreferredCreditName(rawTag, isPerson, 1);
+                string tag = ResolvePreferredCreditName(rawTag, isPerson, priority);
                 if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (roleName ?? string.Empty).Trim().ToUpperInvariant())))
-                    continue;
+                    return;
 
                 var thumbImage = creator.PrimaryImage;
-                if (index?.FindMatch(creator, creator.Title) is { } match)
+                if (priority == 1 && index?.FindMatch(creator, creator.Title) is { } match)
                 {
                     matchedTmdb!.Add(match);
-                    if (Settings.TmdbCastImages && getCreator(match)?.PrimaryImage != null)
-                        thumbImage = getCreator(match)!.PrimaryImage;
+                    if (Settings.TmdbCastImages && getCreator(match)?.PrimaryImage is { } tmdbImage)
+                        thumbImage = tmdbImage;
                 }
 
-                string? thumb = null;
-                if (Settings.TmdbCastImages && !isPerson && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo))
-                    thumb = cachedLogo;
-                else if (thumbImage != null)
-                    thumb = ImageHelper.GetImageUrl(thumbImage, forceRemote: true);
+                string? thumb =
+                    priority == 1 && Settings.TmdbCastImages && !isPerson && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo)
+                        ? cachedLogo
+                        : (thumbImage != null ? ImageHelper.GetImageUrl(thumbImage, forceRemote: true) : null);
 
                 finalRoles.Add(
                     new
@@ -351,36 +350,15 @@ public static class CastHelper
                 );
             }
 
+            foreach (var role in anidbRoles)
+                AddRole(role, 1);
+
             if (matchedTmdb == null)
                 return;
 
             foreach (var role in tmdbRoles)
-            {
-                if (matchedTmdb.Contains(role))
-                    continue;
-
-                var creator = getCreator(role)!;
-                bool isPerson = creator.Type == CreatorType.Person;
-                string? rawTag = creator.Title;
-                string? roleName = getRole(role);
-
-                if (string.IsNullOrWhiteSpace(rawTag) || IsCreditBlacklisted(rawTag))
-                    continue;
-
-                string tag = ResolvePreferredCreditName(rawTag, isPerson, 2);
-                if (IsCreditBlacklisted(tag) || !seenRolePairs.Add((NormalizeCreditKey(tag), (roleName ?? string.Empty).Trim().ToUpperInvariant())))
-                    continue;
-
-                finalRoles.Add(
-                    new
-                    {
-                        order = order++,
-                        tag,
-                        role = roleName,
-                        thumb = creator.PrimaryImage is { } image ? ImageHelper.GetImageUrl(image, forceRemote: true) : null,
-                    }
-                );
-            }
+                if (!matchedTmdb.Contains(role))
+                    AddRole(role, 2);
         }
 
         if (item.Cast != null)
@@ -417,12 +395,12 @@ public static class CastHelper
 
                 if (!studioGroups.TryGetValue(key, out var existing))
                 {
-                    string? thumb = studio is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null;
+                    string? thumb = studio.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
                     studioGroups[key] = (preferredName, isAnimation, thumb);
                 }
                 else
                 {
-                    string? thumb = existing.Thumb ?? (studio is IWithImages withImages ? withImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true) : null);
+                    string? thumb = existing.Thumb ?? studio.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, forceRemote: true);
                     studioGroups[key] = (preferredName, existing.IsAnimationStudio || isAnimation, thumb);
                 }
             }

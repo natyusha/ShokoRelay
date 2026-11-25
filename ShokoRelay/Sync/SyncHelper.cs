@@ -303,6 +303,61 @@ public static class SyncHelper
 
     #region Resolution & Fetching
 
+    /// <summary>Initialized execution context shared across Plex and Shoko watched-state sync runs.</summary>
+    /// <param name="Result">The initialized sync result with per-user buckets populated.</param>
+    /// <param name="DefaultUser">The fallback Shoko user.</param>
+    /// <param name="IncludeAdmin">Whether the Plex admin user is included.</param>
+    /// <param name="AdminShokoUser">Optional mapped Shoko username for the Plex admin.</param>
+    /// <param name="ExtraUsers">Active non-admin Plex users with optional PINs and mapped Shoko usernames.</param>
+    /// <param name="LogPrefix">Dry-run prefix applied to informational log messages.</param>
+    public sealed record SyncRunContext(
+        PlexWatchedSyncResult Result,
+        IUser DefaultUser,
+        bool IncludeAdmin,
+        string? AdminShokoUser,
+        List<(string Name, string? Pin, string? ShokoUser)> ExtraUsers,
+        string LogPrefix
+    );
+
+    /// <summary>Initializes shared prerequisites, active sync users, and per-user buckets for a watched-state synchronization run.</summary>
+    /// <param name="direction">The sync direction label (<c>Plex-&gt;Shoko</c> or <c>Plex&lt;-Shoko</c>).</param>
+    /// <param name="dryRun">Whether this run is a dry run.</param>
+    /// <param name="userType">Active sync user mode.</param>
+    /// <param name="plexClient">Plex client.</param>
+    /// <param name="userService">Shoko user service.</param>
+    /// <param name="configProvider">Configuration provider.</param>
+    /// <param name="plexAuth">Plex authentication service.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>A tuple containing the initialized <see cref="SyncRunContext"/> when ready (or <c>null</c> to exit early) and the base result.</returns>
+    public static async Task<(SyncRunContext? Context, PlexWatchedSyncResult EarlyResult)> InitializeSyncRunAsync(
+        string direction,
+        bool dryRun,
+        SyncUserType userType,
+        PlexClient plexClient,
+        IUserService userService,
+        ConfigProvider configProvider,
+        PlexAuth plexAuth,
+        CancellationToken cancellationToken
+    )
+    {
+        OverrideHelper.Reload();
+        var result = new PlexWatchedSyncResult { Direction = direction };
+        if (userType == SyncUserType.None)
+            return (null, result);
+
+        result = result with { DryRun = dryRun };
+        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault() is not { } defaultUser)
+            return (null, result);
+
+        string? adminUsername = await GetOrRefreshAdminUsernameAsync(configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
+        var (includeAdmin, adminShokoUser, extraUsers) = ResolveActiveSyncUsers(configProvider, userType, adminUsername);
+        if (!includeAdmin && extraUsers.Count == 0)
+            return (null, result);
+
+        result = result with { PerUser = CreatePerUserBuckets(extraUsers.Select(user => user.Name), includeAdmin) };
+        return (new SyncRunContext(result, defaultUser, includeAdmin, adminShokoUser, extraUsers, dryRun ? "[DRYRUN] " : ""), result);
+    }
+
     /// <summary>Retrieves the cached Plex admin username or refreshes it from Plex.tv when advanced user mappings require it.</summary>
     /// <param name="configProvider">Configuration provider.</param>
     /// <param name="plexAuth">Plex authentication service.</param>

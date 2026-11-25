@@ -303,10 +303,10 @@ public class AnimeThemesMp3Generator(
                 if (VfsHelper.IsSeasonSubfolder(Path.GetFileName(dir)) && Path.GetDirectoryName(dir) is { Length: > 0 } parentDir && candidateSet.Contains(parentDir))
                     return false;
 
-                bool hasDirectVideo = fileSystem
-                    .GetFilePaths(dir, cancellationToken: cancellationToken)
-                    .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, fileSystem: fileSystem));
-                return hasDirectVideo
+                bool IsEligibleVideo(string file) =>
+                    videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, fileSystem: fileSystem);
+
+                return fileSystem.GetFilePaths(dir, cancellationToken: cancellationToken).Any(IsEligibleVideo)
                     || fileSystem
                         .GetDirectoryPaths(dir, cancellationToken: cancellationToken)
                         .Where(subDir =>
@@ -314,7 +314,7 @@ public class AnimeThemesMp3Generator(
                             && !VfsShared.IsPathIgnored(subDir, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, isDirectory: true, fileSystem: fileSystem)
                         )
                         .SelectMany(subDir => fileSystem.GetFilePaths(subDir, cancellationToken: cancellationToken))
-                        .Any(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, ignoredNames, relativeTo: ignoreBaseRoot, fileSystem: fileSystem));
+                        .Any(IsEligibleVideo);
             })
             .ToList();
 
@@ -378,14 +378,7 @@ public class AnimeThemesMp3Generator(
         if (VfsHelper.IsInVfsRoot(folder, out string vfsRoot))
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
-        var videoListingOptions = new FileSystemListingOptions
-        {
-            Recursive = !query.Batch,
-            Filter = entry => !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, relativeTo: folder, isDirectory: entry.IsDirectory, fileSystem: fileSystem),
-        };
-        string? videoPath = fileSystem
-            .GetFilePaths(folder, videoListingOptions, cancellationToken)
-            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
+        string? videoPath = FindFirstVideoInFolder(folder, !query.Batch, cancellationToken);
 
         if (videoPath == null)
         {
@@ -661,14 +654,7 @@ public class AnimeThemesMp3Generator(
                     Interlocked.Increment(ref processed);
                     try
                     {
-                        var auditListingOptions = new FileSystemListingOptions
-                        {
-                            Recursive = true,
-                            Filter = entry => !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, relativeTo: folder, isDirectory: entry.IsDirectory, fileSystem: fileSystem),
-                        };
-                        string? videoPath = fileSystem
-                            .GetFilePaths(folder, auditListingOptions, token)
-                            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
+                        string? videoPath = FindFirstVideoInFolder(folder, recursive: true, token);
                         if (videoPath == null || !videoFileLookup.Value.TryGetValue(videoPath, out var series))
                             return;
 
@@ -722,6 +708,27 @@ public class AnimeThemesMp3Generator(
 
         logger.LogInformation("AnimeThemes MP3: Audit complete -> {Processed} non-default themes checked, {Upgrades} upgrades found, {Fixes} missing slugs fixed", processed, upgrades.Count, fixedCount);
         return new ThemeMp3AuditResult(processed, upgrades.Count, fixedCount, [.. upgrades], [.. overriddenOps], [.. overriddenEds], [.. errors]);
+    }
+
+    #endregion
+
+    #region Internal Helpers
+
+    /// <summary>Finds the first allowed, non-ignored video file inside the specified folder.</summary>
+    /// <param name="folder">The folder path to search.</param>
+    /// <param name="recursive">Whether to search subdirectories recursively.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The resolved physical video path, or <c>null</c> if none was found.</returns>
+    private string? FindFirstVideoInFolder(string folder, bool recursive, CancellationToken cancellationToken)
+    {
+        var listingOptions = new FileSystemListingOptions
+        {
+            Recursive = recursive,
+            Filter = entry => !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, relativeTo: folder, isDirectory: entry.IsDirectory, fileSystem: fileSystem),
+        };
+        return fileSystem
+            .GetFilePaths(folder, listingOptions, cancellationToken)
+            .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
     }
 
     #endregion

@@ -130,22 +130,25 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     /// <param name="group">The Shoko group.</param>
     /// <param name="primarySeries">The series providing the artwork.</param>
     /// <returns>A dictionary of Plex metadata properties.</returns>
-    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries) =>
+    public Dictionary<string, object?> MapCollection(IShokoGroup group, ISeries primarySeries)
+    {
+        string title = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}";
         // csharpier-ignore
-        new()
+        return new()
         {
-            ["ratingKey"] = group.GetPlexRatingKey(),
-            ["guid"] = group.GetPlexGuid(),
-            ["key"] = $"/collection/{group.LocalID}",
-            ["type"] = "collection",
-            ["subtype"] = "show",
-            ["title"] = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}",
-            ["thumb"] = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["art"] = (primarySeries as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
-            ["titleSort"] = !string.IsNullOrWhiteSpace(group.PreferredTitle?.Value) ? group.PreferredTitle.Value : $"Group {group.LocalID}",
-            ["summary"] = TextHelper.GetSanitizedDescription(primarySeries),
+            ["ratingKey"]             = group.GetPlexRatingKey(),
+            ["guid"]                  = group.GetPlexGuid(),
+            ["key"]                   = $"/collection/{group.LocalID}",
+            ["type"]                  = "collection",
+            ["subtype"]               = "show",
+            ["title"]                 = title,
+            ["thumb"]                 = primarySeries.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"]                   = primarySeries.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["titleSort"]             = title,
+            ["summary"]               = TextHelper.GetSanitizedDescription(primarySeries),
             //["Image"]               = Likely an image array will be used here
         };
+    }
 
     /// <summary>Returns the collection name for a series based on its top-level Shoko group.</summary>
     /// <remarks>Count how many distinct Primary IDs exist in this group. This ensures that VFS Overrides are respected if they merge the entirety of a Shoko Group into a single series in Plex.</remarks>
@@ -156,7 +159,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         series is IShokoSeries { TopLevelGroupID: > 0 } shokoSeries
         && metadataService.GetShokoGroupByID(shokoSeries.TopLevelGroupID) is { } group
         && group.Series.Select(groupSeries => OverrideHelper.GetPrimary(groupSeries.LocalID, metadataService)).Distinct().Count() > 1
-        && group is IWithTitles { PreferredTitle.Value: { } title }
+        && group.PreferredTitle?.Value is { } title
             ? title
         // Standalone Multi-Part Movie fallback: If no group collection exists, but it's a multi-part movie across separate entries, group the parts into a collection named after the series display title
         : series is IShokoSeries movieSeries
@@ -180,7 +183,6 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     public Dictionary<string, object?> MapSeries(SeriesContext context)
     {
         var series = context.Series;
-        var images = (IWithImages)series;
         var tmdbSeries = context.TmdbSeries;
         var tmdbMovie = context.TmdbMovie;
         var duration = series.Episodes is { Count: > 0 } episodes
@@ -201,8 +203,8 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["type"]                  = "show",
             ["title"]                 = context.Titles.DisplayTitle,
             ["originallyAvailableAt"] = series.AirDate?.ToDateOnly().ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? tmdbMovie?.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            ["thumb"]                 = images.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["art"]                   = images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? (tmdbMovie as IWithImages)?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["thumb"]                 = series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["art"]                   = series.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["contentRating"]         = context.ContentRating,
             ["originalTitle"]         = context.Titles.OriginalTitle,
             ["titleSort"]             = context.Titles.SortTitle,
@@ -214,7 +216,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["studio"]                = studios.FirstOrDefault()?.Tag,
             ["theme"]                 = Settings.PlexThemeMusic && tmdbSeries?.GetCrossSourceID("tvdb", MetadataEntityType.Series) is { } tvdb ? $"https://tvthemes.plexapp.com/{tvdb}.mp3" : null,
 
-            ["Image"]                 = ImageHelper.GenerateImageArray(images, context.Titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
+            ["Image"]                 = ImageHelper.GenerateImageArray(series, context.Titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries ?? (IWithTags?)tmdbMovie, metadataService),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
@@ -244,9 +246,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
     public Dictionary<string, object?> MapMovie(IEpisode episode, SeriesContext context, IMovie? episodeTmdbMovie = null)
     {
         var series = context.Series;
-        var seriesImages = (IWithImages)series;
         var tmdbMovie = episodeTmdbMovie ?? context.TmdbMovie;
-        var movieImages = tmdbMovie as IWithImages;
         var tmdbSeries = context.TmdbSeries;
 
         var mappedFile = context.FileData.Mappings.FirstOrDefault(fileMapping => fileMapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID));
@@ -276,8 +276,8 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             episodeTmdbMovie != null && episodeTmdbMovie.ID != context.TmdbMovie?.ID ? ContentRatingHelper.GetContentRatingAndAdult(series, episodeTmdbMovie) : (context.ContentRating, context.IsAdult);
         var studios = CastHelper.GetStudioTags(series, metadataService);
 
-        var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
-        string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
+        var imagesArray = ImageHelper.GenerateMovieImageArray(series, tmdbMovie, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
+        string? artUrl = series.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
         double? movieTmdbRating =
             tmdbMovie?.Rating > 0 ? tmdbMovie.Rating
             : (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } linkedTmdbEpisode ? linkedTmdbEpisode.Rating
@@ -413,9 +413,6 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var resolvedTmdbEpisode = tmdbEpisode ?? tmdbEpisodes?.FirstOrDefault() ?? episode.AsTmdb();
         var tmdbMovie = (episode as IShokoEpisode)?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? actualSeries.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault();
 
-        var images = (IWithImages)episode;
-        var seriesImages = (IWithImages)series;
-
         bool isMovieOverride = episode.Type == EpisodeType.Episode && (tmdbMovie != null || actualSeries.Type == AnimeType.Movie);
 
         string episodeTitle = isMovieOverride
@@ -441,7 +438,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 : null;
 
         string? thumb = Settings.TmdbThumbnails
-            ? (images.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage))
+            ? (episode.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage))
             : null;
 
         var (rating, isAdult) =
@@ -482,8 +479,8 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["parentGuid"]            = series.GetPlexGuid(mapped.Season),
             ["parentType"]            = "season",
             ["parentTitle"]           = GetSeasonFolder(mapped.Season),
-            ["parentThumb"]           = parentThumb ?? seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["parentArt"]             = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["parentThumb"]           = parentThumb ?? series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["parentArt"]             = series.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["index"]                 = mapped.Episode,
 
             ["grandparentRatingKey"]  = series.GetPlexRatingKey(),
@@ -491,11 +488,11 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["grandparentGuid"]       = series.GetPlexGuid(),
             ["grandparentType"]       = "show",
             ["grandparentTitle"]      = context.Titles.DisplayTitle,
-            ["grandparentThumb"]      = seriesImages.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
-            ["grandparentArt"]        = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
+            ["grandparentThumb"]      = series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
+            ["grandparentArt"]        = series.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["parentIndex"]           = mapped.Season,
 
-            ["Image"]                 = Settings.TmdbThumbnails ? ImageHelper.BuildSnapshotArray(images, episodeTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage) : [],
+            ["Image"]                 = Settings.TmdbThumbnails ? ImageHelper.BuildSnapshotArray(episode, episodeTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage) : [],
             ["Guid"]                  = BuildEpisodeXrefGuidArray(resolvedTmdbEpisode, tmdbMovie, tmdbEpisodes),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
             //["Role"]                = CastHelper.GetCastAndCrew(episode, metadataService), // Large array not used by Plex clients and present in grandparent
@@ -521,6 +518,12 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         string? preferredOrderingId = context.PreferredOrderingId;
         bool enforceTmdb = EnforceTmdbNumbering;
 
+        void AddIfUnique(PlexCoords coords, int? part, Dictionary<string, object?> metadata)
+        {
+            if (metadata.TryGetValue("ratingKey", out var ratingKeyObj) && ratingKeyObj is string ratingKey && seenKeys.Add(ratingKey))
+                items.Add((coords, part, metadata));
+        }
+
         foreach (var mapping in context.FileData.GetForSeason(seasonNumber))
         {
             // TMDB Episode Groups: One Shoko episode maps to multiple TMDB entries (bypassed when custom VFS overrides dictate coordinates).
@@ -541,9 +544,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                         continue;
                     var tmdbCoords = new PlexCoords { Season = season ?? 0, Episode = episode };
                     int? effectivePart = mapping.PartIndex ?? (episodeIndex + 1); // Assign a virtual part index based on the TMDB segment order to ensure unique ratingKeys (e.g. e123p1, e123p2)
-                    var metadata = MapEpisode(shokoEpisode, tmdbCoords, context, effectivePart, tmdbEpisode);
-                    if (metadata is Dictionary<string, object?> metadataDict && metadataDict.TryGetValue("ratingKey", out var ratingKeyObj) && ratingKeyObj is string ratingKey && seenKeys.Add(ratingKey))
-                        items.Add((tmdbCoords, effectivePart, metadata));
+                    AddIfUnique(tmdbCoords, effectivePart, MapEpisode(shokoEpisode, tmdbCoords, context, effectivePart, tmdbEpisode));
                 }
                 continue;
             }
@@ -557,17 +558,13 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                     episodeCoords.Season = mapping.Coords.Season;
                     if (episodeCoords.Season != seasonNumber)
                         continue;
-                    var metadata = MapEpisode(episode, episodeCoords, context, mapping.PartIndex);
-                    if (metadata is Dictionary<string, object?> metadataDict && metadataDict.TryGetValue("ratingKey", out var ratingKeyObj) && ratingKeyObj is string ratingKey && seenKeys.Add(ratingKey))
-                        items.Add((episodeCoords, mapping.PartIndex, metadata));
+                    AddIfUnique(episodeCoords, mapping.PartIndex, MapEpisode(episode, episodeCoords, context, mapping.PartIndex));
                 }
                 continue;
             }
 
             // Standard or Relation-linked files: Use the PrimaryEpisode resolved by MapHelper, which filters out unwanted relations.
-            var primaryMetadata = MapEpisode(mapping.PrimaryEpisode, mapping.Coords, context, mapping.PartIndex, mapping.TmdbEpisode);
-            if (primaryMetadata is Dictionary<string, object?> primaryDict && primaryDict.TryGetValue("ratingKey", out var primaryRatingKey) && primaryRatingKey is string primaryKey && seenKeys.Add(primaryKey))
-                items.Add((mapping.Coords, mapping.PartIndex, primaryMetadata));
+            AddIfUnique(mapping.Coords, mapping.PartIndex, MapEpisode(mapping.PrimaryEpisode, mapping.Coords, context, mapping.PartIndex, mapping.TmdbEpisode));
         }
         return [.. items.OrderBy(item => item.Coords.Episode).ThenBy(item => item.Part ?? 0).Select(item => item.Meta)];
     }

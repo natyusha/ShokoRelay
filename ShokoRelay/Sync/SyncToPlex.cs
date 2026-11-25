@@ -42,30 +42,18 @@ public class SyncToPlex(
         CancellationToken cancellationToken = default
     )
     {
-        OverrideHelper.Reload();
-        var result = new PlexWatchedSyncResult { Direction = "Plex<-Shoko" };
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
+        var (syncContext, earlyResult) = await SyncHelper.InitializeSyncRunAsync("Plex<-Shoko", dryRun, userType, plexClient, userService, configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
+        if (syncContext == null)
+            return earlyResult;
 
-        if (userType == SyncUserType.None)
-            return result;
-
-        var logPrefix = (result = result with { DryRun = dryRun }).DryRun ? "[DRYRUN] " : "";
-        bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
-
-        if (!plexClient.IsEnabled || userService.GetUsers().OrderBy(user => user.LocalID).FirstOrDefault() is not { } defaultUser)
-            return result;
         var targets = plexClient.GetConfiguredTargets();
         if (targets.Count == 0)
-            return result;
+            return syncContext.Result;
 
-        string? adminUsername = await SyncHelper.GetOrRefreshAdminUsernameAsync(configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
-
-        var (includeAdmin, adminShokoUser, extraUsers) = SyncHelper.ResolveActiveSyncUsers(configProvider, userType, adminUsername);
-        if (!includeAdmin && extraUsers.Count == 0)
-            return result;
-
-        result = result with { PerUser = SyncHelper.CreatePerUserBuckets(extraUsers.Select(user => user.Name), includeAdmin) };
+        var (result, defaultUser, includeAdmin, adminShokoUser, extraUsers, logPrefix) = syncContext;
+        bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
 
         var shokoWatchedByUser = new Dictionary<int, List<(IEpisodeUserData UserData, IShokoEpisode Episode)>>();
         var shokoUserLookup = new Dictionary<string, IUser?>(StringComparer.OrdinalIgnoreCase);
