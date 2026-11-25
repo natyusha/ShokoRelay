@@ -160,7 +160,7 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
             }
 
             if (modified)
-                await File.WriteAllLinesAsync(fullTxtPath, lines).ConfigureAwait(false);
+                await VfsShared.WriteLinesAtomicAsync(fullTxtPath, lines).ConfigureAwait(false);
 
             foreach (var dir in dirsToScan)
                 try
@@ -199,11 +199,7 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
 
                     if (entry.IsSymbolicLink)
                     {
-                        if (entry.IsDirectory)
-                            fileSystem.DeleteDirectory(entry.Path, false);
-                        else
-                            fileSystem.DeleteFile(entry.Path);
-
+                        VfsShared.DeleteSymbolicLink(fileSystem, entry.Path);
                         details.Add(entry.Path);
                         logger.LogDebug("SourceLinkService: Purged link -> {Entry}", entry.Path);
                         deleted++;

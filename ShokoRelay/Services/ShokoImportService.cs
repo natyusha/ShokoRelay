@@ -72,7 +72,14 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                     return false;
                 if (!managedFolderStatus.TryGetValue(folder.ID, out bool online))
                 {
-                    online = folder.AvailableFreeSpace != -1 && fileSystem.DirectoryExists(folder.Path);
+                    try
+                    {
+                        online = folder.AvailableFreeSpace != -1 && fileSystem.DirectoryExists(folder.Path) && !fileSystem.IsDirectoryEmpty(folder.Path);
+                    }
+                    catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
+                    {
+                        online = false;
+                    }
                     if (!online)
                         logger.LogWarning("ShokoImportService: Managed folder '{FolderName}' [{FolderId}] is offline/unmounted -> Skipping missing file checks for its contents.", folder.Name, folder.ID);
                     managedFolderStatus[folder.ID] = online;

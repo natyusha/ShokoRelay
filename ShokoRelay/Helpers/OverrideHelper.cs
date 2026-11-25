@@ -260,6 +260,31 @@ public static class OverrideHelper
         return [shokoSeriesId];
     }
 
+    /// <summary>Returns Shoko series IDs currently cached in any manual or auto-merged group containing the specified AniDB anime ID.</summary>
+    /// <param name="anidbAnimeId">The AniDB anime ID to inspect prior to reloading.</param>
+    /// <param name="metadataService">Service used to resolve AniDB anime IDs to Shoko series IDs.</param>
+    /// <returns>A list of Shoko series IDs currently associated with the AniDB anime ID.</returns>
+    public static List<int> GetCachedGroupIds(int anidbAnimeId, IMetadataService metadataService)
+    {
+        EnsureLoaded();
+        if (anidbAnimeId <= 0)
+            return [];
+
+        var results = new HashSet<int>();
+        if (s_groups.TryGetValue(anidbAnimeId, out var manualGroup))
+            foreach (int memberAnidbId in manualGroup)
+                if (metadataService.GetShokoSeriesByAnidbID(memberAnidbId) is { } memberSeries)
+                    results.Add(memberSeries.LocalID);
+
+        foreach (var tmdbGroup in s_tmdbGroups.Values)
+            if (tmdbGroup.Contains(anidbAnimeId))
+                foreach (int memberAnidbId in tmdbGroup)
+                    if (metadataService.GetShokoSeriesByAnidbID(memberAnidbId) is { } memberSeries)
+                        results.Add(memberSeries.LocalID);
+
+        return [.. results];
+    }
+
     /// <summary>Retrieves manual VFS coordinates for a specific episode, if defined in the overrides file.</summary>
     /// <param name="anidbAnimeId">The AniDB Anime ID the episode belongs to.</param>
     /// <param name="type">The source episode type to match against.</param>

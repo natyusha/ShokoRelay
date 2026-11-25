@@ -3,6 +3,7 @@ using System.Collections.Frozen;
 using System.Text;
 using System.Text.RegularExpressions;
 using Shoko.Abstractions.Metadata.Anidb;
+using Shoko.Abstractions.Metadata.Containers;
 
 namespace ShokoRelay.Helpers;
 
@@ -134,10 +135,10 @@ public static partial class TagHelper
 
     /// <summary>Return an array of tag objects derived from a series, applying filters, global deduplication, and configured sources.</summary>
     /// <param name="series">The Shoko series metadata.</param>
-    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
+    /// <param name="tmdbTagsSource">Optional pre-resolved TMDB series or movie metadata object.</param>
     /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
     /// <returns>An array of tag metadata objects.</returns>
-    public static object[] GetFilteredTags(ISeries series, ISeries? tmdbSeries = null, IMetadataService? metadataService = null)
+    public static object[] GetFilteredTags(ISeries series, IWithTags? tmdbTagsSource = null, IMetadataService? metadataService = null)
     {
         var key = new TagCacheKey(Settings.TagOverrides ?? string.Empty, Settings.TagSources, Settings.MinimumTagWeight);
         if (key.Sources == TagSources.None)
@@ -150,7 +151,7 @@ public static partial class TagHelper
 
         return
         [
-            .. ExtractNormalizedTags(CollectRawTags(series, tmdbSeries, key.Sources, key.MinWeight), state)
+            .. ExtractNormalizedTags(CollectRawTags(series, tmdbTagsSource, key.Sources, key.MinWeight), state)
                 .Select(tag => state.DisplayNames.GetOrAdd(tag.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(tag.CleanName), tag.Priority, shouldRecord))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(displayName => (object)new { tag = displayName }),
@@ -169,8 +170,9 @@ public static partial class TagHelper
                     foreach (var tag in anidbTags)
                         record("AniDB", 0, tag.Name);
 
-                if (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() is { } tmdb)
-                    foreach (var tag in tmdb.Tags)
+                var tmdbTags = (series.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() as IWithTags ?? series.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault())?.Tags;
+                if (tmdbTags != null)
+                    foreach (var tag in tmdbTags)
                         if (tag.Kind is TagKind.Genre || (tag.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(tag.Name)))
                             record("TMDB", 1, tag.Name);
 
@@ -333,11 +335,11 @@ public static partial class TagHelper
 
     /// <summary>Collects raw tag names and source priorities for a series according to the configured tag sources and minimum weight.</summary>
     /// <param name="series">The series metadata.</param>
-    /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata object.</param>
+    /// <param name="tmdbTagsSource">Optional pre-resolved TMDB series or movie metadata object.</param>
     /// <param name="sources">Configured tag source flags.</param>
     /// <param name="minWeight">Minimum AniDB tag weight threshold.</param>
     /// <returns>An enumerable of raw tag names paired with source priorities.</returns>
-    private static IEnumerable<(string Name, int Priority)> CollectRawTags(ISeries series, ISeries? tmdbSeries, TagSources sources, MinimumTagWeight minWeight)
+    private static IEnumerable<(string Name, int Priority)> CollectRawTags(ISeries series, IWithTags? tmdbTagsSource, TagSources sources, MinimumTagWeight minWeight)
     {
         if (sources == TagSources.None)
             return [];
@@ -348,7 +350,11 @@ public static partial class TagHelper
         if (sources.HasFlag(TagSources.AniDB) && shokoSeries?.AnidbAnime?.Tags is IReadOnlyList<IAnidbTagForAnime> anidbTags)
             result = result.Concat(anidbTags.Where(tag => !string.IsNullOrWhiteSpace(tag.Name) && ((int)minWeight <= 0 || tag.Weight >= (int)minWeight)).Select(tag => (tag.Name, Priority: 1)));
 
-        if (sources.HasFlag(TagSources.TMDB) && (tmdbSeries ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault() ?? (series.ID.Source == MetadataSource.TMDB ? series : null)) is { } tmdb)
+        var tmdb = tmdbTagsSource
+            ?? shokoSeries?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()
+            ?? (IWithTags?)shokoSeries?.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault()
+            ?? (series.ID.Source == MetadataSource.TMDB ? series : null);
+        if (sources.HasFlag(TagSources.TMDB) && tmdb != null)
             result = result.Concat(
                 tmdb.Tags.Where(tag => !string.IsNullOrWhiteSpace(tag.Name) && (tag.Kind is TagKind.Genre || (tag.Kind is TagKind.Keyword && !NonEnglishTagRegex().IsMatch(tag.Name))))
                     .Select(tag => (tag.Name, Priority: 2))

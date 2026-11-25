@@ -216,7 +216,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
             ["Image"]                 = ImageHelper.GenerateImageArray(images, context.Titles.DisplayTitle, Settings.AddEveryImage, Settings.TmdbImageLanguage),
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries, metadataService),
+            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries ?? (IWithTags?)tmdbMovie, metadataService),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
             ["Country"]               = BuildCountryArray(series, tmdbSeries, tmdbMovie),
             ["Role"]                  = CastHelper.GetCastAndCrew(series, metadataService, tmdbSeries),
@@ -304,7 +304,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
             ["Image"]                 = imagesArray,
             //["OriginalImage"]       = Should be able to implement this but might make more sense to leave it to Shoko
-            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbSeries, metadataService),
+            ["Genre"]                 = TagHelper.GetFilteredTags(series, tmdbMovie ?? (IWithTags?)tmdbSeries, metadataService),
             ["Guid"]                  = BuildXrefGuidArray(series, tmdbSeries, tmdbMovie),
             ["Country"]               = BuildCountryArray(series, tmdbSeries, tmdbMovie),
             ["Role"]                  = CastHelper.GetCastAndCrew(series, metadataService, tmdbSeries),

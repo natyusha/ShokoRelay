@@ -325,6 +325,8 @@ internal static class VfsShared
                         else
                             fileSystem.DeleteFile(destination);
                     }
+                    else if (existingStat is DirectoryStat)
+                        fileSystem.DeleteDirectory(destination, recursive: true);
                     else if (existingStat is not null)
                         fileSystem.DeleteFile(destination);
                 }
@@ -371,6 +373,17 @@ internal static class VfsShared
             logger.LogDebug(exception, "VFS: Symlink creation failed -> {Link}", destination);
             return false;
         }
+    }
+
+    /// <summary>Deletes a symbolic link without following its target, handling Windows directory symlinks safely.</summary>
+    /// <param name="fileSystem">Shoko file system service.</param>
+    /// <param name="path">The symbolic link path to delete.</param>
+    public static void DeleteSymbolicLink(IFileSystem fileSystem, string path)
+    {
+        if (fileSystem.GetStat(path, followSymbolicLinks: false) is SymbolicLinkStat { IsDirectoryLink: true })
+            fileSystem.DeleteDirectory(path, recursive: false);
+        else
+            fileSystem.DeleteFile(path);
     }
 
     #endregion
@@ -541,14 +554,35 @@ internal static class VfsShared
 
     #region File Writes & Cache
 
+    /// <summary>Runs a fire-and-forget task without flowing the caller's <see cref="ExecutionContext"/> (preventing stale <c>HttpContext</c> or actor leaks).</summary>
+    /// <param name="action">The asynchronous work to execute.</param>
+    public static void RunDetached(Func<Task> action)
+    {
+        using var suppressed = ExecutionContext.SuppressFlow();
+        _ = Task.Run(action);
+    }
+
     /// <summary>Atomically writes a file via a temporary path move using the supplied writer callback.</summary>
     /// <param name="path">The target file path.</param>
     /// <param name="writeTemp">Callback that writes the contents to the temporary file path.</param>
     public static void WriteAtomic(string path, Action<string> writeTemp)
     {
-        string tempPath = path + ".tmp";
-        writeTemp(tempPath);
-        File.Move(tempPath, path, overwrite: true);
+        string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            writeTemp(tempPath);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+            catch { }
+            throw;
+        }
     }
 
     /// <summary>Asynchronously and atomically writes a file via a temporary path move using the supplied writer callback.</summary>
@@ -558,9 +592,22 @@ internal static class VfsShared
     /// <returns>A task representing the asynchronous write operation.</returns>
     public static async Task WriteAtomicAsync(string path, Func<string, CancellationToken, Task> writeTemp, CancellationToken cancellationToken = default)
     {
-        string tempPath = path + ".tmp";
-        await writeTemp(tempPath, cancellationToken).ConfigureAwait(false);
-        File.Move(tempPath, path, overwrite: true);
+        string tempPath = $"{path}.{Guid.NewGuid():N}.tmp";
+        try
+        {
+            await writeTemp(tempPath, cancellationToken).ConfigureAwait(false);
+            File.Move(tempPath, path, overwrite: true);
+        }
+        catch
+        {
+            try
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
+            catch { }
+            throw;
+        }
     }
 
     /// <summary>Atomically writes text content to a target file via a temporary file move.</summary>

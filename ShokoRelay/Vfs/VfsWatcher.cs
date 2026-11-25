@@ -241,7 +241,13 @@ public class VfsWatcher(
         var affectedSeries = new List<IShokoSeries>();
         foreach (var change in @event.Changes)
         {
-            if (change.Source != MetadataSource.TMDB || metadataService.GetShokoSeriesByAnidbID(change.AnidbAnimeID) is not { } series)
+            if (change.Source != MetadataSource.TMDB)
+                continue;
+
+            foreach (int cachedId in OverrideHelper.GetCachedGroupIds(change.AnidbAnimeID, metadataService))
+                affectedIds.Add(cachedId);
+
+            if (metadataService.GetShokoSeriesByAnidbID(change.AnidbAnimeID) is not { } series)
                 continue;
 
             affectedIds.Add(series.GetPrimaryId(metadataService));
@@ -250,7 +256,7 @@ public class VfsWatcher(
             affectedSeries.Add(series);
         }
 
-        if (affectedSeries.Count == 0)
+        if (affectedSeries.Count == 0 && affectedIds.Count == 0)
             return;
 
         OverrideHelper.Reload();
@@ -328,7 +334,7 @@ public class VfsWatcher(
                 return;
             _processing = true;
             var stopToken = stopCts.Token;
-            _ = Task.Run(() => ProcessQueueAsync(stopToken));
+            VfsShared.RunDetached(() => ProcessQueueAsync(stopToken));
         }
     }
 
@@ -502,7 +508,7 @@ public class VfsWatcher(
             return cts;
         });
 
-        _ = Task.Run(async () =>
+        VfsShared.RunDetached(async () =>
         {
             try
             {

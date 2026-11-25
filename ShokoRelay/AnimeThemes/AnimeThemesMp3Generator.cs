@@ -378,16 +378,14 @@ public class AnimeThemesMp3Generator(
         if (VfsHelper.IsInVfsRoot(folder, out string vfsRoot))
             return new(folder, "error", $"Cannot generate Theme.mp3 inside the VFS directory '{vfsRoot}'. Target your physical managed folder instead.");
 
-        var videoListingOptions = new FileSystemListingOptions { Recursive = !query.Batch };
+        var videoListingOptions = new FileSystemListingOptions
+        {
+            Recursive = !query.Batch,
+            Filter = entry => !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, relativeTo: folder, isDirectory: entry.IsDirectory, fileSystem: fileSystem),
+        };
         string? videoPath = fileSystem
             .GetFilePaths(folder, videoListingOptions, cancellationToken)
             .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
-        if (videoPath == null && query.Batch)
-            videoPath = fileSystem
-                .GetDirectoryPaths(folder, cancellationToken: cancellationToken)
-                .Where(subDir => VfsHelper.IsSeasonSubfolder(Path.GetFileName(subDir)) && !VfsShared.IsPathIgnored(subDir, videoService, Settings, isDirectory: true, fileSystem: fileSystem))
-                .SelectMany(subDir => fileSystem.GetFilePaths(subDir, cancellationToken: cancellationToken))
-                .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
 
         if (videoPath == null)
         {
@@ -554,8 +552,7 @@ public class AnimeThemesMp3Generator(
 
             // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
             if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled && !Settings.Advanced.DisableVfsGeneration)
-            {
-                _ = Task.Run(async () =>
+                VfsShared.RunDetached(async () =>
                 {
                     try
                     {
@@ -571,7 +568,6 @@ public class AnimeThemesMp3Generator(
                         logger.LogWarning(exception, "AnimeThemes MP3: Failed to trigger Plex refresh for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
                     }
                 });
-            }
 
             if (!query.Batch)
                 AddToThemeMp3Cache(folder, AnimeThemesHelper.StandardizeSlug(slugRaw));

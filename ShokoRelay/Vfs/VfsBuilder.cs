@@ -527,11 +527,14 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         try
         {
             var cleanStopwatch = Stopwatch.StartNew();
-            Parallel.ForEach(fileSystem.GetDirectoryPaths(path), DefaultParallelOptions(), dir =>
+            Parallel.ForEach(fileSystem.GetDirectoryEntries(path), DefaultParallelOptions(), entry =>
             {
                 try
                 {
-                    fileSystem.DeleteDirectory(dir, true);
+                    if (entry.IsSymbolicLink)
+                        VfsShared.DeleteSymbolicLink(fileSystem, entry.Path);
+                    else
+                        fileSystem.DeleteDirectory(entry.Path, true);
                 }
                 catch { }
             });

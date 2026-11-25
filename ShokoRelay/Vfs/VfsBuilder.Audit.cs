@@ -107,7 +107,7 @@ public partial class VfsBuilder
                         {
                             if (entry.IsSymbolicLink && entry.Stat == null)
                             {
-                                fileSystem.DeleteFile(entry.Path);
+                                VfsShared.DeleteSymbolicLink(fileSystem, entry.Path);
                                 Interlocked.Increment(ref brokenLinks);
                                 removed.Add($"[Broken Link] {entry.Path}");
                             }

@@ -40,15 +40,11 @@ public static class ActionScheduleHelper
             // If the interval divides evenly into 24 hours (excluding 1 hour), generate specific daily clock-aligned triggers mapped to the user's timezone via the UTC offset
             if (freqHours > 1 && freqHours <= 24 && 24 % freqHours == 0)
             {
-                var todayUtc = DateTime.UtcNow.Date;
+                double localOffsetMinutes = DateTimeOffset.Now.Offset.TotalMinutes;
                 for (int hourOffset = 0; hourOffset < 24; hourOffset += freqHours)
                 {
-                    // Calculate the UTC hour and map it to the local server time
-                    int utcHour = (offset + hourOffset + 24) % 24;
-                    var utcTime = DateTime.SpecifyKind(todayUtc.AddHours(utcHour), DateTimeKind.Utc);
-                    var localTime = TimeZoneInfo.ConvertTimeFromUtc(utcTime, TimeZoneInfo.Local);
-
-                    triggers.Add(ActionTrigger.DailyAt(new TimeOnly(localTime.Hour, localTime.Minute)));
+                    int totalMinutes = (((int)Math.Round(((offset + hourOffset) * 60.0) + localOffsetMinutes) % 1440) + 1440) % 1440;
+                    triggers.Add(ActionTrigger.DailyAt(new TimeOnly(totalMinutes / 60, totalMinutes % 60)));
                 }
             }
             else

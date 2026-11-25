@@ -256,8 +256,18 @@ public partial class ConfigProvider : IDisposable
     {
         var settings = GetSettings();
         var httpContext = _httpContextAccessor?.HttpContext;
-        if (httpContext == null || httpContext.Request.Method != HttpMethods.Get)
+        if (httpContext == null)
             return settings;
+
+        try
+        {
+            if (httpContext.Request.Method != HttpMethods.Get)
+                return settings;
+        }
+        catch (ObjectDisposedException)
+        {
+            return settings;
+        }
 
         if (httpContext.Items.TryGetValue("EffectiveRelayConfig", out var cached) && cached is RelayConfig cachedConfig)
             return cachedConfig;
