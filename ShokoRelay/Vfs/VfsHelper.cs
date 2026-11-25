@@ -331,11 +331,19 @@ public static partial class VfsHelper
                 if (!expectedFiles.Contains(file))
                     try
                     {
-                        // Allow AnimeThemesMapping to manage its own files
-                        if (fileSystem.ReadSymbolicLink(file) is { } linkTarget && linkTarget.Contains(themeRootName, StringComparison.OrdinalIgnoreCase))
-                            continue;
+                        if (fileSystem.GetStat(file, followSymbolicLinks: false) is SymbolicLinkStat symlinkStat)
+                        {
+                            // Allow AnimeThemesMapping to manage its own files
+                            if (symlinkStat.Target?.Contains(themeRootName, StringComparison.OrdinalIgnoreCase) == true)
+                                continue;
 
-                        fileSystem.DeleteFile(file);
+                            if (symlinkStat.IsDirectoryLink == true)
+                                fileSystem.DeleteDirectory(file, recursive: false);
+                            else
+                                fileSystem.DeleteFile(file);
+                        }
+                        else
+                            fileSystem.DeleteFile(file);
                     }
                     catch { }
 

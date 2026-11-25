@@ -166,6 +166,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     {
         var processedInRun = new ConcurrentDictionary<int, byte>();
         var fileDataCache = new ConcurrentDictionary<int, MapHelper.SeriesFileData?>();
+        var dirArtCache = new ConcurrentDictionary<string, Lazy<string[]>>(VfsShared.PathComparer);
+        var artworkListingOptions = new FileSystemListingOptions { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
         var orderedTargets = targets.OrderBy(target => target.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
         bool sectionScanFailed = false;
 
@@ -268,7 +270,6 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                     }
 
                     // Find a local episode thumbnail alongside the physical video files
-                    var artworkListingOptions = new FileSystemListingOptions { Extensions = PlexConstants.LocalMediaAssets.Artwork.Keys };
                     var localThumb = (episode.Videos ?? [])
                         .SelectMany(video => video.Files ?? [])
                         .Select(file => file.Path)
@@ -276,9 +277,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         .Select(path => (Dir: Path.GetDirectoryName(path), Base: Path.GetFileNameWithoutExtension(path)))
                         .Where(entry => !string.IsNullOrEmpty(entry.Dir))
                         .SelectMany(entry =>
-                            fileSystem
-                                .GetFilePaths(entry.Dir!, artworkListingOptions, itemToken)
-                                .Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase))
+                            dirArtCache
+                                .GetOrAdd(entry.Dir!, dir => new Lazy<string[]>(() => fileSystem.GetFilePaths(dir, artworkListingOptions, cancellationToken)))
+                                .Value.Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase))
                         )
                         .FirstOrDefault();
 

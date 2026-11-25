@@ -15,7 +15,7 @@ public class VfsIgnoreRule(IVideoService videoService, ConfigProvider configProv
 
     /// <inheritdoc/>
     public bool ShouldIgnore(IManagedFolder folder, FileSystemEntry entry) =>
-        VfsShared.IsPathIgnored(entry.Path, videoService, configProvider.GetSettings(), relativeTo: folder?.Path, isDirectory: entry.IsDirectory, fileSystem: fileSystem);
+        VfsShared.IsPathIgnored(entry.Path, videoService, configProvider.GetSettings(), relativeTo: folder?.Path, fileSystem: fileSystem, isDirectoryResolver: () => entry.IsDirectory);
 
     #endregion
 }

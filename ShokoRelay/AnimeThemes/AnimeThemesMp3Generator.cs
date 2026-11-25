@@ -661,8 +661,13 @@ public class AnimeThemesMp3Generator(
                     Interlocked.Increment(ref processed);
                     try
                     {
+                        var auditListingOptions = new FileSystemListingOptions
+                        {
+                            Recursive = true,
+                            Filter = entry => !VfsShared.IsPathIgnored(entry.Path, videoService, Settings, relativeTo: folder, isDirectory: entry.IsDirectory, fileSystem: fileSystem),
+                        };
                         string? videoPath = fileSystem
-                            .GetFilePaths(folder, new FileSystemListingOptions { Recursive = true }, token)
+                            .GetFilePaths(folder, auditListingOptions, token)
                             .FirstOrDefault(file => videoService.IsAllowedVideoExtension(file) && !VfsShared.IsPathIgnored(file, videoService, Settings, fileSystem: fileSystem));
                         if (videoPath == null || !videoFileLookup.Value.TryGetValue(videoPath, out var series))
                             return;

@@ -422,6 +422,7 @@ internal static class VfsShared
     /// <param name="relativeTo">Optional managed folder root used to isolate relative path segments.</param>
     /// <param name="isDirectory">Whether the path represents a directory rather than a file.</param>
     /// <param name="fileSystem">Optional Shoko file system service for long-path-safe sibling checks.</param>
+    /// <param name="isDirectoryResolver">Optional lazy resolver evaluated only when inline extra matching needs to distinguish files from directories.</param>
     /// <returns>True if any segment of the path or the filename matches an ignore rule.</returns>
     public static bool IsPathIgnored(
         string path,
@@ -430,7 +431,8 @@ internal static class VfsShared
         HashSet<string>? ignoredNames = null,
         string? relativeTo = null,
         bool isDirectory = false,
-        IFileSystem? fileSystem = null
+        IFileSystem? fileSystem = null,
+        Func<bool>? isDirectoryResolver = null
     )
     {
         if (string.IsNullOrEmpty(path))
@@ -523,13 +525,13 @@ internal static class VfsShared
                     return true;
         }
 
-        if (plexLocalExtras && !isDirectory)
+        if (plexLocalExtras)
         {
             var fileSpan = path.AsSpan(lastSeparatorIndex >= 0 ? lastSeparatorIndex + 1 : 0);
             int lastDot = fileSpan.LastIndexOf('.');
             var nameWithoutExt = lastDot >= 0 ? fileSpan[..lastDot] : fileSpan;
 
-            if (nameWithoutExt.Length > 0 && VfsHelper.IsLocalExtraFile(nameWithoutExt, out int suffixIndex))
+            if (nameWithoutExt.Length > 0 && VfsHelper.IsLocalExtraFile(nameWithoutExt, out int suffixIndex) && !(isDirectoryResolver?.Invoke() ?? isDirectory))
             {
                 string? dir = Path.GetDirectoryName(originalPath);
                 if (string.IsNullOrEmpty(dir))

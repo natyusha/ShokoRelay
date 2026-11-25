@@ -278,7 +278,11 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
 
         var imagesArray = ImageHelper.GenerateMovieImageArray(seriesImages, movieImages, episode.EpisodeNumber, title, Settings.AddEveryImage, Settings.TmdbImageLanguage, out string? thumbUrl);
         string? artUrl = seriesImages.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? movieImages?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage);
-        double? movieTmdbRating = tmdbMovie?.Rating ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault()?.Rating ?? tmdbSeries?.Rating;
+        double? movieTmdbRating =
+            tmdbMovie?.Rating > 0 ? tmdbMovie.Rating
+            : (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault() is { Rating: > 0 } linkedTmdbEpisode ? linkedTmdbEpisode.Rating
+            : tmdbSeries?.Rating > 0 ? tmdbSeries.Rating
+            : null;
         double? movieAnidbRating = episode.Rating > 0 ? episode.Rating : series.Rating;
         // csharpier-ignore
         return new()

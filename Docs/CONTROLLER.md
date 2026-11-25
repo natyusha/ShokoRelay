@@ -154,7 +154,7 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
   - Any setting under `#region Provider Config` in `RelayConfig.cs` can be overridden per-request. Semicolons are used as delimiters.
   - Settings primarily utilized by background automations or Quick Actions (e.g., `CollectionImages`, `CriticRatingMode`) fall outside the scope of Plex's active metadata requests.
   - These settings will fallback to the globally configured dashboard values.
-- TMDB episode-numbering is honoured when enabled (uses `IShokoEpisode.TmdbEpisodes`).
+- TMDB episode-numbering is honoured when enabled (uses `IShokoEpisode.GetLinkedEpisodes(MetadataSource.TMDB)`).
 - Hidden episodes are excluded from all metadata results.
 - Supported `RatingKey` formats:
   - `123` (Shoko Series ID) / `a890` (AniDB Series ID)
