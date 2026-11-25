@@ -211,6 +211,11 @@
   async function showNowPlaying(folderPath) {
     try {
       const response = await fetch(`${base}/animethemes/mp3/stream?path=${encodeURIComponent(folderPath)}`, { method: "HEAD" });
+      /**
+       * Reads and URI-decodes an ID3 metadata response header.
+       * @param {string} headerKey - The HTTP response header name.
+       * @returns {string} The decoded header value, or an empty string if absent.
+       */
       const getHeader = (headerKey) => {
         const value = response.headers.get(headerKey);
         if (!value) return "";

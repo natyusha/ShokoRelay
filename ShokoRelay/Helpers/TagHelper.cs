@@ -152,7 +152,7 @@ public static partial class TagHelper
         return
         [
             .. ExtractNormalizedTags(CollectRawTags(series, tmdbTagsSource, key.Sources, key.MinWeight), state)
-                .Select(tag => state.DisplayNames.GetOrAdd(tag.NormKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(tag.CleanName), tag.Priority, shouldRecord))
+                .Select(tag => state.DisplayNames.GetOrAdd(tag.NormalizedKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(TitleCase(tag.CleanName), tag.Priority, shouldRecord))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Select(displayName => (object)new { tag = displayName }),
         ];
@@ -218,10 +218,10 @@ public static partial class TagHelper
     private sealed class WarmThreadState
     {
         /// <summary>Memoized cleanup and merge resolution results per raw tag name.</summary>
-        public readonly Dictionary<string, (string NormKey, string TitleCased, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, (string NormalizedKey, string TitleCased, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
 
         /// <summary>Observed series counts per tag variant tuple.</summary>
-        public readonly Dictionary<(string NormKey, int Priority, string TitleCased), int> Counts = [];
+        public readonly Dictionary<(string NormalizedKey, int Priority, string TitleCased), int> Counts = [];
 
         /// <summary>Best-priority tag variant encountered within the current series.</summary>
         public readonly Dictionary<string, (int Priority, string TitleCased)> BestInSeries = new(StringComparer.OrdinalIgnoreCase);
@@ -257,8 +257,8 @@ public static partial class TagHelper
                     activeMerges[normalizedKey] = defaultEntry.Value;
             }
 
-            foreach (var (normSource, target) in userMerges)
-                activeMerges[normSource] = target;
+            foreach (var (normalizedSource, target) in userMerges)
+                activeMerges[normalizedSource] = target;
 
             // Start with default blacklist, dropping any tag mentioned on a user merge line so user merges can unblock default blacklisted tags
             var activeBlacklist = new HashSet<string>(s_defaultTagBlacklist.Where(tagKey => !userMergeMentioned.Contains(tagKey)), StringComparer.OrdinalIgnoreCase);
@@ -305,26 +305,26 @@ public static partial class TagHelper
                                 continue;
                             }
 
-                            string origNorm = NormalizeTagKey(clean);
-                            bool isMerged = state.Merges.TryGetValue(origNorm, out var target);
+                            string originalNormalizedKey = NormalizeTagKey(clean);
+                            bool isMerged = state.Merges.TryGetValue(originalNormalizedKey, out var target);
                             string effectiveName = isMerged ? target! : clean;
-                            string normKey = isMerged ? NormalizeTagKey(effectiveName) : origNorm;
-                            bool skip = normKey.Length == 0 || state.Blacklist.Contains(normKey) || state.Blacklist.Contains(origNorm);
+                            string normalizedKey = isMerged ? NormalizeTagKey(effectiveName) : originalNormalizedKey;
+                            bool skip = normalizedKey.Length == 0 || state.Blacklist.Contains(normalizedKey) || state.Blacklist.Contains(originalNormalizedKey);
 
-                            resolved = local.ResolveCache[rawName] = (normKey, skip ? string.Empty : TitleCase(effectiveName), skip);
+                            resolved = local.ResolveCache[rawName] = (normalizedKey, skip ? string.Empty : TitleCase(effectiveName), skip);
                         }
 
-                        if (!resolved.Skip && !local.BestInSeries.ContainsKey(resolved.NormKey))
-                            local.BestInSeries[resolved.NormKey] = (priority, resolved.TitleCased);
+                        if (!resolved.Skip && !local.BestInSeries.ContainsKey(resolved.NormalizedKey))
+                            local.BestInSeries[resolved.NormalizedKey] = (priority, resolved.TitleCased);
                     }
 
-                    foreach (var (normKey, (priority, titleCased)) in local.BestInSeries)
-                        local.Counts[(normKey, priority, titleCased)] = local.Counts.GetValueOrDefault((normKey, priority, titleCased), 0) + 1;
+                    foreach (var (normalizedKey, (priority, titleCased)) in local.BestInSeries)
+                        local.Counts[(normalizedKey, priority, titleCased)] = local.Counts.GetValueOrDefault((normalizedKey, priority, titleCased), 0) + 1;
                 },
                 local =>
                 {
-                    foreach (var ((normKey, priority, titleCased), count) in local.Counts)
-                        state.DisplayNames.GetOrAdd(normKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(titleCased, priority, record: true, count);
+                    foreach (var ((normalizedKey, priority, titleCased), count) in local.Counts)
+                        state.DisplayNames.GetOrAdd(normalizedKey, _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(titleCased, priority, record: true, count);
                 },
                 cancellationToken
             );
@@ -392,7 +392,7 @@ public static partial class TagHelper
     /// <param name="tags">The raw collection of tag names paired with source priority.</param>
     /// <param name="state">The active tag cache state containing blacklists and merge mappings.</param>
     /// <returns>An enumerable of cleaned, merged, and deduplicated tag entries.</returns>
-    private static IEnumerable<(string CleanName, string NormKey, int Priority)> ExtractNormalizedTags(IEnumerable<(string Name, int Priority)> tags, TagCacheState state) =>
+    private static IEnumerable<(string CleanName, string NormalizedKey, int Priority)> ExtractNormalizedTags(IEnumerable<(string Name, int Priority)> tags, TagCacheState state) =>
         tags
         // Strip moderator notes / AniDB comments first
         .Select(tag => (CleanName: TagCleanupRegex().Replace(tag.Name, "").Trim(), tag.Priority))
@@ -400,17 +400,17 @@ public static partial class TagHelper
             // Resolve merge rules using normalized keys
             .Select(tag =>
             {
-                var normKey = NormalizeTagKey(tag.CleanName);
-                var isMerged = state.Merges.TryGetValue(normKey, out var target);
+                var normalizedKey = NormalizeTagKey(tag.CleanName);
+                var isMerged = state.Merges.TryGetValue(normalizedKey, out var target);
                 var effectiveName = isMerged ? target! : tag.CleanName;
-                var effectiveKey = isMerged ? NormalizeTagKey(effectiveName) : normKey;
-                return (CleanName: effectiveName, SourceKey: normKey, NormKey: effectiveKey, tag.Priority);
+                var effectiveKey = isMerged ? NormalizeTagKey(effectiveName) : normalizedKey;
+                return (CleanName: effectiveName, SourceKey: normalizedKey, NormalizedKey: effectiveKey, tag.Priority);
             })
             // Blacklist filtering (checks both source and merged keys)
-            .Where(tag => tag.NormKey.Length > 0 && !state.Blacklist.Contains(tag.NormKey) && !state.Blacklist.Contains(tag.SourceKey))
+            .Where(tag => tag.NormalizedKey.Length > 0 && !state.Blacklist.Contains(tag.NormalizedKey) && !state.Blacklist.Contains(tag.SourceKey))
             // Deduplicate within this series (AniDB tags will beat TMDB because anidbNames precedes tmdbNames)
-            .DistinctBy(tag => tag.NormKey)
-            .Select(tag => (tag.CleanName, tag.NormKey, tag.Priority));
+            .DistinctBy(tag => tag.NormalizedKey)
+            .Select(tag => (tag.CleanName, tag.NormalizedKey, tag.Priority));
 
     /// <summary>Applies special case preferences for whole words and hyphenated suffixes.</summary>
     /// <param name="word">The word token to format.</param>

@@ -55,7 +55,6 @@ public static class ContentRatingHelper
         // Build AniDB weight dictionary and populate tagSet for precision-based decisions (defaults to 0 when not present).
         var anidbTags = (series as IShokoSeries)?.AnidbAnime?.Tags ?? (series as IAnidbAnime)?.Tags;
         if (anidbTags != null)
-        {
             foreach (var animeTag in anidbTags)
             {
                 var name = animeTag?.Name?.Trim();
@@ -65,7 +64,6 @@ public static class ContentRatingHelper
                 tagSet.Add(lower);
                 anidbWeights[lower] = animeTag!.Weight;
             }
-        }
 
         // 18 restricted -> X (adult) immediately
         if (tagSet.Contains("18 restricted"))
@@ -109,19 +107,16 @@ public static class ContentRatingHelper
 
             // Uses the AniDB "target audience" tags to select a baseline rating when no weighted content indicators apply: https://anidb.net/tag/2606/animetb
             // Check higher (more restrictive) ratings first and return immediately when matched.
-            if (string.IsNullOrEmpty(contentRating))
-            {
-                contentRating = tagSet switch
+            contentRating = string.IsNullOrEmpty(contentRating)
+                ? tagSet switch
                 {
                     _ when tagSet.Contains("josei") || tagSet.Contains("seinen") => "TV-14" + descriptor,
                     _ when tagSet.Contains("shoujo") || tagSet.Contains("shounen") => "TV-PG" + descriptor,
                     _ when tagSet.Contains("mina") => "TV-G" + descriptor,
                     _ when tagSet.Contains("kodomo") => "TV-Y" + descriptor,
                     _ => null,
-                };
-            }
-            else if (contentRating != "X")
-                contentRating += descriptor;
+                }
+                : (contentRating != "X" ? contentRating + descriptor : contentRating);
 
             if (!string.IsNullOrEmpty(contentRating))
                 return (contentRating, false);

@@ -268,7 +268,10 @@ public partial class ConfigProvider : IDisposable
             try
             {
                 if (httpContext.Request.Method != HttpMethods.Get)
+                {
+                    httpContext.Items["EffectiveRelayConfig"] = settings;
                     return settings;
+                }
             }
             catch (ObjectDisposedException)
             {

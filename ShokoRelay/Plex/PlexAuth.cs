@@ -340,17 +340,25 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                 return users;
             }
 
-            var doc = new XmlDocument { XmlResolver = null };
-            doc.LoadXml(content);
-            var nodes = doc.SelectNodes("//SharedServer");
+            var xmlDocument = new XmlDocument { XmlResolver = null };
+            xmlDocument.LoadXml(content);
+            var nodes = xmlDocument.SelectNodes("//SharedServer");
             if (nodes == null)
                 return users;
 
             foreach (XmlNode node in nodes)
             {
-                if (node.Attributes is not { } attrs)
+                if (node.Attributes is not { } attributes)
                     continue;
-                users.Add(new PlexSharedServerUser(attrs["id"]?.Value, attrs["userID"]?.Value, attrs["username"]?.Value ?? attrs["name"]?.Value, attrs["email"]?.Value, attrs["accessToken"]?.Value));
+                users.Add(
+                    new PlexSharedServerUser(
+                        attributes["id"]?.Value,
+                        attributes["userID"]?.Value,
+                        attributes["username"]?.Value ?? attributes["name"]?.Value,
+                        attributes["email"]?.Value,
+                        attributes["accessToken"]?.Value
+                    )
+                );
             }
         }
         catch (Exception exception)
@@ -385,16 +393,16 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
             if (string.IsNullOrWhiteSpace(content))
                 return friends;
 
-            var doc = new XmlDocument { XmlResolver = null };
-            doc.LoadXml(content);
-            if (doc.SelectNodes("//User") is not { } nodes)
+            var xmlDocument = new XmlDocument { XmlResolver = null };
+            xmlDocument.LoadXml(content);
+            if (xmlDocument.SelectNodes("//User") is not { } nodes)
                 return friends;
 
             foreach (XmlNode node in nodes)
             {
-                if (node.Attributes is not { } attrs)
+                if (node.Attributes is not { } attributes)
                     continue;
-                friends.Add(new PlexFriendUser(attrs["id"]?.Value, attrs["title"]?.Value, attrs["username"]?.Value, attrs["email"]?.Value));
+                friends.Add(new PlexFriendUser(attributes["id"]?.Value, attributes["title"]?.Value, attributes["username"]?.Value, attributes["email"]?.Value));
             }
         }
         catch (Exception exception)
@@ -441,9 +449,9 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
                     return GetJsonString(json.RootElement, "authToken") ?? GetJsonString(json.RootElement, "auth_token");
                 }
 
-                var doc = new XmlDocument { XmlResolver = null };
-                doc.LoadXml(content);
-                var node = doc.SelectSingleNode("//user") ?? doc.DocumentElement;
+                var xmlDocument = new XmlDocument { XmlResolver = null };
+                xmlDocument.LoadXml(content);
+                var node = xmlDocument.SelectSingleNode("//user") ?? xmlDocument.DocumentElement;
                 return node?.Attributes?["authToken"]?.Value ?? node?.Attributes?["authenticationToken"]?.Value;
             }
             catch (Exception exception)
@@ -465,10 +473,10 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         if (!response.IsSuccessStatusCode)
             return null;
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
-        using var doc = JsonDocument.Parse(content);
+        using var jsonDocument = JsonDocument.Parse(content);
         return new PlexAccountInfo(
-            doc.RootElement.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null,
-            doc.RootElement.TryGetProperty("username", out var userProp) ? userProp.GetString() : null
+            jsonDocument.RootElement.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : null,
+            jsonDocument.RootElement.TryGetProperty("username", out var userProp) ? userProp.GetString() : null
         );
     }
 

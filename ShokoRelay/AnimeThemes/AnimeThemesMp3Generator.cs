@@ -426,8 +426,8 @@ public class AnimeThemesMp3Generator(
         if (!query.Force && fileSystem.FileExists(themePath))
             return new(folder, "skipped", "Theme.mp3 already exists.");
 
-        string? temp = null;
-        string? tempMp3 = null;
+        string? tempAudioPath = null;
+        string? tempMp3Path = null;
         try
         {
             if (!query.Batch)
@@ -521,19 +521,19 @@ public class AnimeThemesMp3Generator(
             {
                 response.EnsureSuccessStatusCode();
                 string audioExtension = Uri.TryCreate(audioUrl, UriKind.Absolute, out var audioUri) ? Path.GetExtension(audioUri.AbsolutePath) : Path.GetExtension(audioUrl);
-                temp = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{audioExtension}");
+                tempAudioPath = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}{audioExtension}");
                 await using var streamIn = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                await using var streamOut = File.Create(temp);
+                await using var streamOut = File.Create(tempAudioPath);
                 await streamIn.CopyToAsync(streamOut, cancellationToken).ConfigureAwait(false);
             }
 
-            var duration = await ffmpegService.ProbeDurationAsync(temp, cancellationToken).ConfigureAwait(false);
+            var duration = await ffmpegService.ProbeDurationAsync(tempAudioPath, cancellationToken).ConfigureAwait(false);
             string title = duration.TotalSeconds < 100 && !string.IsNullOrEmpty(songTitle) ? songTitle + " (TV Size)" : songTitle;
 
             logger.LogDebug("AnimeThemes MP3: Converting audio for -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
-            tempMp3 = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}.mp3");
-            await ffmpegService.ConvertToMp3FileAsync(temp, tempMp3, title, slugDisplay, artist, animeTitle, cancellationToken).ConfigureAwait(false);
-            fileSystem.MoveFile(tempMp3, themePath, overwrite: true);
+            tempMp3Path = Path.Combine(Path.GetTempPath(), $"at-{Guid.NewGuid():N}.mp3");
+            await ffmpegService.ConvertToMp3FileAsync(tempAudioPath, tempMp3Path, title, slugDisplay, artist, animeTitle, cancellationToken).ConfigureAwait(false);
+            fileSystem.MoveFile(tempMp3Path, themePath, overwrite: true);
 
             // Create a relative symbolic link for the Theme.mp3 in the Shoko VFS directories
             int primaryId = series.GetPrimaryId(metadataService);
@@ -587,18 +587,18 @@ public class AnimeThemesMp3Generator(
         }
         finally
         {
-            if (!string.IsNullOrEmpty(temp) && File.Exists(temp))
+            if (!string.IsNullOrEmpty(tempAudioPath) && File.Exists(tempAudioPath))
                 try
                 {
-                    logger.LogTrace("AnimeThemes MP3: Cleaning up temporary file -> {TempFile}", temp);
-                    File.Delete(temp);
+                    logger.LogTrace("AnimeThemes MP3: Cleaning up temporary file -> {TempFile}", tempAudioPath);
+                    File.Delete(tempAudioPath);
                 }
                 catch { }
-            if (!string.IsNullOrEmpty(tempMp3) && File.Exists(tempMp3))
+            if (!string.IsNullOrEmpty(tempMp3Path) && File.Exists(tempMp3Path))
                 try
                 {
-                    logger.LogTrace("AnimeThemes MP3: Cleaning up temporary MP3 file -> {TempFile}", tempMp3);
-                    File.Delete(tempMp3);
+                    logger.LogTrace("AnimeThemes MP3: Cleaning up temporary MP3 file -> {TempFile}", tempMp3Path);
+                    File.Delete(tempMp3Path);
                 }
                 catch { }
         }

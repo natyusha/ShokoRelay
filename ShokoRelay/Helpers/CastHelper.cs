@@ -36,10 +36,10 @@ public static class CastHelper
     private static readonly FrozenDictionary<string, string> s_creditMerges;
 
     /// <summary>Global cache mapping normalized AniDB credit keys (separated by Person vs. Company) to their preferred display names.</summary>
-    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), CacheHelper.GlobalNameEntry> s_anidbCreditNames = new();
+    private static readonly ConcurrentDictionary<(bool IsPerson, string NormalizedKey), CacheHelper.GlobalNameEntry> s_anidbCreditNames = new();
 
     /// <summary>Global cache mapping normalized TMDB-only credit keys (separated by Person vs. Company) to their preferred display names.</summary>
-    private static readonly ConcurrentDictionary<(bool IsPerson, string NormKey), CacheHelper.GlobalNameEntry> s_tmdbCreditNames = new();
+    private static readonly ConcurrentDictionary<(bool IsPerson, string NormalizedKey), CacheHelper.GlobalNameEntry> s_tmdbCreditNames = new();
 
     /// <summary>Tracks Shoko series IDs already recorded into the global credit cache to prevent repeated-request count inflation.</summary>
     private static readonly ConcurrentDictionary<int, byte> s_recordedSeriesIds = new();
@@ -117,24 +117,24 @@ public static class CastHelper
                         if (!local.ResolveCache.TryGetValue(rawName, out var resolved))
                         {
                             string trimmed = rawName.Trim();
-                            string norm = NormalizeCreditKey(trimmed);
-                            bool skip = norm.Length == 0 || s_creditMerges.ContainsKey(norm) || IsCreditBlacklisted(trimmed);
-                            resolved = local.ResolveCache[rawName] = (trimmed, norm, skip);
+                            string normalizedKey = NormalizeCreditKey(trimmed);
+                            bool skip = normalizedKey.Length == 0 || s_creditMerges.ContainsKey(normalizedKey) || IsCreditBlacklisted(trimmed);
+                            resolved = local.ResolveCache[rawName] = (trimmed, normalizedKey, skip);
                         }
 
-                        if (resolved.Skip || !local.SeenInSeries.Add((isPerson, isAnidb, resolved.NormKey)))
+                        if (resolved.Skip || !local.SeenInSeries.Add((isPerson, isAnidb, resolved.NormalizedKey)))
                             return;
 
-                        var key = (isPerson, isAnidb, resolved.NormKey, resolved.Trimmed);
+                        var key = (isPerson, isAnidb, resolved.NormalizedKey, resolved.Trimmed);
                         local.Counts[key] = local.Counts.GetValueOrDefault(key, 0) + 1;
                     });
                 },
                 local =>
                 {
-                    foreach (var ((isPerson, isAnidb, normKey, trimmed), count) in local.Counts)
+                    foreach (var ((isPerson, isAnidb, normalizedKey, trimmed), count) in local.Counts)
                     {
                         var targetCache = isAnidb ? s_anidbCreditNames : s_tmdbCreditNames;
-                        targetCache.GetOrAdd((isPerson, normKey), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, isAnidb ? 1 : 2, record: true, count);
+                        targetCache.GetOrAdd((isPerson, normalizedKey), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, isAnidb ? 1 : 2, record: true, count);
                     }
                 },
                 cancellationToken
@@ -149,7 +149,7 @@ public static class CastHelper
     /// <param name="tmdbSeries">Optional pre-resolved TMDB series metadata.</param>
     private static void RecordSeriesCredits(ISeries series, ISeries? tmdbSeries)
     {
-        var seenInSeries = new HashSet<(bool IsPerson, string NormKey, int Priority)>();
+        var seenInSeries = new HashSet<(bool IsPerson, string NormalizedKey, int Priority)>();
 
         EnumerateSeriesCredits(series, tmdbSeries, (rawName, isPerson, isAnidb) =>
         {
@@ -157,15 +157,15 @@ public static class CastHelper
                 return;
 
             string trimmed = rawName.Trim();
-            string norm = NormalizeCreditKey(trimmed);
-            if (norm.Length == 0 || s_creditMerges.ContainsKey(norm))
+            string normalizedKey = NormalizeCreditKey(trimmed);
+            if (normalizedKey.Length == 0 || s_creditMerges.ContainsKey(normalizedKey))
                 return;
 
             int priority = isAnidb ? 1 : 2;
-            if (seenInSeries.Add((isPerson, norm, priority)))
+            if (seenInSeries.Add((isPerson, normalizedKey, priority)))
             {
                 var targetCache = isAnidb ? s_anidbCreditNames : s_tmdbCreditNames;
-                targetCache.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
+                targetCache.GetOrAdd((isPerson, normalizedKey), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, priority, record: true);
             }
         });
     }
@@ -249,12 +249,12 @@ public static class CastHelper
     private static string ResolvePreferredCreditName(string rawName, bool isPerson, int priority = 2)
     {
         string trimmed = rawName.Trim();
-        string norm = NormalizeCreditKey(trimmed);
-        return norm.Length == 0 ? trimmed
-            : s_creditMerges.TryGetValue(norm, out var mapped) ? mapped
+        string normalizedKey = NormalizeCreditKey(trimmed);
+        return normalizedKey.Length == 0 ? trimmed
+            : s_creditMerges.TryGetValue(normalizedKey, out var mapped) ? mapped
             : priority == 1 ? trimmed
-            : s_anidbCreditNames.TryGetValue((isPerson, norm), out var anidbEntry) ? anidbEntry.ResolveDisplayName(trimmed, 1, record: false)
-            : s_tmdbCreditNames.GetOrAdd((isPerson, norm), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
+            : s_anidbCreditNames.TryGetValue((isPerson, normalizedKey), out var anidbEntry) ? anidbEntry.ResolveDisplayName(trimmed, 1, record: false)
+            : s_tmdbCreditNames.GetOrAdd((isPerson, normalizedKey), _ => new CacheHelper.GlobalNameEntry()).ResolveDisplayName(trimmed, 2, record: false);
     }
 
     /// <summary>Normalizes a studio, company, or creator name for comparison by stripping trailing (JP) tags, diacritics, spaces, and punctuation.</summary>
@@ -482,13 +482,13 @@ public static class CastHelper
     private sealed class WarmThreadState
     {
         /// <summary>Memoized normalization results per raw credit name.</summary>
-        public readonly Dictionary<string, (string Trimmed, string NormKey, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
+        public readonly Dictionary<string, (string Trimmed, string NormalizedKey, bool Skip)> ResolveCache = new(StringComparer.Ordinal);
 
         /// <summary>Observed series counts per credit variant tuple.</summary>
-        public readonly Dictionary<(bool IsPerson, bool IsAnidb, string NormKey, string Trimmed), int> Counts = [];
+        public readonly Dictionary<(bool IsPerson, bool IsAnidb, string NormalizedKey, string Trimmed), int> Counts = [];
 
         /// <summary>Deduplication set ensuring each normalized credit is counted once per series.</summary>
-        public readonly HashSet<(bool IsPerson, bool IsAnidb, string NormKey)> SeenInSeries = [];
+        public readonly HashSet<(bool IsPerson, bool IsAnidb, string NormalizedKey)> SeenInSeries = [];
     }
 
     /// <summary>Flips a two-part name (Given Family to Family Given) with zero allocations using memory spans.</summary>
@@ -616,7 +616,6 @@ public static class CastHelper
 
                 // Index Alternative Titles / Aliases
                 if (creator?.Titles is { Count: > 0 } titles)
-                {
                     foreach (var title in titles)
                     {
                         if (string.IsNullOrWhiteSpace(title.Value))
@@ -630,7 +629,6 @@ public static class CastHelper
                         if (GetFlippedName(alias) is { } aliasFlipped)
                             _altNames.TryAdd(aliasFlipped, item);
                     }
-                }
             }
         }
 

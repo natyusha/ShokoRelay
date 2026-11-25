@@ -119,18 +119,18 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
                     foreach (var entry in fileSystem.GetFileSystemEntries(sourceDir))
                     {
                         string name = entry.Name;
-                        bool isDir = entry.IsDirectory;
-                        bool isAttachmentDir = isDir && name.StartsWith(sourceBase, comparison) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[sourceBase.Length..]);
-                        bool isSidecarFile = !isDir && name.StartsWith(sourceBase, comparison) && (name.Length == sourceBase.Length || !char.IsLetterOrDigit(name[sourceBase.Length]));
+                        bool isDirectory = entry.IsDirectory;
+                        bool isAttachmentDir = isDirectory && name.StartsWith(sourceBase, comparison) && PlexConstants.LocalMediaAssets.AttachmentFolderSuffixes.Contains(name[sourceBase.Length..]);
+                        bool isSidecarFile = !isDirectory && name.StartsWith(sourceBase, comparison) && (name.Length == sourceBase.Length || !char.IsLetterOrDigit(name[sourceBase.Length]));
 
                         // Logic: Filter for the primary video, any file starting with the base name (guarded against prefix collisions), or the designated attachments folder
                         if (!name.Equals(Path.GetFileName(fullSource), comparison) && !isSidecarFile && !isAttachmentDir)
                             continue;
 
-                        string suffix = isDir ? "_attach" : name[sourceBase.Length..];
+                        string suffix = isDirectory ? "_attach" : name[sourceBase.Length..];
                         string targetPath = Path.Combine(destinationDir, finalDestinationBase + suffix);
 
-                        if (isDir)
+                        if (isDirectory)
                         {
                             if (fileSystem.FileExists(targetPath))
                                 fileSystem.DeleteFile(targetPath);
@@ -167,14 +167,14 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
             if (modified)
                 await VfsShared.WriteLinesAtomicAsync(fullTxtPath, lines, fileSystem: fileSystem).ConfigureAwait(false);
 
-            foreach (var dir in dirsToScan)
+            foreach (var directory in dirsToScan)
                 try
                 {
-                    await videoService.NotifyVideoFileChangeDetected(dir).ConfigureAwait(false);
+                    await videoService.NotifyVideoFileChangeDetected(directory).ConfigureAwait(false);
                 }
                 catch (Exception exception)
                 {
-                    logger.LogWarning(exception, "SourceLinkService: Failed to notify directory change for {Dir}", dir);
+                    logger.LogWarning(exception, "SourceLinkService: Failed to notify directory change for {Directory}", directory);
                 }
         }
 

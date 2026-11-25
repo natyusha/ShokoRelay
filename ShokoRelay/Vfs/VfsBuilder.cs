@@ -170,7 +170,6 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
 
                 var rootsInvolved = rootFilesByRoot.Keys.Concat(seasonsByRoot.Keys).Distinct(VfsShared.PathComparer).ToList();
                 if (seriesCreated > 0 || rootsInvolved.Count > 0)
-                {
                     foreach (var root in rootsInvolved)
                     {
                         var rootFiles = rootFilesByRoot.GetValueOrDefault(root) ?? [];
@@ -194,7 +193,6 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                                 )
                             );
                     }
-                }
 
                 // Capture individual series details for the log report
                 bool isMovie = MapHelper.IsMovie(series);

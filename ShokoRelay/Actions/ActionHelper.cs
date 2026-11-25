@@ -11,6 +11,7 @@ public static class ActionScheduleHelper
     #region Schedule Sync
 
     /// <summary>Synchronizes the configured dashboard intervals with the native scheduled action service.</summary>
+    /// <remarks>Shoko Relay owns the trigger schedules for <see cref="ShokoImportAction"/>, <see cref="PlexWatchedSyncAction"/>, and <see cref="PlexAutomationAction"/>, overwriting manual WebUI trigger edits on startup or settings save.</remarks>
     /// <param name="settings">The current relay configuration.</param>
     /// <param name="scheduledActionService">The native scheduled action service.</param>
     public static void SyncTriggers(RelayConfig settings, IScheduledActionService scheduledActionService)
@@ -40,6 +41,7 @@ public static class ActionScheduleHelper
             // If the interval divides evenly into 24 hours (excluding 1 hour), generate specific daily clock-aligned triggers mapped to the user's timezone via the UTC offset
             if (freqHours > 1 && freqHours <= 24 && 24 % freqHours == 0)
             {
+                // Note: Uses the current local offset at sync time, so triggers can drift by 1 hour across DST transitions (fixed via a server restart or saving settings)
                 double localOffsetMinutes = DateTimeOffset.Now.Offset.TotalMinutes;
                 for (int hourOffset = 0; hourOffset < 24; hourOffset += freqHours)
                 {

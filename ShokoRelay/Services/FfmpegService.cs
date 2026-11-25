@@ -18,6 +18,9 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     /// <summary>Tracks whether FFmpeg paths have been successfully configured.</summary>
     private bool _ffmpegConfigured;
 
+    /// <summary>The last evaluated <see cref="AdvancedConfig.FFmpegPath"/> value used to detect runtime setting changes.</summary>
+    private string? _lastConfiguredFfmpegPath;
+
     /// <summary>The resolved path to the FFmpeg executable.</summary>
     private string _ffmpegPath = "ffmpeg";
 
@@ -91,24 +94,26 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
         {
             string ffmpegName = OperatingSystem.IsWindows() ? "ffmpeg.exe" : "ffmpeg";
             string ffprobeName = OperatingSystem.IsWindows() ? "ffprobe.exe" : "ffprobe";
+            string configured = Settings.Advanced.FFmpegPath ?? string.Empty;
+            bool pathSettingChanged = !string.Equals(_lastConfiguredFfmpegPath, configured, StringComparison.Ordinal);
 
             // Verify if the current paths are still valid physically on disk. If the paths are just the filenames (e.g., "ffmpeg"), assume they are on the system PATH and skip the File.Exists check.
             bool ffmpegValid = _ffmpegPath == ffmpegName || File.Exists(_ffmpegPath);
             bool ffprobeValid = _ffprobePath == ffprobeName || File.Exists(_ffprobePath);
 
-            if (_ffmpegConfigured && ffmpegValid && ffprobeValid)
+            if (_ffmpegConfigured && !pathSettingChanged && ffmpegValid && ffprobeValid)
                 return;
 
             _ffmpegConfigured = false;
-            logger.LogInformation("FfmpegService: Binaries moved or missing -> Re-scanning...");
+            _lastConfiguredFfmpegPath = configured;
+            logger.LogInformation("FfmpegService: Binaries moved, missing, or reconfigured -> Re-scanning...");
 
             // Reset paths to defaults before performing discovery
             _ffmpegPath = ffmpegName;
             _ffprobePath = ffprobeName;
 
-            var (ffmpegFound, ffprobeFound, locatedDir) = (false, false, (string?)null);
+            var (ffmpegFound, ffprobeFound, locatedDirectory) = (false, false, (string?)null);
             var candidates = new List<string>();
-            string configured = Settings.Advanced.FFmpegPath;
             if (!string.IsNullOrWhiteSpace(configured))
             {
                 try
@@ -120,10 +125,10 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
                     {
                         _ffmpegPath = full;
                         ffmpegFound = true;
-                        string? dir = Path.GetDirectoryName(full);
-                        if (!string.IsNullOrWhiteSpace(dir) && Directory.Exists(dir))
-                            candidates.Add(dir);
-                        locatedDir ??= dir;
+                        string? directory = Path.GetDirectoryName(full);
+                        if (!string.IsNullOrWhiteSpace(directory) && Directory.Exists(directory))
+                            candidates.Add(directory);
+                        locatedDirectory ??= directory;
                     }
                     else
                         logger.LogWarning("FfmpegService: Configured FFmpeg path does not exist -> {Path}", full);
@@ -135,25 +140,25 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
             }
 
             // Dynamically inspect Shoko Utilities folders to find binaries placed after server start
-            if (!string.IsNullOrWhiteSpace(_applicationPath) && Path.Combine(_applicationPath, "Utilities", "FFmpeg") is { } appUtilitiesDir && Directory.Exists(appUtilitiesDir))
-                candidates.Add(appUtilitiesDir);
-            if (!string.IsNullOrWhiteSpace(_dataPath) && Path.Combine(_dataPath, "Utilities", "FFmpeg") is { } dataUtilitiesDir && Directory.Exists(dataUtilitiesDir))
-                candidates.Add(dataUtilitiesDir);
+            if (!string.IsNullOrWhiteSpace(_applicationPath) && Path.Combine(_applicationPath, "Utilities", "FFmpeg") is { } appUtilitiesDirectory && Directory.Exists(appUtilitiesDirectory))
+                candidates.Add(appUtilitiesDirectory);
+            if (!string.IsNullOrWhiteSpace(_dataPath) && Path.Combine(_dataPath, "Utilities", "FFmpeg") is { } dataUtilitiesDirectory && Directory.Exists(dataUtilitiesDirectory))
+                candidates.Add(dataUtilitiesDirectory);
 
-            foreach (string dir in candidates)
+            foreach (string directory in candidates)
             {
                 if (!ffmpegFound)
-                    (ffmpegFound, locatedDir) = TryFindBinary(dir, ffmpegName, ref _ffmpegPath, locatedDir);
+                    (ffmpegFound, locatedDirectory) = TryFindBinary(directory, ffmpegName, ref _ffmpegPath, locatedDirectory);
                 if (!ffprobeFound)
-                    (ffprobeFound, locatedDir) = TryFindBinary(dir, ffprobeName, ref _ffprobePath, locatedDir);
+                    (ffprobeFound, locatedDirectory) = TryFindBinary(directory, ffprobeName, ref _ffprobePath, locatedDirectory);
                 if (ffmpegFound && ffprobeFound)
                     break;
             }
 
             if (ffmpegFound || ffprobeFound)
             {
-                _workingDirectory = DetermineWorkingDirectory(locatedDir ?? _dataPath);
-                logger.LogInformation("FfmpegService: FFmpeg binaries configured at {Location}", locatedDir ?? "multiple locations");
+                _workingDirectory = DetermineWorkingDirectory(locatedDirectory ?? _dataPath);
+                logger.LogInformation("FfmpegService: FFmpeg binaries configured at {Location}", locatedDirectory ?? "multiple locations");
             }
             else
             {
@@ -166,26 +171,26 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
     }
 
     /// <summary>Searches a specific directory for a binary and updates the provided path field if found.</summary>
-    /// <param name="dir">The directory to search.</param>
+    /// <param name="directory">The directory to search.</param>
     /// <param name="binaryName">The filename of the binary (e.g., ffmpeg.exe).</param>
     /// <param name="pathField">A reference to the string field storing the resolved path.</param>
-    /// <param name="currentLocatedDir">The directory where a previous binary in the suite was found, used as a hint.</param>
+    /// <param name="currentLocatedDirectory">The directory where a previous binary in the suite was found, used as a hint.</param>
     /// <returns>A tuple containing a boolean indicating success and the directory where the binary was located.</returns>
-    private static (bool Found, string? LocatedDir) TryFindBinary(string dir, string binaryName, ref string pathField, string? currentLocatedDir)
+    private static (bool Found, string? LocatedDirectory) TryFindBinary(string directory, string binaryName, ref string pathField, string? currentLocatedDirectory)
     {
-        string candidate = Path.Combine(dir, binaryName);
+        string candidate = Path.Combine(directory, binaryName);
         if (!File.Exists(candidate))
-            return (false, currentLocatedDir);
+            return (false, currentLocatedDirectory);
 
         pathField = candidate;
-        return (true, currentLocatedDir ?? dir);
+        return (true, currentLocatedDirectory ?? directory);
     }
 
     /// <summary>Resolves a valid working directory for process execution based on a preferred path hint.</summary>
     /// <param name="preferred">The preferred directory or file path to evaluate.</param>
     /// <returns>A confirmed absolute directory path.</returns>
     private string DetermineWorkingDirectory(string preferred) =>
-        File.Exists(preferred) && Path.GetDirectoryName(preferred) is string dir && Directory.Exists(dir) ? dir
+        File.Exists(preferred) && Path.GetDirectoryName(preferred) is string directory && Directory.Exists(directory) ? directory
         : Directory.Exists(preferred) ? preferred
         : (!string.IsNullOrWhiteSpace(_dataPath) && Directory.Exists(_dataPath) ? _dataPath : Environment.CurrentDirectory);
 

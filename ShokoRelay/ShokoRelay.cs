@@ -46,7 +46,7 @@ public class ServiceRegistration : IPluginServiceRegistration
             .ConfigurePrimaryHttpMessageHandler(() =>
                 new SocketsHttpHandler
                 {
-                    UseCookies = true,
+                    UseCookies = false,
                     AllowAutoRedirect = true,
                     AutomaticDecompression = DecompressionMethods.All,
                     PooledConnectionLifetime = TimeSpan.FromMinutes(2),

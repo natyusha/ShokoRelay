@@ -73,6 +73,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 {
                     try
                     {
+                        // Ensure unmounted mount points never risk purging valid database records
                         online = folder.AvailableFreeSpace != -1 && fileSystem.DirectoryExists(folder.Path) && !fileSystem.IsDirectoryEmpty(folder.Path);
                     }
                     catch (Exception exception) when (exception is UnauthorizedAccessException or IOException)
@@ -86,7 +87,7 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 return online;
             }
 
-            // A file is considered "missing" if its managed folder is online and it doesn't exist on disk OR if its path is blocked by Relay ignore rules.
+            // A file is considered "missing" if its managed folder is online and it doesn't exist on disk OR if its path is blocked by Relay ignore rules
             var toDelete = all.Where(videoFile =>
                     IsFolderOnline(videoFile.ManagedFolder)
                     && (!fileSystem.FileExists(videoFile.Path) || VfsShared.IsPathIgnored(videoFile.Path, videoService, Settings, ignoredNames, relativeTo: videoFile.ManagedFolder.Path, fileSystem: fileSystem))

@@ -295,10 +295,19 @@ public class DashboardController(
                 if (!string.IsNullOrEmpty(rawCss))
                 {
                     int braceIndex = rawCss.IndexOf('{');
-                    if (braceIndex < 0)
-                        wrappedCss = $":root {{\n{rawCss}\n}}";
-                    else if (TextHelper.FindLastTopLevelSemicolon(rawCss[..braceIndex]) is int lastSemicolon && lastSemicolon >= 0 && !rawCss[..lastSemicolon].TrimStart().StartsWith('@'))
-                        wrappedCss = $":root {{\n{rawCss[..(lastSemicolon + 1)].Trim()}\n}}\n{rawCss[(lastSemicolon + 1)..].TrimStart()}";
+                    string prefix = braceIndex < 0 ? rawCss : rawCss[..braceIndex];
+                    int lastSemicolon = TextHelper.FindLastTopLevelSemicolon(prefix);
+
+                    if (braceIndex < 0 || lastSemicolon >= 0)
+                    {
+                        int splitIndex = TextHelper.FindTopLevelAtRuleEnd(prefix);
+                        string atRules = splitIndex > 0 ? prefix[..splitIndex].TrimEnd() : string.Empty;
+                        string declarations = (braceIndex < 0 ? prefix[splitIndex..] : prefix[splitIndex..(lastSemicolon + 1)]).Trim();
+                        string remainder = braceIndex < 0 ? string.Empty : rawCss[(lastSemicolon + 1)..].TrimStart();
+
+                        if (!string.IsNullOrEmpty(declarations))
+                            wrappedCss = $"{(string.IsNullOrEmpty(atRules) ? string.Empty : atRules + "\n")}:root {{\n{declarations}\n}}{(string.IsNullOrEmpty(remainder) ? string.Empty : "\n" + remainder)}";
+                    }
                 }
                 cssContent = $"{valuesCss}{wrappedCss}";
             }

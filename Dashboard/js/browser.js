@@ -238,6 +238,11 @@
   function locateSeriesInTree(targetSeriesId, targetAnidbId) {
     if (!vfsTree || (!targetSeriesId && !targetAnidbId)) return;
 
+    /**
+     * Checks whether a series matches the requested target Shoko Series ID or AniDB ID.
+     * @param {Object} series - The blueprint series entry to test.
+     * @returns {boolean} True if the series matches either target identifier.
+     */
     const matchesTarget = (series) => (targetSeriesId && series.id === targetSeriesId) || (targetAnidbId && series.anidbId === targetAnidbId);
     const activeRoot = displayRoots.find((rootItem) => rootItem.name === activeTabName);
     if (!activeRoot || !activeRoot.series.some(matchesTarget)) {

@@ -182,6 +182,33 @@ public static partial class TextHelper
         return (blacklist, merges, mergeMentioned);
     }
 
+    /// <summary>Finds the end index of leading top-level CSS at-rules (such as <c>@import</c> or <c>@charset</c>) in a CSS prefix while ignoring comments and string literals.</summary>
+    /// <param name="cssPrefix">The CSS text preceding the first opening brace.</param>
+    /// <returns>The character index immediately following the last leading top-level at-rule semicolon, or <c>0</c> if none exist.</returns>
+    public static int FindTopLevelAtRuleEnd(string cssPrefix)
+    {
+        int atRuleEnd = 0;
+        int statementStart = 0;
+
+        foreach (Match match in CssTopLevelSemicolonRegex().Matches(cssPrefix))
+        {
+            if (!match.Groups["semi"].Success)
+                continue;
+
+            string statement = cssPrefix[statementStart..(match.Index + 1)].TrimStart();
+            while (statement.StartsWith("/*", StringComparison.Ordinal) && statement.IndexOf("*/", 2, StringComparison.Ordinal) is int commentEnd && commentEnd >= 0)
+                statement = statement[(commentEnd + 2)..].TrimStart();
+
+            if (!statement.StartsWith('@'))
+                break;
+
+            atRuleEnd = match.Index + 1;
+            statementStart = atRuleEnd;
+        }
+
+        return atRuleEnd;
+    }
+
     /// <summary>Finds the last semicolon in a CSS prefix while ignoring block comments and quoted string literals.</summary>
     /// <param name="cssPrefix">The CSS text preceding the first opening brace.</param>
     /// <returns>The zero-based index of the last top-level semicolon, or <c>-1</c> if none exists.</returns>
@@ -222,13 +249,14 @@ public static partial class TextHelper
 
             titles ??= [.. item.Titles.Where(title => title.Type != TitleType.Short)];
 
-            if (TextManager != null && language.TryGetTitleLanguage(out var targetLang))
+            if (TextManager != null && language.TryGetTitleLanguage(out var targetLanguage))
             {
                 if (
-                    targetLang != TitleLanguage.Main
-                    && titles.FirstOrDefault(title => title.IsEnabled && title.Preference == TextPreference.Language && title.Language == targetLang && !string.IsNullOrEmpty(title.Value)) is { } langPref
+                    targetLanguage != TitleLanguage.Main
+                    && titles.FirstOrDefault(title => title.IsEnabled && title.Preference == TextPreference.Language && title.Language == targetLanguage && !string.IsNullOrEmpty(title.Value))
+                        is { } languagePreference
                 )
-                    return langPref.Value;
+                    return languagePreference.Value;
 
                 baseSelection ??= TextManager.GetTitleSelection(
                     item switch
@@ -244,7 +272,7 @@ public static partial class TextHelper
                     .Select(group => new TitleSelectionStep
                     {
                         Source = group.Key,
-                        Language = targetLang,
+                        Language = targetLanguage,
                         AllowSynonyms = group.Any(step => step.AllowSynonyms),
                     })
                     .ToList();
@@ -254,7 +282,7 @@ public static partial class TextHelper
                         new TitleSelectionStep
                         {
                             Source = null,
-                            Language = targetLang,
+                            Language = targetLanguage,
                             AllowSynonyms = true,
                         }
                     );
@@ -309,20 +337,20 @@ public static partial class TextHelper
 
             overviews ??= item.Overviews;
 
-            if (TextManager != null && language.TryGetTitleLanguage(out var targetLang))
+            if (TextManager != null && language.TryGetTitleLanguage(out var targetLanguage))
             {
                 if (
-                    overviews.FirstOrDefault(overview => overview.IsEnabled && overview.Preference == TextPreference.Language && overview.Language == targetLang && !string.IsNullOrEmpty(overview.Value)) is
-                    { } langPref
+                    overviews.FirstOrDefault(overview => overview.IsEnabled && overview.Preference == TextPreference.Language && overview.Language == targetLanguage && !string.IsNullOrEmpty(overview.Value)) is
+                    { } languagePreference
                 )
-                    return langPref.Value;
+                    return languagePreference.Value;
 
                 baseSelection ??= TextManager.GetOverviewSelection();
 
-                var steps = baseSelection.Steps.Select(step => step.Source).Distinct().Select(source => new OverviewSelectionStep { Source = source, Language = targetLang }).ToList();
+                var steps = baseSelection.Steps.Select(step => step.Source).Distinct().Select(source => new OverviewSelectionStep { Source = source, Language = targetLanguage }).ToList();
 
                 if (steps.Count == 0)
-                    steps.Add(new OverviewSelectionStep { Source = null, Language = targetLang });
+                    steps.Add(new OverviewSelectionStep { Source = null, Language = targetLanguage });
 
                 var selection = new OverviewSelection { Steps = steps, UsePreferences = false };
 

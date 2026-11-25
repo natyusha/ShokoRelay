@@ -265,7 +265,6 @@ public class AnimeThemesController(
         var videoIdToRelativePath = new Dictionary<int, string>();
         List<AnimeThemesMappingEntry> entries = [];
         if (IoFile.Exists(mapPath))
-        {
             try
             {
                 entries = AnimeThemesHelper.ParseMappingContentWithComments(VfsShared.ReadAllTextShared(mapPath)).Entries;
@@ -276,12 +275,10 @@ public class AnimeThemesController(
             {
                 Logger.LogWarning(exception, "AnimeThemes Player: Failed to parse mapping CSV for webm tree");
             }
-        }
 
         // Load VFS WebM Cache (Existing Anime)
         string cachePath = Path.Combine(ConfigProvider.CacheDirectory, ShokoRelayConstants.FileAtWebmCache);
         if (IoFile.Exists(cachePath))
-        {
             try
             {
                 foreach (var line in VfsShared.ReadLinesShared(cachePath))
@@ -337,7 +334,6 @@ public class AnimeThemesController(
             {
                 Logger.LogWarning(exception, "AnimeThemes Player: Failed to parse webm cache");
             }
-        }
 
         // Process Mapping CSV (Missing Anime)
         if (entries.Count > 0)
@@ -468,7 +464,7 @@ public class AnimeThemesController(
 
     /// <summary>Resolves the Shoko Series ID from the path segments of a cached VFS WebM entry.</summary>
     /// <param name="segments">The normalized path segments of the VFS entry.</param>
-    /// <returns>The resolved Shoko Series ID, or <c>null</c> if it could not be determined.</returns>
+    /// <returns>The resolved primary Shoko Series ID, or <c>null</c> if it could not be determined.</returns>
     private int? ResolveWebmTreeSeriesId(string[] segments)
     {
         // Fast path: determine whether the ID preceding Shorts belongs to a Movie VFS (EpisodeID) or TV VFS (SeriesID)
@@ -476,7 +472,9 @@ public class AnimeThemesController(
         if (shortsIndex > 0 && int.TryParse(segments[shortsIndex - 1], out int directId))
         {
             bool isMovieVfs = shortsIndex > 1 && string.Equals(segments[shortsIndex - 2], VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase);
-            return isMovieVfs ? MetadataService.GetShokoEpisodeByID(directId)?.ShokoSeriesID : MetadataService.GetShokoSeriesByID(directId)?.LocalID;
+            return isMovieVfs
+                ? (MetadataService.GetShokoEpisodeByID(directId) is { ShokoSeriesID: var episodeSeriesId } ? OverrideHelper.GetPrimary(episodeSeriesId, MetadataService) : null)
+                : MetadataService.GetShokoSeriesByID(directId)?.GetPrimaryId(MetadataService);
         }
 
         if (shortsIndex < 0)
@@ -484,9 +482,9 @@ public class AnimeThemesController(
                 if (int.TryParse(segments[segmentIndex], out int candidateId))
                 {
                     if (MetadataService.GetShokoSeriesByID(candidateId) is { } series)
-                        return series.LocalID;
+                        return series.GetPrimaryId(MetadataService);
                     if (MetadataService.GetShokoEpisodeByID(candidateId) is { ShokoSeriesID: var episodeSeriesId })
-                        return episodeSeriesId;
+                        return OverrideHelper.GetPrimary(episodeSeriesId, MetadataService);
                 }
 
         return null;

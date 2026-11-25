@@ -303,8 +303,8 @@
     const responseData = getData(response);
     if (!responseData) return { text: "", errorCount: 0 };
     if (responseData.errors && typeof responseData.errors === "object" && !Array.isArray(responseData.errors)) {
-      const msgs = Object.values(responseData.errors).flat();
-      if (msgs.length > 0) return { text: msgs.join(", "), errorCount: msgs.length };
+      const messages = Object.values(responseData.errors).flat();
+      if (messages.length > 0) return { text: messages.join(", "), errorCount: messages.length };
     }
     if (response.isOk === false && responseData.title && !responseData.message) return { text: responseData.title, errorCount: 1 };
 

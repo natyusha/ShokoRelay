@@ -92,27 +92,25 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             var potentialFallbacks = new List<(PlexLibraryTarget Target, string GuessedPath, bool IsParentMatch)>();
 
             foreach (var target in allTargets)
+            foreach (var location in target.Locations)
             {
-                foreach (var location in target.Locations)
+                string normalizedLocation = PlexHelper.NormalizePathForPlex(location);
+                string locationSuffix = $"/{activeRootName}";
+
+                if (normalizedLocation.EndsWith(locationSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normalizedLocation, activeRootName, StringComparison.OrdinalIgnoreCase))
                 {
-                    string normalizedLocation = PlexHelper.NormalizePathForPlex(location);
-                    string locationSuffix = $"/{activeRootName}";
+                    // Detect Plex's native directory separator and format the path to match the target OS
+                    char plexSeparator = location.Contains('\\') ? '\\' : '/';
+                    string nativeSuffix = relativeSuffix.Replace('/', plexSeparator);
+                    string guessedPath = $"{location.TrimEnd('\\', '/')}{plexSeparator}{nativeSuffix}";
 
-                    if (normalizedLocation.EndsWith(locationSuffix, StringComparison.OrdinalIgnoreCase) || string.Equals(normalizedLocation, activeRootName, StringComparison.OrdinalIgnoreCase))
-                    {
-                        // Detect Plex's native directory separator and format the path to match the target OS
-                        char plexSeparator = location.Contains('\\') ? '\\' : '/';
-                        string nativeSuffix = relativeSuffix.Replace('/', plexSeparator);
-                        string guessedPath = $"{location.TrimEnd('\\', '/')}{plexSeparator}{nativeSuffix}";
+                    // Extract Plex's parent directory name preceding the VFS root
+                    int plexEndIndex = normalizedLocation.LastIndexOf(locationSuffix, StringComparison.OrdinalIgnoreCase);
+                    string plexParentName =
+                        plexEndIndex > 0 && normalizedLocation.LastIndexOf('/', plexEndIndex - 1) is int plexStartIndex && plexStartIndex >= 0 ? normalizedLocation[(plexStartIndex + 1)..plexEndIndex] : "";
 
-                        // Extract Plex's parent directory name preceding the VFS root
-                        int plexEndIndex = normalizedLocation.LastIndexOf(locationSuffix, StringComparison.OrdinalIgnoreCase);
-                        string plexParentName =
-                            plexEndIndex > 0 && normalizedLocation.LastIndexOf('/', plexEndIndex - 1) is int plexStartIndex && plexStartIndex >= 0 ? normalizedLocation[(plexStartIndex + 1)..plexEndIndex] : "";
-
-                        bool isParentMatch = !string.IsNullOrEmpty(shokoParentName) && string.Equals(shokoParentName, plexParentName, StringComparison.OrdinalIgnoreCase);
-                        potentialFallbacks.Add((target, guessedPath, isParentMatch));
-                    }
+                    bool isParentMatch = !string.IsNullOrEmpty(shokoParentName) && string.Equals(shokoParentName, plexParentName, StringComparison.OrdinalIgnoreCase);
+                    potentialFallbacks.Add((target, guessedPath, isParentMatch));
                 }
             }
 
@@ -414,8 +412,8 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         var content = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            using var doc = JsonDocument.Parse(content);
-            if (!doc.RootElement.TryGetProperty("MediaContainer", out var metadataClient) || !metadataClient.TryGetProperty("Directory", out var directories))
+            using var jsonDocument = JsonDocument.Parse(content);
+            if (!jsonDocument.RootElement.TryGetProperty("MediaContainer", out var metadataClient) || !metadataClient.TryGetProperty("Directory", out var directories))
                 return null;
 
             foreach (var directory in directories.EnumerateArray())
