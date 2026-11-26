@@ -48,10 +48,38 @@ public class DashboardController(
 
     private static readonly FileExtensionContentTypeProvider s_contentTypeProvider = new();
 
+    private const string OverridesPlaceholder =
+        "This allows shows which are separated on AniDB but part of the same TMDB listing to be combined into a single entry in Plex.\n"
+        + "Each line should contain a comma separated list of AniDB IDs you wish to merge.\n"
+        + "The first ID is the primary series and the others will be merged into it (for both VFS builds and metadata lookups).\n"
+        + "If the series do not share a TMDB link, you must append a specific season and episode starting number: ';S##E##'.\n"
+        + "You can also map specific episodes, types, and ranges using '|' as a separator: ';1-10s1e1|11-20s2e1|s1s0e101|o1s0e102'.\n"
+        + "Lines that are blank or start with a '#' are ignored. An example is shown below:\n\n"
+        + "## Shoko Relay VFS Overrides\n\n# Fairy Tail (Shared TMDB Link)\n6662,8132,9980,13295\n\n"
+        + "# Bleach (Movies as Specials)\n2369,4515;s0e101,5352;s0e102,6041;s0e103,7666;s0e104\n\n"
+        + "# Fairy Tail (Manual Assignment)\n6662;1-48s1e1|49-96s2e1|97-150s3e1|151-175s4e1,8132;s0e1,9980;1-51s5e1|52-90s6e1|91-102s7e1,13295;s8e1";
+
+    private static readonly string s_encodedOverridesPlaceholder = WebUtility.HtmlEncode(OverridesPlaceholder).Replace("\n", "&#10;", StringComparison.Ordinal);
+
+    private static readonly string s_assetVersion = ResolveAssetVersion();
+
     private static readonly FrozenDictionary<string, string> s_templateConstants = typeof(ShokoRelayConstants)
         .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
         .Where(field => field.IsLiteral && !field.IsInitOnly)
         .ToFrozenDictionary(field => field.Name, field => field.GetValue(null)?.ToString() ?? string.Empty, StringComparer.Ordinal);
+
+    /// <summary>Resolves a build-specific asset cache-busting token from the plugin version and embedded source revision.</summary>
+    /// <returns>The version string used in static asset query parameters.</returns>
+    private static string ResolveAssetVersion()
+    {
+        var metadata = typeof(DashboardController).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().ToList();
+        string? releaseTag = metadata.FirstOrDefault(attribute => attribute.Key == "ReleaseTag")?.Value;
+        if (!string.IsNullOrWhiteSpace(releaseTag))
+            return ShokoRelayConstants.Version;
+
+        string? sourceRevision = metadata.FirstOrDefault(attribute => attribute.Key == "SourceRevision")?.Value;
+        return sourceRevision is { Length: >= 7 } ? $"{ShokoRelayConstants.Version}-{sourceRevision[..7]}" : ShokoRelayConstants.Version;
+    }
 
     #endregion
 
@@ -241,6 +269,7 @@ public class DashboardController(
     [HttpGet("theme.css")]
     public IActionResult GetDynamicThemeCss()
     {
+        SetNoCacheHeaders();
         string rawThemeId = Settings.Advanced.SelectedTheme;
         if (string.IsNullOrWhiteSpace(rawThemeId) || rawThemeId.Equals("default", StringComparison.OrdinalIgnoreCase))
             return Content(string.Empty, "text/css");
@@ -424,10 +453,20 @@ public class DashboardController(
         if (!VfsShared.IsPathUnderDirectory(requested, dashboardDir) || !IoFile.Exists(requested))
             return NotFound();
 
-        // Replace {{ConstantName}} placeholders with values from ShokoRelayConstants
+        SetNoCacheHeaders();
+        string shokoBase = WebUtility.HtmlEncode(Request.PathBase.Value?.TrimEnd('/') ?? string.Empty);
+
+        // Replace {{ConstantName}} placeholders with values from ShokoRelayConstants and request-scoped template tokens
         var html = TextHelper
             .TemplatePlaceholderRegex()
-            .Replace(IoFile.ReadAllText(requested), match => s_templateConstants.TryGetValue(match.Groups["name"].Value, out var constantValue) ? constantValue : match.Value);
+            .Replace(VfsShared.ReadAllTextShared(requested), match => match.Groups["name"].Value switch
+                {
+                    "ShokoBase" => shokoBase,
+                    "AssetVersion" => s_assetVersion,
+                    "OverridesPlaceholder" => s_encodedOverridesPlaceholder,
+                    var constantName when s_templateConstants.TryGetValue(constantName, out var constantValue) => constantValue,
+                    _ => match.Value,
+                });
 
         if (html.IndexOf("<base", StringComparison.OrdinalIgnoreCase) < 0)
             html = html.Replace("<head>", $"<head>\n    <base href=\"{WebUtility.HtmlEncode($"{Request.PathBase}{ShokoRelayConstants.BasePath}/dashboard/")}\">", StringComparison.OrdinalIgnoreCase);

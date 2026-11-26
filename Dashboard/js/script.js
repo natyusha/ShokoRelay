@@ -554,16 +554,6 @@
       };
     },
     /**
-     * Appends a parameter to URLSearchParams when its value is non-null and non-empty.
-     * @param {URLSearchParams} params - The target search parameters collection.
-     * @param {string} key - The parameter name.
-     * @param {*} value - The parameter value.
-     * @returns {void}
-     */
-    setIfNotEmpty: (params, key, value) => {
-      if (value != null && String(value) !== "") params.set(key, String(value));
-    },
-    /**
      * Cycles through an array of modes in a given direction.
      * @param {string} current - The currently active mode.
      * @param {string[]} modes - The ordered list of valid modes.
@@ -588,7 +578,7 @@
 
   // #region Feature Logic
   /**
-   * Initializes the custom hover tooltip overlay and configures secure external link target behaviors.
+   * Initializes the custom hover tooltip overlay for elements with title attributes.
    * @returns {void}
    */
   function initTooltips() {
@@ -657,12 +647,11 @@
     document.addEventListener("mouseleave", hide);
 
     /**
-     * Attaches custom tooltip handlers and external-link security attributes to an element.
+     * Attaches custom tooltip handlers to an element carrying a title attribute.
      * @param {HTMLElement} target - The element to inspect and bind.
      * @returns {void}
      */
     const attach = (target) => {
-      // Tooltip logic
       if (target.title) {
         target.dataset.tooltipText = target.title;
         target.removeAttribute("title");
@@ -677,28 +666,20 @@
           target.addEventListener("mousedown", hide);
         }
       }
-      // Automated link behavior: Force new tab and security headers for all links
-      if (target.tagName === "A" && target.hasAttribute("href")) {
-        const href = target.getAttribute("href");
-        if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
-          target.target = "_blank";
-          target.rel = "noopener noreferrer";
-        }
-      }
     };
 
-    document.querySelectorAll("[title], a[href]").forEach(attach);
+    document.querySelectorAll("[title]").forEach(attach);
     new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === 1) {
             attach(node);
-            node.querySelectorAll("[title], a[href]").forEach(attach);
+            node.querySelectorAll("[title]").forEach(attach);
           }
         });
-        if (mutation.type === "attributes" && (mutation.attributeName === "title" || mutation.attributeName === "href") && mutation.target.nodeType === 1) attach(mutation.target);
+        if (mutation.type === "attributes" && mutation.attributeName === "title" && mutation.target.nodeType === 1) attach(mutation.target);
       });
-    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title", "href"] });
+    }).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ["title"] });
   }
   // #endregion
 

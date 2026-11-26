@@ -58,6 +58,7 @@
         loginLink = document.createElement("a");
         loginLink.id = "plex-login";
         loginLink.target = "_blank";
+        loginLink.rel = "noopener noreferrer";
         authAction.appendChild(loginLink);
       }
       loginLink.href = pinData.authUrl;

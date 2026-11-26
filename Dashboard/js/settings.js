@@ -101,6 +101,19 @@
   }
 
   /**
+   * Creates and appends a formatted field label element from a configuration property schema.
+   * @param {HTMLElement} wrap - The container element to append the label to.
+   * @param {Object} prop - The property schema object.
+   * @returns {HTMLLabelElement} The created label element.
+   */
+  function createFieldLabel(wrap, prop) {
+    const label = document.createElement("label");
+    label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
+    wrap.appendChild(label);
+    return label;
+  }
+
+  /**
    * Generates a multiselect checkbox dropdown for Flags enum properties and binds it to the configuration state.
    * @param {HTMLElement} wrap - The container element to append to.
    * @param {Object} prop - The property schema object.
@@ -109,9 +122,7 @@
    * @returns {void}
    */
   function createFlagsMultiselect(wrap, prop, config, value) {
-    const label = document.createElement("label");
-    label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
-    wrap.appendChild(label);
+    createFieldLabel(wrap, prop);
 
     const enumValues = prop.EnumValues || [];
     let mask = parseFlagsValue(value, enumValues);
@@ -183,9 +194,7 @@
    * @returns {void}
    */
   function createDualTextareaMapping(wrap, prop, config, value, leftHeader, rightHeader, keyOnLeft) {
-    const label = document.createElement("label");
-    label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
-    wrap.appendChild(label);
+    createFieldLabel(wrap, prop);
 
     const mappingContainer = document.createElement("div");
     mappingContainer.innerHTML = `<div class="full">
@@ -258,13 +267,11 @@
     schema.forEach((prop) => {
       const wrap = document.createElement("div");
       if (prop.Rebuild) wrap.classList.add("vfs-rebuild");
-      const label = document.createElement("label");
       const value = getValueByPath(config, prop.Path);
       let input;
 
       if (prop.Path.endsWith("SelectedTheme")) {
-        label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
-        wrap.appendChild(label);
+        createFieldLabel(wrap, prop);
         input = document.createElement("select");
         input.add(new Option("Default", "default"));
         input.add(new Option("Shoko Gray", "shoko-gray"));
@@ -306,8 +313,7 @@
       } else if (prop.Path.endsWith("SubtitleLanguageMappings")) {
         createDualTextareaMapping(wrap, prop, config, value, "Original Tags", "Mapped Tags", true);
       } else {
-        label.innerHTML = `<span>${esc(prop.Display || prop.Path.split(".").pop())}</span>${prop.Description ? `<small>${esc(prop.Description)}</small>` : ""}`;
-        wrap.appendChild(label);
+        createFieldLabel(wrap, prop);
         input = document.createElement(prop.Type === "enum" ? "select" : prop.Type === "json" || prop.Path.endsWith("TagOverrides") || prop.Path.endsWith("Exclusions") ? "textarea" : "input");
         if (prop.Path === "TagOverrides") input.id = "resizable";
         if (prop.Type === "enum") {
@@ -418,11 +424,7 @@
 
   // Help Modal Logic
   const helpBtn = element("settings-help-open");
-  if (helpBtn)
-    helpBtn.onclick = () => {
-      const modal = element("settings-help-modal");
-      openModal(modal);
-    };
+  if (helpBtn) helpBtn.onclick = () => openModal(element("settings-help-modal"));
 
   (async () => {
     await window._sr.authReady;

@@ -4,9 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dashboard | Shoko Relay</title>
-    <link rel="icon" href="favicon.ico" />
-    <link rel="stylesheet" href="css/style.css" />
-    <link rel="stylesheet" href="css/dashboard.css" />
+    <link rel="icon" href="favicon.ico?v={{ AssetVersion }}" />
+    <link rel="stylesheet" href="css/style.css?v={{ AssetVersion }}" />
+    <link rel="stylesheet" href="css/dashboard.css?v={{ AssetVersion }}" />
     <link rel="stylesheet" href="../theme.css" />
     <script>
       window._sr = window._sr || {};
@@ -194,7 +194,7 @@
               <svg class="icon-svg"><use href="img/icons.svg#database-outline"></use></svg>
               Shoko: VFS
             </h2>
-            <a href="../browser" class="img-btn" title="Open VFS Browser" aria-label="Open VFS Browser">
+            <a href="../browser" target="_blank" rel="noopener noreferrer" class="img-btn" title="Open VFS Browser" aria-label="Open VFS Browser">
               <svg class="icon-svg"><use href="img/icons.svg#folder-open"></use></svg>
             </a>
           </div>
@@ -230,7 +230,7 @@
               </div>
               AnimeThemes: VFS
             </h2>
-            <a href="../player" class="img-btn" title="Open AnimeThemes Player" aria-label="Open AnimeThemes Player">
+            <a href="../player" target="_blank" rel="noopener noreferrer" class="img-btn" title="Open AnimeThemes Player" aria-label="Open AnimeThemes Player">
               <svg class="icon-svg"><use href="img/icons.svg#movie-open"></use></svg>
             </a>
           </div>
@@ -273,13 +273,21 @@
               <svg class="icon-svg"><use href="img/icons.svg#auto-fix"></use></svg>
               Quick Actions
             </h2>
-            <a id="relay-api-link" href="#" class="img-btn" title="Open Swagger (Relay)" aria-label="Open Relay Swagger">
+            <a
+              id="relay-api-link"
+              href="{{ ShokoBase }}/swagger/index.html?urls.primaryName=Shoko+Relay+V1"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="img-btn"
+              title="Open Swagger (Relay)"
+              aria-label="Open Relay Swagger"
+            >
               <svg class="api-svg"><use href="img/icons.svg#relay-api"></use></svg>
             </a>
-            <a id="shoko-api-link" href="#" class="img-btn" title="Open Swagger (Shoko)" aria-label="Open Shoko Swagger">
+            <a id="shoko-api-link" href="{{ ShokoBase }}/swagger/index.html" target="_blank" rel="noopener noreferrer" class="img-btn" title="Open Swagger (Shoko)" aria-label="Open Shoko Swagger">
               <svg class="api-svg"><use href="img/icons.svg#shoko-api"></use></svg>
             </a>
-            <a id="shoko-dashboard-link" href="#" class="img-btn" title="Open Shoko Dashboard" aria-label="Open Shoko Dashboard">
+            <a id="shoko-dashboard-link" href="{{ ShokoBase }}/webui/dashboard" target="_blank" rel="noopener noreferrer" class="img-btn" title="Open Shoko Dashboard" aria-label="Open Shoko Dashboard">
               <svg class="icon-svg"><use href="img/icons.svg#view-dashboard-outline"></use></svg>
             </a>
           </div>
@@ -449,16 +457,16 @@
     <!-- #region MARK: Floating Links
     -->
     <div class="floating-actions" role="navigation" aria-label="Quick links">
-      <a class="float-link" href="https://discord.gg/shokoanime" title="Discord" aria-label="Shoko Discord">
+      <a class="float-link" href="https://discord.gg/shokoanime" target="_blank" rel="noopener noreferrer" title="Discord" aria-label="Shoko Discord">
         <svg class="icon-svg"><use href="img/icons.svg#discord"></use></svg>
       </a>
-      <a class="float-link" href="https://animethemes.moe/" title="AnimeThemes" aria-label="AnimeThemes">
+      <a class="float-link" href="https://animethemes.moe/" target="_blank" rel="noopener noreferrer" title="AnimeThemes" aria-label="AnimeThemes">
         <svg class="at-svg"><use href="img/icons.svg#animethemes"></use></svg>
       </a>
-      <a class="float-link" href="https://docs.shokoanime.com/daily/" title="Shoko Docs" aria-label="Shoko Docs">
+      <a class="float-link" href="https://docs.shokoanime.com/daily/" target="_blank" rel="noopener noreferrer" title="Shoko Docs" aria-label="Shoko Docs">
         <svg class="icon-svg"><use href="img/icons.svg#docs"></use></svg>
       </a>
-      <a class="float-link github-float" href="https://github.com/natyusha/ShokoRelay" title="Github" aria-label="Shoko Relay on GitHub">
+      <a class="float-link github-float" href="https://github.com/natyusha/ShokoRelay" target="_blank" rel="noopener noreferrer" title="Github" aria-label="Shoko Relay on GitHub">
         <svg class="icon-svg"><use href="img/icons.svg#github"></use></svg>
       </a>
       <button id="auth-logout" class="float-link" title="Logout" type="button" aria-label="Logout" hidden>
@@ -473,7 +481,7 @@
       <div class="modal overrides" role="document">
         <header>VFS Overrides Editor</header>
         <div class="modal-body">
-          <textarea id="overrides-text"></textarea>
+          <textarea id="overrides-text" placeholder="{{ OverridesPlaceholder }}"></textarea>
         </div>
         <footer>
           <button id="overrides-cancel" class="cancel">Cancel</button>
@@ -620,16 +628,17 @@
             <small>Every provider setting that is listed under this section requires a metadata refresh in Plex to take effect.</small>
             <h4>Tag Weights</h4>
             <small>
-              Many tags on AniDB use a <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" title="AniDB Wiki">3 Star Weight System</a> which represents a value from 0 (no stars) to 600 (3
-              stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star threshold.
+              Many tags on AniDB use a
+              <a href="https://wiki.anidb.net/Tags#Star-rating_-_the_Weight_system" target="_blank" rel="noopener noreferrer" title="AniDB Wiki">3 Star Weight System</a> which represents a value from 0 (no
+              stars) to 600 (3 stars) and determines how relevant the tag is to the series it is applied to. By setting this value you can filter out tags below a certain star threshold.
             </small>
             <h4>Tag Overrides</h4>
             <small>
               Tags can easily be merged or blocked using this setting. The first tag on a new line becomes the target, with all subsequent tags merged into it:
               <code>Target Tag, Source Tag 1, Source Tag 2</code>. You can also blacklist tags by prefixing a new line with a semicolon: <code>;Blocked Tag 1,Blocked Tag 2</code>. There is a
-              <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" title="Default Tag Overrides">large list of tags</a> which are already blocked/merged by
-              default. Anything on a merge or block line which references one of them will supersede it. It should also be noted that this allows custom tag names to be assigned as the target tag name does not
-              have to exist in Shoko.
+              <a href="https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Data/default_tag_overrides.csv" target="_blank" rel="noopener noreferrer" title="Default Tag Overrides">large list of tags</a>
+              which are already blocked/merged by default. Anything on a merge or block line which references one of them will supersede it. It should also be noted that this allows custom tag names to be
+              assigned as the target tag name does not have to exist in Shoko.
             </small>
           </section>
           <section>
@@ -683,7 +692,9 @@
               Allows specific folders within your Shoko managed destinations to be ignored during VFS generation. Any Shoko managed folders that are not marked as "Destination" or "None" as well as the: VFS
               Root Path, Movie VFS Root Path, AnimeThemes Root Path and Collection Images Root Path are excluded by default. These exclusions are also registered with Shoko's video service as "Ignored Folders"
               which will not be scanned as media. To avoid cases where Shoko isn't scanning things you might want it to, ensure unique folder names are used here. Anything which matches Plex's
-              <a href="https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/" title="Plex Articles">Local Files for TV Show Trailers and Extras</a>
+              <a href="https://support.plex.tv/articles/local-files-for-tv-show-trailers-and-extras/" target="_blank" rel="noopener noreferrer" title="Plex Articles">
+                Local Files for TV Show Trailers and Extras
+              </a>
               will also be ignored unless the "Plex Local Extras" setting is disabled.
             </small>
             <h4>Managed Folder Exclusions</h4>
@@ -703,14 +714,17 @@
             </small>
             <h4>Plex Image Sync</h4>
             <small>
-              Syncs <a href="https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/" title="Plex Articles">Local Artwork Assets</a> from Plex to Shoko. This allows Shoko's WebUI to have the
-              same art as Plex and is faster than manually uploaded art in Shoko. Plex's locally generated episode thumbnails will also be synced to Shoko if "TMDB Thumbnails" is disabled.
+              Syncs <a href="https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/" target="_blank" rel="noopener noreferrer" title="Plex Articles">Local Artwork Assets</a> from Plex to Shoko.
+              This allows Shoko's WebUI to have the same art as Plex and is faster than manually uploaded art in Shoko. Plex's locally generated episode thumbnails will also be synced to Shoko if "TMDB
+              Thumbnails" is disabled.
             </small>
             <h4>Plex Data Path</h4>
             <small>
               The path to the Metadata subfolder located in
-              <a href="https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/" title="Plex Articles">Plex's Data Directory</a>. This is used exclusively for the image
-              cleanup task that is run at the start of collection generation.
+              <a href="https://support.plex.tv/articles/202915258-where-is-the-plex-media-server-data-directory-located/" target="_blank" rel="noopener noreferrer" title="Plex Articles">
+                Plex's Data Directory
+              </a>
+              . This is used exclusively for the image cleanup task that is run at the start of collection generation.
             </small>
             <h4>Empty Plex Trash Threshold</h4>
             <small>
@@ -729,11 +743,11 @@
     </div>
     <!-- #endregion -->
 
-    <script src="js/script.js"></script>
-    <script src="js/dashboard.js"></script>
-    <script src="js/settings.js"></script>
-    <script src="js/plex.js"></script>
-    <script src="js/shoko.js"></script>
-    <script src="js/animethemes.js"></script>
+    <script src="js/script.js?v={{ AssetVersion }}"></script>
+    <script src="js/dashboard.js?v={{ AssetVersion }}"></script>
+    <script src="js/settings.js?v={{ AssetVersion }}"></script>
+    <script src="js/plex.js?v={{ AssetVersion }}"></script>
+    <script src="js/shoko.js?v={{ AssetVersion }}"></script>
+    <script src="js/animethemes.js?v={{ AssetVersion }}"></script>
   </body>
 </html>

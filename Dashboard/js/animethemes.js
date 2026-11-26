@@ -7,12 +7,23 @@
 
   // #region Param Providers
   /**
+   * Appends a parameter to URLSearchParams when its value is non-null and non-empty.
+   * @param {URLSearchParams} params - The target search parameters collection.
+   * @param {string} key - The parameter name.
+   * @param {*} value - The parameter value.
+   * @returns {void}
+   */
+  const setIfNotEmpty = (params, key, value) => {
+    if (value != null && String(value) !== "") params.set(key, String(value));
+  };
+
+  /**
    * Collects MP3 generation parameters for the Action Dispatcher.
    * @returns {URLSearchParams} The compiled parameters.
    */
   window._sr.getAtParams = () => {
     const params = new URLSearchParams();
-    ["path", "slug", "offset"].forEach((key) => window._sr.setIfNotEmpty(params, key, element(`at-${key}`)?.value));
+    ["path", "slug", "offset"].forEach((key) => setIfNotEmpty(params, key, element(`at-${key}`)?.value));
     ["seasonal", "force", "batch"].forEach((toggle) => element(`at-mp3-${toggle}`)?.getAttribute("aria-pressed") === "true" && params.set(toggle, "true"));
     return params;
   };
@@ -23,7 +34,7 @@
    */
   window._sr.getAtMapParams = () => {
     const params = new URLSearchParams();
-    window._sr.setIfNotEmpty(params, "filter", element("at-filter-map")?.value);
+    setIfNotEmpty(params, "filter", element("at-filter-map")?.value);
     return params;
   };
   // #endregion
