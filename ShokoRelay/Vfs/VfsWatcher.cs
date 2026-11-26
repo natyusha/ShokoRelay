@@ -17,7 +17,7 @@ namespace ShokoRelay.Vfs;
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="linkingService">Shoko linking service.</param>
 /// <param name="orderingService">Shoko metadata ordering service.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="collectionService">Plex collection service.</param>
 /// <param name="atMapping">AnimeThemes mapping service.</param>
 /// <param name="criticRatingService">Plex critic rating service.</param>
@@ -32,7 +32,7 @@ public class VfsWatcher(
     IMetadataService metadataService,
     IMetadataLinkingService linkingService,
     IMetadataOrderingService orderingService,
-    PlexClient plexLibrary,
+    PlexClient plexClient,
     CollectionService collectionService,
     AnimeThemesMapping atMapping,
     CriticRatingService criticRatingService,
@@ -373,6 +373,7 @@ public class VfsWatcher(
                         try
                         {
                             builder.Build(removedIds, cleanRoot: false);
+                            await atMapping.ApplyMappingIfExistsAsync(removedIds, stopToken).ConfigureAwait(false);
                         }
                         finally
                         {
@@ -470,11 +471,11 @@ public class VfsWatcher(
             return;
         }
 
-        if (!deferScan && plexLibrary.IsEnabled)
+        if (!deferScan && plexClient.IsEnabled)
             ScheduleLibraryScan(series);
 
         // Schedules or resets the timer for deferred VFS creation or Plex metadata fixup
-        if (plexLibrary.IsEnabled || Settings.Advanced.DeferVfsCreationUntilFixup)
+        if (plexClient.IsEnabled || Settings.Advanced.DeferVfsCreationUntilFixup)
         {
             string actionName = Settings.Advanced.DeferVfsCreationUntilFixup ? "deferred VFS creation" : "metadata fixup";
             logger.LogDebug("VFS: Scheduling {Action} for series -> {Title} [{LocalId}] in {Delay} minute(s)", actionName, series.GetDisplayTitle(), series.LocalID, Settings.Advanced.PlexFixupDelay);
@@ -549,7 +550,7 @@ public class VfsWatcher(
             foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, metadataService))
             {
                 if (fileSystem.DirectoryExists(path) && !fileSystem.IsDirectoryEmpty(path))
-                    await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+                    await plexClient.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
                 else
                     logger.LogDebug("VFS: Library scan for series -> {Title} [{LocalId}] skipped; path '{Path}' not ready or empty", series.GetDisplayTitle(), series.LocalID, path);
             }
@@ -589,7 +590,7 @@ public class VfsWatcher(
             }
 
             // Re-resolve the series fresh after the debounce delay and exit if deleted or Plex is unlinked
-            if (!plexLibrary.IsEnabled || metadataService.GetShokoSeriesByID(seriesId) is not { } series)
+            if (!plexClient.IsEnabled || metadataService.GetShokoSeriesByID(seriesId) is not { } series)
                 return;
 
             // Wait to allow the filesystem to settle, or for Plex's native auto-scanner to index the newly generated VFS symlinks
@@ -599,13 +600,13 @@ public class VfsWatcher(
             var vfsPaths = VfsShared.ResolveSeriesVfsPaths(series, metadataService).ToList();
             if (Settings.Automation.ScanOnVfsRefresh)
                 foreach (var path in vfsPaths)
-                    await plexLibrary.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
+                    await plexClient.RefreshSectionPathAsync(path, token).ConfigureAwait(false);
 
-            var targets = plexLibrary.GetConfiguredTargets();
+            var targets = plexClient.GetConfiguredTargets();
             bool foundInAnyTarget = false;
 
             // Pre-filter targets so we only poll libraries that physically contain the VFS paths for this series, eliminating timeouts on irrelevant libraries
-            var matchingTargetIds = vfsPaths.SelectMany(plexLibrary.GetMatchingTargetsForPath).Select(match => (match.Target.ServerId, match.Target.SectionId)).ToHashSet();
+            var matchingTargetIds = vfsPaths.SelectMany(plexClient.GetMatchingTargetsForPath).Select(match => (match.Target.ServerId, match.Target.SectionId)).ToHashSet();
 
             // Wait for Plex to assign rating keys (primarily for users in deferred mode)
             int retryDelaySeconds = Settings.Advanced.PlexScanDelay;
@@ -619,7 +620,7 @@ public class VfsWatcher(
                 var ratingKeys = new List<int>();
                 for (int retry = 0; retry < maxRetries; retry++)
                 {
-                    ratingKeys = await plexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, metadataService, token).ConfigureAwait(false);
+                    ratingKeys = await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, metadataService, token).ConfigureAwait(false);
                     if (ratingKeys.Count > 0)
                         break;
 
@@ -651,8 +652,8 @@ public class VfsWatcher(
                             target.Title,
                             target.ServerName
                         );
-                        await plexLibrary.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
-                        await plexLibrary.AnalyzeItemAsync(ratingKey, target, token).ConfigureAwait(false);
+                        await plexClient.RefreshMetadataAsync(ratingKey, target, token).ConfigureAwait(false);
+                        await plexClient.AnalyzeItemAsync(ratingKey, target, token).ConfigureAwait(false);
                     }
                     else
                     {

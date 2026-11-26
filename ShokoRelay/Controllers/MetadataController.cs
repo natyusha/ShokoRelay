@@ -10,7 +10,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="mapper">Plex metadata mapper.</param>
 /// <param name="configProvider">Configuration provider.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
@@ -24,11 +24,11 @@ public class MetadataController(
     IMetadataService metadataService,
     PlexMetadata mapper,
     ConfigProvider configProvider,
-    PlexClient plexLibrary,
+    PlexClient plexClient,
     IVideoService videoService,
     IFileSystem fileSystem,
     ILogger<MetadataController> logger
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
+) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
     #region Provider Descriptor
 
@@ -251,7 +251,7 @@ public class MetadataController(
                 )
             )
             {
-                var (episode, movieContext, tmdbMovie) = TryResolveMovieContext(ratingKey);
+                var (episode, movieContext, tmdbMovie) = TryResolveMovieContext(ratingKey, allowNumeric: isMovieEndpoint);
                 return episode != null && movieContext != null
                     ? WrapInContainer(mapper.MapMovie(episode, movieContext, tmdbMovie), ShokoRelayConstants.MovieAgentScheme)
                     : TryResolveFallbackNumericMovie(ratingKey);

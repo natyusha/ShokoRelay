@@ -10,7 +10,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Provides operations for building AnimeThemes VFS mappings, generating MP3 series themes, and handling the standalone video player endpoints.</summary>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="animeThemesMp3Generator">AnimeThemes MP3 generator.</param>
 /// <param name="animeThemesMapping">AnimeThemes mapping service.</param>
 /// <param name="webmDownloader">AnimeThemes WebM downloader.</param>
@@ -24,14 +24,14 @@ namespace ShokoRelay.Controllers;
 public class AnimeThemesController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
-    PlexClient plexLibrary,
+    PlexClient plexClient,
     AnimeThemesMp3Generator animeThemesMp3Generator,
     AnimeThemesMapping animeThemesMapping,
     AnimeThemesWebmDownloader webmDownloader,
     IVideoService videoService,
     IFileSystem fileSystem,
     ILogger<AnimeThemesController> logger
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
+) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
     #region Setup
 
@@ -119,7 +119,7 @@ public class AnimeThemesController(
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
 
-        string mappedPath = PlexLibrary.MapPlexPathToShokoPath(query.Path);
+        string mappedPath = PlexClient.MapPlexPathToShokoPath(query.Path);
         string? fullFolderPath = null;
         try
         {
@@ -222,7 +222,7 @@ public class AnimeThemesController(
         string themePath;
         try
         {
-            themePath = Path.Combine(Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path)), "Theme.mp3");
+            themePath = Path.Combine(Path.GetFullPath(PlexClient.MapPlexPathToShokoPath(path)), "Theme.mp3");
         }
         catch (ArgumentException)
         {
@@ -358,7 +358,7 @@ public class AnimeThemesController(
         string fullPath;
         try
         {
-            fullPath = Path.GetFullPath(PlexLibrary.MapPlexPathToShokoPath(path));
+            fullPath = Path.GetFullPath(PlexClient.MapPlexPathToShokoPath(path));
         }
         catch (ArgumentException)
         {

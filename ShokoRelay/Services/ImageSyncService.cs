@@ -67,6 +67,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             var allSeries =
                 allowedPrimaryIds != null ? [.. allowedPrimaryIds.Select(metadataService.GetShokoSeriesByID).OfType<IShokoSeries>()] : metadataService.GetAllShokoSeries()?.Cast<IShokoSeries>().ToList() ?? [];
             HashSet<int>? allowedSet = allowedPrimaryIds != null ? [.. allowedPrimaryIds] : null;
+            if (allowedSet != null && allSeries.Count == 0)
+                return new ImageSyncResult(0, 0, 0, 0, [], [], stopwatch.Elapsed);
 
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             logger.LogInformation("ImageSyncService: Starting image synchronization (local collection/series artwork{Details})...", syncDetails);

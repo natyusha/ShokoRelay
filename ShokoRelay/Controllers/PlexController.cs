@@ -23,7 +23,7 @@ public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, s
 /// <summary>Manages Plex-specific integrations including authentication, metadata automation, and image sync.</summary>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="plexAuth">Plex authentication service.</param>
 /// <param name="collectionService">Plex collection service.</param>
 /// <param name="criticRatingService">Plex critic rating service.</param>
@@ -40,7 +40,7 @@ public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, s
 public class PlexController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
-    PlexClient plexLibrary,
+    PlexClient plexClient,
     PlexAuth plexAuth,
     CollectionService collectionService,
     CriticRatingService criticRatingService,
@@ -50,7 +50,7 @@ public class PlexController(
     PlexAutomationService plexAutomationService,
     PlexMetadata plexMetadata,
     ILogger<PlexController> logger
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
+) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
     #region Setup
 
@@ -179,21 +179,21 @@ public class PlexController(
     #region Automation
 
     /// <summary>Triggers a partial library scan in Plex for specific series.</summary>
-    /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
+    /// <param name="filter">Comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
     /// <returns>A response containing the count of successful refresh requests sent.</returns>
     [HttpGet("plex/library/refresh")]
     public async Task<IActionResult> RefreshPlexSeries([FromQuery] string filter)
     {
         if (ValidateFilterOrBadRequest(filter, out var ids) is { } validation)
             return validation;
-        if (!PlexLibrary.IsEnabled)
+        if (!PlexClient.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex is not configured."));
 
         int triggeredCount = 0;
         foreach (var id in ids)
             if (MetadataService.GetShokoSeriesByID(id) is { } series)
                 foreach (var path in VfsShared.ResolveSeriesVfsPaths(series, MetadataService))
-                    if (await PlexLibrary.RefreshSectionPathAsync(path).ConfigureAwait(false))
+                    if (await PlexClient.RefreshSectionPathAsync(path).ConfigureAwait(false))
                         triggeredCount++;
 
         return Ok(new RelayResponse<object>(Data: new { triggered = triggeredCount }));
@@ -210,7 +210,7 @@ public class PlexController(
 
         int refreshedCount = 0;
         var errors = new List<string>();
-        var targets = PlexLibrary.GetConfiguredTargets();
+        var targets = PlexClient.GetConfiguredTargets();
 
         foreach (var series in seriesList)
         {
@@ -222,11 +222,11 @@ public class PlexController(
             foreach (var target in targets)
                 try
                 {
-                    var ratingKeys = await PlexLibrary.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
+                    var ratingKeys = await PlexClient.FindRatingKeysForShokoSeriesInSectionAsync(series.LocalID, target, MetadataService, HttpContext.RequestAborted).ConfigureAwait(false);
                     if (ratingKeys.Count > 0)
                         foreach (var ratingKey in ratingKeys)
                         {
-                            if (await PlexLibrary.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
+                            if (await PlexClient.RefreshMetadataAsync(ratingKey, target, HttpContext.RequestAborted).ConfigureAwait(false))
                             {
                                 refreshedCount++;
                                 Logger.LogInformation(
@@ -302,7 +302,7 @@ public class PlexController(
     /// <returns>A task representing the result of the automation run.</returns>
     [HttpGet("plex/automation/run")]
     public Task<IActionResult> RunPlexAutomationNow() =>
-        !PlexLibrary.IsEnabled
+        !PlexClient.IsEnabled
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskPlexAutomationRun,

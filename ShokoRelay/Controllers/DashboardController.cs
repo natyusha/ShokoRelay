@@ -21,7 +21,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Provides operations for serving the dashboard pages, static assets, and dynamic theme stylesheets.</summary>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="webThemeService">Shoko web theme service.</param>
 /// <param name="applicationPaths">Shoko application paths.</param>
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
@@ -35,14 +35,14 @@ namespace ShokoRelay.Controllers;
 public class DashboardController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
-    PlexClient plexLibrary,
+    PlexClient plexClient,
     IWebThemeService webThemeService,
     IApplicationPaths applicationPaths,
     IScheduledActionService scheduledActionService,
     IUserService userService,
     IAuthenticationThrottleService throttleService,
     ILogger<DashboardController> logger
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
+) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
     #region Setup
 
@@ -196,12 +196,12 @@ public class DashboardController(
     {
         var payload = ConfigProvider.GetDashboardConfig();
         var themes = webThemeService.GetThemes(forceRefresh: false).Select(theme => new { id = theme.ID, name = theme.Name }).ToList();
-        var path = Path.Combine(ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
+        var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
         return Ok(
             new
             {
                 payload,
-                overrides = IoFile.Exists(path) ? IoFile.ReadAllText(path) : string.Empty,
+                overrides = IoFile.Exists(path) ? VfsShared.ReadAllTextShared(path) : string.Empty,
                 themes,
             }
         );

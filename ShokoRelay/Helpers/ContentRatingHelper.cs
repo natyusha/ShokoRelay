@@ -132,7 +132,11 @@ public static class ContentRatingHelper
     /// <param name="fallback">The optional fallback content rating container.</param>
     /// <returns>The resolved rating string or null.</returns>
     private static string? GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback) =>
-        (fallback?.ContentRatings ?? (series as IWithContentRatings)?.ContentRatings ?? (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings)
+        (
+            fallback?.ContentRatings is { Count: > 0 } ? fallback.ContentRatings
+            : series is IWithContentRatings { ContentRatings: { Count: > 0 } seriesRatings } ? seriesRatings
+            : (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings
+        )
             is { Count: > 0 } ratings
             ? ratings.FirstOrDefault(rating => string.Equals(rating.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(rating.Value))?.Value
                 ?? ratings.FirstOrDefault(rating => !string.IsNullOrWhiteSpace(rating.Value))?.Value

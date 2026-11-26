@@ -15,7 +15,7 @@ namespace ShokoRelay.Controllers;
 /// <summary>Handles Shoko-specific automation tasks including VFS construction and housekeeping.</summary>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="vfsBuilder">VFS builder.</param>
 /// <param name="shokoImportService">Shoko import service.</param>
 /// <param name="watchedSyncService">Watched state sync service (Plex to Shoko).</param>
@@ -36,7 +36,7 @@ namespace ShokoRelay.Controllers;
 public class ShokoController(
     ConfigProvider configProvider,
     IMetadataService metadataService,
-    PlexClient plexLibrary,
+    PlexClient plexClient,
     VfsBuilder vfsBuilder,
     ShokoImportService shokoImportService,
     SyncToShoko watchedSyncService,
@@ -50,7 +50,7 @@ public class ShokoController(
     PlexMetadata plexMetadata,
     IScheduledActionService scheduledActionService,
     ILogger<ShokoController> logger
-) : ShokoRelayBaseController(configProvider, metadataService, plexLibrary, logger)
+) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
     #region Virtual File System
 
@@ -86,7 +86,7 @@ public class ShokoController(
                 await atMapping.ApplyMappingIfExistsAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None).ConfigureAwait(false);
 
                 // Trigger standard debounced Plex updates if this is a targeted manual rebuild
-                if (PlexLibrary.IsEnabled && filterIds.Count > 0)
+                if (PlexClient.IsEnabled && filterIds.Count > 0)
                     foreach (var id in filterIds)
                         vfsWatcher.TriggerPlexUpdates(id);
 
@@ -292,10 +292,10 @@ public class ShokoController(
                 var plexMessages = new List<string>();
                 int effectiveThreshold = threshold ?? Settings.Advanced.EmptyPlexTrashThreshold;
 
-                if (effectiveThreshold > 0 && PlexLibrary.IsEnabled)
-                    foreach (var target in PlexLibrary.GetConfiguredTargets())
+                if (effectiveThreshold > 0 && PlexClient.IsEnabled)
+                    foreach (var target in PlexClient.GetConfiguredTargets())
                     {
-                        var (_, trashed, message) = await PlexLibrary.EmptyTrashWithSafetyAsync(target, effectiveThreshold, dryRun).ConfigureAwait(false);
+                        var (_, trashed, message) = await PlexClient.EmptyTrashWithSafetyAsync(target, effectiveThreshold, dryRun).ConfigureAwait(false);
                         plexMessages.Add($"[{target.Title}] {message}");
                         if (trashed.Count > 0)
                             plexRemoved.AddRange(trashed.Select(item => $"[{target.Title}] {item}"));
@@ -363,7 +363,7 @@ public class ShokoController(
         [FromQuery] SyncUserType? users = null,
         [FromQuery] string? libraryName = null
     ) =>
-        !PlexLibrary.IsEnabled
+        !PlexClient.IsEnabled
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
             : ExecuteTrackedTaskAsync(
                 ShokoRelayConstants.TaskShokoSyncWatched,

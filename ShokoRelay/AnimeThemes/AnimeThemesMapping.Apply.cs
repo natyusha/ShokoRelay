@@ -299,7 +299,7 @@ public partial class AnimeThemesMapping
 
         foreach (var managedRoot in managedRoots)
         {
-            string normalizedRoot = managedRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string normalizedRoot = VfsShared.TrimRoot(managedRoot)!;
             string themeDir = Path.Combine(normalizedRoot, themeRootName);
             if (!fileSystem.DirectoryExists(themeDir))
                 continue;
@@ -331,7 +331,7 @@ public partial class AnimeThemesMapping
                     {
                         string key = NormalizeRelativeThemeKey(entry.FilePath);
                         foreach (var root in roots)
-                            context.NeededInRoots.Add((root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), key));
+                            context.NeededInRoots.Add((VfsShared.TrimRoot(root)!, key));
                     }
                 }
             }
@@ -342,7 +342,7 @@ public partial class AnimeThemesMapping
                 var blueprint = VfsShared.LoadBlueprint();
                 foreach (var (vfsRootPath, seriesDict) in blueprint)
                 {
-                    string? root = Path.GetDirectoryName(vfsRootPath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    string? root = VfsShared.TrimRoot(Path.GetDirectoryName(vfsRootPath));
                     if (string.IsNullOrEmpty(root))
                         continue;
 
@@ -358,7 +358,7 @@ public partial class AnimeThemesMapping
                 if (File.Exists(cachePath))
                 {
                     var entriesByVideoId = entries.ToLookup(entry => entry.VideoId);
-                    var normalizedManagedRoots = managedRoots.Select(path => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)).OrderByDescending(path => path.Length).ToList();
+                    var normalizedManagedRoots = managedRoots.Select(path => VfsShared.TrimRoot(path)!).OrderByDescending(path => path.Length).ToList();
                     foreach (var line in VfsShared.ReadLinesShared(cachePath))
                     {
                         var parts = line.Split('|', 3);
@@ -390,7 +390,7 @@ public partial class AnimeThemesMapping
         if (Settings.Advanced.DisableVfsGeneration)
             return true;
 
-        string normalizedTargetRoot = targetRoot.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string normalizedTargetRoot = VfsShared.TrimRoot(targetRoot)!;
         string key = NormalizeRelativeThemeKey(relativePath);
         var destinationLock = context.DestinationLocks.GetOrAdd(destinationPath, _ => new SemaphoreSlim(1, 1));
         destinationLock.Wait();

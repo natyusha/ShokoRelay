@@ -174,10 +174,7 @@ public class AnimeThemesMp3Generator(
         var excluded = VfsShared.GetIgnoredFolderNames(Settings);
         try
         {
-            var roots = VfsShared
-                .GetManagedFolderPaths(videoService, requireExists: true, fileSystem: fileSystem)
-                .Select(path => path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-                .ToList();
+            var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true, fileSystem: fileSystem).Select(path => VfsShared.TrimRoot(path)!).ToList();
 
             var newCache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
 
@@ -275,7 +272,7 @@ public class AnimeThemesMp3Generator(
         // Scan recursively for directories that hold videos directly (or via immediate Season/Specials subfolders), pruning ignored/VFS paths before descending
         string? managedRoot = VfsShared
             .GetManagedFolderPaths(videoService)
-            .Select(path => Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+            .Select(path => VfsShared.TrimRoot(path, fullPath: true)!)
             .OrderByDescending(path => path.Length)
             .FirstOrDefault(path => string.Equals(root, path, VfsShared.PathComparison) || VfsShared.IsPathUnderDirectory(root, path));
         string ignoreBaseRoot = managedRoot ?? root;
@@ -322,6 +319,7 @@ public class AnimeThemesMp3Generator(
 
         var processedSeries = new ConcurrentDictionary<int, byte>();
         var newlyGenerated = new ConcurrentBag<(string Folder, string Slug)>();
+        var seriesIdsToRefresh = new ConcurrentBag<int>();
         bool wasCancelled = false;
 
         try
@@ -337,6 +335,8 @@ public class AnimeThemesMp3Generator(
                         processed++;
                         if (!string.IsNullOrWhiteSpace(processResult.Folder))
                             newlyGenerated.Add((processResult.Folder, AnimeThemesHelper.StandardizeSlug(processResult.Slug)));
+                        if (!string.IsNullOrEmpty(processResult.VfsLinkPath) && processResult.SeriesId is > 0)
+                            seriesIdsToRefresh.Add(processResult.SeriesId.Value);
                     }
                     else if (processResult.Status == "skipped")
                         skipped++;
@@ -357,6 +357,9 @@ public class AnimeThemesMp3Generator(
             if (!newlyGenerated.IsEmpty)
                 AddBatchToThemeMp3Cache(newlyGenerated);
         }
+
+        if (!wasCancelled && !seriesIdsToRefresh.IsEmpty && plexClient.IsEnabled && !Settings.Advanced.DisableVfsGeneration)
+            RefreshGeneratedSeriesInPlex([.. seriesIdsToRefresh.Distinct()]);
 
         logger.LogInformation("AnimeThemes MP3: Batch generation {Status} -> {Processed} processed, {Skipped} skipped, {Errors} errors", wasCancelled ? "cancelled" : "finished", processed, skipped, errors);
         return new ThemeMp3BatchResult(root, results, processed, skipped, errors);
@@ -556,23 +559,8 @@ public class AnimeThemesMp3Generator(
                 }
 
             // After a successful VFS link is created, trigger a Plex metadata refresh to ensure the new Theme.mp3 is picked up by the server.
-            if (!string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled && !Settings.Advanced.DisableVfsGeneration)
-                VfsShared.RunDetached(async () =>
-                {
-                    try
-                    {
-                        int bufferSeconds = Settings.Advanced.PlexScanDelay;
-                        if (bufferSeconds > 0)
-                            await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
-
-                        logger.LogDebug("AnimeThemes MP3: Refreshing Plex metadata for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
-                        await plexClient.RefreshSeriesMetadataAsync(series.LocalID, metadataService).ConfigureAwait(false);
-                    }
-                    catch (Exception exception)
-                    {
-                        logger.LogWarning(exception, "AnimeThemes MP3: Failed to trigger Plex refresh for series -> {Title} [{LocalId}]", series.GetDisplayTitle(), series.LocalID);
-                    }
-                });
+            if (!query.Batch && !string.IsNullOrEmpty(vfsLink) && plexClient.IsEnabled && !Settings.Advanced.DisableVfsGeneration)
+                RefreshGeneratedSeriesInPlex([series.LocalID]);
 
             if (!query.Batch)
                 AddToThemeMp3Cache(folder, AnimeThemesHelper.StandardizeSlug(slugRaw));
@@ -732,6 +720,32 @@ public class AnimeThemesMp3Generator(
     #endregion
 
     #region Internal Helpers
+
+    /// <summary>Schedules a single detached Plex metadata refresh pass after <see cref="AdvancedConfig.PlexScanDelay"/> for newly generated themes.</summary>
+    /// <param name="seriesIds">The distinct Shoko series IDs whose Plex metadata should be refreshed.</param>
+    private void RefreshGeneratedSeriesInPlex(IReadOnlyCollection<int> seriesIds)
+    {
+        if (seriesIds.Count == 0)
+            return;
+
+        VfsShared.RunDetached(async () =>
+        {
+            int bufferSeconds = Settings.Advanced.PlexScanDelay;
+            if (bufferSeconds > 0)
+                await Task.Delay(TimeSpan.FromSeconds(bufferSeconds)).ConfigureAwait(false);
+
+            foreach (int seriesId in seriesIds)
+                try
+                {
+                    logger.LogDebug("AnimeThemes MP3: Refreshing Plex metadata for series [{LocalId}]", seriesId);
+                    await plexClient.RefreshSeriesMetadataAsync(seriesId, metadataService).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    logger.LogWarning(exception, "AnimeThemes MP3: Failed to trigger Plex refresh for series [{LocalId}]", seriesId);
+                }
+        });
+    }
 
     /// <summary>Finds the first allowed, non-ignored video file inside the specified folder.</summary>
     /// <param name="folder">The folder path to search.</param>

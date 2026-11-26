@@ -75,10 +75,8 @@ public class AnimeThemesWebmDownloader(
         string? targetRoot = null;
         if (!string.IsNullOrWhiteSpace(query.Destination))
         {
-            string normalizedDestination = Path.GetFullPath(VfsShared.NormalizeSeparators(query.Destination)).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            targetRoot = managedFolders.FirstOrDefault(folderPath =>
-                string.Equals(Path.GetFullPath(folderPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), normalizedDestination, VfsShared.PathComparison)
-            );
+            string normalizedDestination = VfsShared.TrimRoot(query.Destination, fullPath: true)!;
+            targetRoot = managedFolders.FirstOrDefault(folderPath => string.Equals(VfsShared.TrimRoot(folderPath, fullPath: true), normalizedDestination, VfsShared.PathComparison));
             if (targetRoot == null)
             {
                 messages.Add($"Destination '{query.Destination}' is not a VFS-enabled Shoko managed folder.");

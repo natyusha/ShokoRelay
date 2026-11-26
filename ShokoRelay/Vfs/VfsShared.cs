@@ -61,22 +61,26 @@ internal static class VfsShared
             string.Equals(exclusion, folder.ID.ToString(), StringComparison.OrdinalIgnoreCase) || string.Equals(exclusion, folder.Name, StringComparison.OrdinalIgnoreCase)
         );
 
+    /// <summary>Normalizes a directory path and trims trailing separators unless the path is a filesystem or drive root.</summary>
+    /// <param name="path">The directory path to normalize.</param>
+    /// <param name="fullPath">When <c>true</c>, resolves the path via <see cref="Path.GetFullPath(string)"/> before trimming.</param>
+    /// <returns>The normalized directory path, or <c>null</c> if the input is null or whitespace.</returns>
+    public static string? TrimRoot(string? path, bool fullPath = false)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
+        string normalizedInput = NormalizeSeparators(fullPath ? Path.GetFullPath(path) : path);
+        string? pathRoot = Path.GetPathRoot(normalizedInput);
+        return !string.IsNullOrEmpty(pathRoot) && string.Equals(normalizedInput, pathRoot, PathComparison)
+            ? normalizedInput
+            : normalizedInput.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+    }
+
     /// <summary>Determines the root import path for a video file.</summary>
     /// <param name="location">The video file location.</param>
     /// <returns>The resolved import root path, or <c>null</c> if unavailable.</returns>
     public static string? ResolveImportRootPath(IVideoFile location)
     {
-        static string? TrimRoot(string? path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return null;
-            string normalizedInput = NormalizeSeparators(path);
-            string? pathRoot = Path.GetPathRoot(normalizedInput);
-            return !string.IsNullOrEmpty(pathRoot) && string.Equals(normalizedInput, pathRoot, PathComparison)
-                ? normalizedInput
-                : normalizedInput.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        }
-
         if (!string.IsNullOrWhiteSpace(location.ManagedFolder?.Path))
             return TrimRoot(location.ManagedFolder.Path);
 
@@ -466,18 +470,12 @@ internal static class VfsShared
         }
         else if (Path.IsPathRooted(path))
         {
-            string fullNormalizedPath = NormalizeSeparators(path);
-            if (fullNormalizedPath.Length > 1)
-                fullNormalizedPath = fullNormalizedPath.TrimEnd(Path.DirectorySeparatorChar);
+            string fullNormalizedPath = TrimRoot(path) ?? string.Empty;
 
             var matchedRoot = (videoService.GetAllManagedFolders() ?? [])
                 .Select(folder => folder.Path)
                 .Where(folderPath => !string.IsNullOrWhiteSpace(folderPath))
-                .Select(folderPath =>
-                {
-                    string normalizedFolder = NormalizeSeparators(folderPath);
-                    return normalizedFolder.Length > 1 ? normalizedFolder.TrimEnd(Path.DirectorySeparatorChar) : normalizedFolder;
-                })
+                .Select(folderPath => TrimRoot(folderPath)!)
                 .OrderByDescending(folderPath => folderPath.Length)
                 .FirstOrDefault(folderPath =>
                     string.Equals(fullNormalizedPath, folderPath, PathComparison)

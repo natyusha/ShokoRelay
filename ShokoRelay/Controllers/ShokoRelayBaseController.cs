@@ -167,12 +167,12 @@ public sealed class RelayAdminAuthorizeAttribute : Attribute, IAuthorizationFilt
 /// <remarks>Contains shared logic for logging, validation, response formatting, and Plex discovery.</remarks>
 /// <param name="configProvider">Configuration provider.</param>
 /// <param name="metadataService">Shoko metadata service.</param>
-/// <param name="plexLibrary">Plex client.</param>
+/// <param name="plexClient">Plex client.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
 [Route(ShokoRelayConstants.BasePath)]
 [ApiVersion(ShokoRelayConstants.ApiVersion)]
-public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexLibrary, ILogger logger) : ControllerBase
+public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IMetadataService metadataService, PlexClient plexClient, ILogger logger) : ControllerBase
 {
     #region Setup
 
@@ -186,7 +186,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     protected readonly IMetadataService MetadataService = metadataService;
 
     /// <summary>Client used for interacting with configured Plex server instances.</summary>
-    protected readonly PlexClient PlexLibrary = plexLibrary;
+    protected readonly PlexClient PlexClient = plexClient;
 
     /// <summary>Returns the absolute base URL of the plugin's API on the current host, honouring reverse-proxy forwarding headers.</summary>
     protected string ApiBase =>
@@ -307,7 +307,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     {
         seriesList = [];
         filterIds = [];
-        if (!PlexLibrary.IsEnabled)
+        if (!PlexClient.IsEnabled)
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex server configuration is missing or no library selected."));
 
         var validation = ValidateFilterOrBadRequest(filter, out filterIds);
