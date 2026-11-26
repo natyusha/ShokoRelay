@@ -445,10 +445,8 @@
 
       const hasTheme = (series.rootFiles || []).some((file) => file.name === "Theme.mp3");
       const validSeasons = (series.seasons || []).filter((season) => season.name.toLowerCase().startsWith("season") || season.name.toLowerCase() === "specials");
-      const movieFile = (series.seasons || [])
-        .filter((season) => season.name.startsWith("Movie ❯ "))
-        .flatMap((season) => season.files || [])
-        .find((file) => !file.name.replace(/\\/g, "/").toLowerCase().startsWith("shorts/"));
+      const movieFiles = (series.seasons || []).filter((season) => season.name.startsWith("Movie ❯ ")).flatMap((season) => season.files || []);
+      const movieFile = movieFiles.find((file) => !file.name.includes("/") && !file.name.includes("\\")) || movieFiles.find((file) => !file.name.replace(/\\/g, "/").toLowerCase().startsWith("shorts/"));
       const firstFile = series.rootFiles && series.rootFiles.length > 0 ? series.rootFiles[0] : validSeasons.flatMap((season) => season.files || [])[0] || movieFile || null;
       let slug = "";
       let upgrade = "";
