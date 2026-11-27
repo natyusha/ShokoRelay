@@ -52,9 +52,13 @@ public static class TaskHelper
         ActiveTasks.TryAdd(taskName, DateTime.UtcNow);
     }
 
-    /// <summary>Unregisters an active task without saving a result.</summary>
+    /// <summary>Unregisters an active task without saving a result when no queued jobs for that task remain active.</summary>
     /// <param name="taskName">The unique identifier for the task.</param>
-    public static void FinishTask(string taskName) => ActiveTasks.TryRemove(taskName, out _);
+    public static void FinishTask(string taskName)
+    {
+        if (!s_queuedJobsByTask.TryGetValue(taskName, out var jobs) || jobs.IsEmpty)
+            ActiveTasks.TryRemove(taskName, out _);
+    }
 
     /// <summary>Moves a task from active to completed and stores the result object.</summary>
     /// <param name="taskName">The unique identifier for the task.</param>
@@ -104,6 +108,8 @@ public static class TaskHelper
                 if (removedForDashboard && !TaskResults.ContainsKey(taskName))
                     TaskResults[taskName] = new { status = "cancelled", message = "Removed from queue." };
             }
+            else
+                ActiveTasks.TryAdd(taskName, DateTime.UtcNow);
         }
     }
 

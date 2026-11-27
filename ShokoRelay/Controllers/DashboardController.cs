@@ -226,7 +226,14 @@ public class DashboardController(
     public IActionResult GetConfig()
     {
         var payload = ConfigProvider.GetDashboardConfig();
-        var themes = webThemeService.GetThemes(forceRefresh: false).Select(theme => new { id = theme.ID, name = theme.Name }).ToList();
+        var themes = new[] { new { id = "default", name = "Default" }, new { id = "shoko-gray", name = "Shoko Gray" } }
+            .Concat(
+                webThemeService
+                    .GetThemes(forceRefresh: false)
+                    .Where(theme => !string.Equals(theme.ID, "default", StringComparison.OrdinalIgnoreCase) && !string.Equals(theme.ID, "shoko-gray", StringComparison.OrdinalIgnoreCase))
+                    .Select(theme => new { id = theme.ID, name = theme.Name })
+            )
+            .ToList();
         var path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileVfsOverrides);
         return Ok(
             new
@@ -485,12 +492,28 @@ public class DashboardController(
     /// <param name="Type">The UI data type.</param>
     /// <param name="Display">The display name.</param>
     /// <param name="Description">The descriptive tooltip text.</param>
+    /// <param name="Prompt">Optional placeholder prompt text.</param>
+    /// <param name="Pattern">Optional regular expression validation pattern.</param>
+    /// <param name="PatternError">Optional validation error message when <paramref name="Pattern"/> fails.</param>
     /// <param name="DefaultValue">The hardcoded default value.</param>
     /// <param name="EnumValues">Possible values for enums.</param>
     /// <param name="Advanced">Whether this is an advanced setting.</param>
     /// <param name="Rebuild">Whether the setting requires a VFS rebuild.</param>
     /// <param name="Language">Whether this is a language setting.</param>
-    private sealed record ConfigPropertySchema(string Path, string Type, string? Display, string? Description, object? DefaultValue, object? EnumValues, bool Advanced, bool Rebuild, bool Language);
+    private sealed record ConfigPropertySchema(
+        string Path,
+        string Type,
+        string? Display,
+        string? Description,
+        string? Prompt,
+        string? Pattern,
+        string? PatternError,
+        object? DefaultValue,
+        object? EnumValues,
+        bool Advanced,
+        bool Rebuild,
+        bool Language
+    );
 
     /// <summary>Recursively builds a list of property metadata descriptors from a type to expose as a JSON schema.</summary>
     /// <param name="type">The type to reflect over and parse.</param>
@@ -513,7 +536,9 @@ public class DashboardController(
             bool isLanguage = prop.GetCustomAttribute<LanguageSettingAttribute>() != null;
             string path = string.IsNullOrWhiteSpace(prefix) ? prop.Name : $"{prefix}.{prop.Name}";
             var display = prop.GetCustomAttribute<DisplayAttribute>();
+            var regex = prop.GetCustomAttribute<RegularExpressionAttribute>();
             var defaultValue = prop.GetCustomAttribute<DefaultValueAttribute>()?.Value;
+            string? prompt = display?.GetPrompt();
             Type propType = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
 
             if (propType.IsEnum)
@@ -529,16 +554,16 @@ public class DashboardController(
                     })
                     .Where(enumItem => !isFlags || (enumItem.value > 0 && (enumItem.value & (enumItem.value - 1)) == 0))
                     .ToArray();
-                props.Add(new ConfigPropertySchema(path, isFlags ? "flags" : "enum", display?.Name, display?.Description, defaultValue, values, isAdvanced, needsRebuild, isLanguage));
+                props.Add(new ConfigPropertySchema(path, isFlags ? "flags" : "enum", display?.Name, display?.Description, prompt, null, null, defaultValue, values, isAdvanced, needsRebuild, isLanguage));
             }
             else if (propType == typeof(bool))
-                props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
+                props.Add(new ConfigPropertySchema(path, "bool", display?.Name, display?.Description, prompt, null, null, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (propType == typeof(string))
-                props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
+                props.Add(new ConfigPropertySchema(path, "string", display?.Name, display?.Description, prompt, regex?.Pattern, regex?.ErrorMessage, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (propType.IsPrimitive || propType == typeof(decimal))
-                props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
+                props.Add(new ConfigPropertySchema(path, "number", display?.Name, display?.Description, prompt, null, null, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (typeof(IDictionary).IsAssignableFrom(propType))
-                props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
+                props.Add(new ConfigPropertySchema(path, "json", display?.Name, display?.Description, prompt, null, null, defaultValue, null, isAdvanced, needsRebuild, isLanguage));
             else if (propType.IsClass)
                 props.AddRange(BuildConfigSchema(propType, path, isAdvanced));
         }

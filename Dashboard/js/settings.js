@@ -273,8 +273,6 @@
       if (prop.Path.endsWith("SelectedTheme")) {
         createFieldLabel(wrap, prop);
         input = document.createElement("select");
-        input.add(new Option("Default", "default"));
-        input.add(new Option("Shoko Gray", "shoko-gray"));
 
         (rawConfig.themes || []).forEach((theme) => {
           const option = new Option(theme.name, theme.id);
@@ -326,8 +324,7 @@
           input.type = "number";
         } else if (input.tagName === "INPUT") {
           input.type = "text";
-          if (prop.Path.endsWith("ShokoServerUrl")) input.placeholder = "e.g. http://localhost:8111";
-          if (prop.Path.endsWith("PlexServerUrl")) input.placeholder = "e.g. http://localhost:32400";
+          if (prop.Prompt) input.placeholder = prop.Prompt;
         }
         wrap.appendChild(input);
 
@@ -353,14 +350,13 @@
             };
             window._sr.updateLogoutButton?.();
           };
-          // Custom validation for ShokoServerUrl and PlexServerUrl
-        } else if (prop.Path.endsWith("ShokoServerUrl") || prop.Path.endsWith("PlexServerUrl")) {
+        } else if (prop.Pattern) {
+          const regex = new RegExp(prop.Pattern);
           input.value = value ?? "";
           input.onchange = async () => {
-            const urlRegex = /^https?:\/\/([a-zA-Z0-9.-]+|\[[a-fA-F0-9:]+\])(:\d+)?$/;
             const cleanedValue = input.value.trim().replace(/\/+$/, "");
-            if (cleanedValue && !urlRegex.test(cleanedValue)) {
-              showToast(`Invalid ${prop.Path.endsWith("ShokoServerUrl") ? "Shoko" : "Plex"} URL. Use http(s)://HOST:PORT`, "error", 5000);
+            if (cleanedValue && !regex.test(cleanedValue)) {
+              showToast(prop.PatternError || "Invalid input format.", "error", 5000);
               input.value = getValueByPath(config, prop.Path) || "";
               return;
             }

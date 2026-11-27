@@ -106,12 +106,9 @@
           dryRun: isDryRun,
           ratings: element("sync-ratings").checked,
           progress: element("sync-progress").checked,
+          users: element("sync-users").value,
           queue: "true",
         });
-
-        const usersValue = element("sync-users").value;
-        const usersMap = { 0: "all", 1: "admin", 2: "extra", 3: "advanced", 4: "none" };
-        queryParams.set("users", usersMap[usersValue] || "none");
 
         const libraryName = element("sync-library")?.value.trim();
         if (libraryName) queryParams.set("libraryName", libraryName);
