@@ -133,7 +133,7 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
     /// <returns>Tuple of token validity and lists of servers/devices.</returns>
     public async Task<(bool TokenValid, List<PlexServerInfo> Servers, List<PlexDevice> Devices)> GetPlexServerListAsync(string token, string clientIdentifier, CancellationToken cancellationToken = default)
     {
-        using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources"), token, clientIdentifier);
+        using var request = CreateRequest(HttpMethod.Get, new Uri("https://clients.plex.tv/api/v2/resources?includeHttps=1&includeRelay=1&includeIPv6=1"), token, clientIdentifier);
         using var response = await httpClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode)
             return (response.StatusCode is not HttpStatusCode.Unauthorized and not HttpStatusCode.Forbidden, [], []);

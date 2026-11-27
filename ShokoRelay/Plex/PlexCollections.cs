@@ -62,7 +62,7 @@ public class PlexCollections(HttpClient httpClient, PlexClient plexClient, IFile
             // Find a collection ID by title, enforcing an exact match to prevent Plex search fuzziness from merging unrelated collections
             using var findRequest = plexClient.CreateRequest(
                 HttpMethod.Get,
-                $"/library/sections/{target.SectionId}/collections?title={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10",
+                $"/library/sections/{target.SectionId}/collections?title=={Uri.EscapeDataString(collectionName)}&X-Plex-Container-Size=10",
                 target.ServerUrl
             );
             using var findResponse = await httpClient.SendAsync(findRequest, cancellationToken).ConfigureAwait(false);

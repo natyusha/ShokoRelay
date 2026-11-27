@@ -30,6 +30,7 @@ public class SyncToPlex(
     /// <param name="dryRun">If true, skip scrobble execution.</param>
     /// <param name="sinceHours">Optional window to limit processed items.</param>
     /// <param name="includeVotes">Include user ratings.</param>
+    /// <param name="includeProgress">Include playback progress.</param>
     /// <param name="userTypeOverride">Optional override for the sync users configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
@@ -39,6 +40,7 @@ public class SyncToPlex(
         bool dryRun,
         int? sinceHours,
         bool? includeVotes = null,
+        bool? includeProgress = null,
         SyncUserType? userTypeOverride = null,
         string? libraryName = null,
         CancellationToken cancellationToken = default,
@@ -52,12 +54,9 @@ public class SyncToPlex(
         if (syncContext == null)
             return earlyResult;
 
-        var targets = plexClient.GetConfiguredTargets();
-        if (targets.Count == 0)
-            return syncContext.Result;
-
         var (result, defaultUser, includeAdmin, adminShokoUser, extraUsers, logPrefix) = syncContext;
         bool actualVotes = includeVotes ?? auto.ShokoSyncWatchedIncludeRatings;
+        bool actualProgress = includeProgress ?? auto.ShokoSyncWatchedIncludeProgress;
 
         var shokoWatchedByUser = new Dictionary<int, List<(IEpisodeUserData UserData, IShokoEpisode Episode)>>();
         var shokoUserLookup = new Dictionary<string, IUser?>(StringComparer.OrdinalIgnoreCase);
@@ -86,6 +85,10 @@ public class SyncToPlex(
         var matchedGlobal = new HashSet<(string PlexUser, int EpisodeId)>();
         var activeSourceEpisodes = new HashSet<(string PlexUser, int EpisodeId)>();
         var preferredOrderingIdCache = new Dictionary<int, string?>();
+        var targets = plexClient.GetConfiguredTargets();
+        if (targets.Count == 0)
+            return syncContext.Result;
+
         var targetStages = progress.InStages([.. Enumerable.Repeat(1m, Math.Max(1, targets.Count))]);
         targetStages.Report(0);
 
@@ -138,10 +141,14 @@ public class SyncToPlex(
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
                 var userWatched = GetShokoWatchedForUser(targetShokoUser);
+                var watchedInShokoIds = new HashSet<int>();
+                var activeUserEpisodeCount = userWatched.Count;
                 foreach (var (userData, _) in userWatched)
+                {
                     activeSourceEpisodes.Add((userName, userData.EpisodeID));
-
-                result.PerUser[userName] = result.PerUser[userName] with { Processed = Math.Max(result.PerUser[userName].Processed, userWatched.Count) };
+                    if (userData.IsWatched)
+                        watchedInShokoIds.Add(userData.EpisodeID);
+                }
 
                 var plexMap = new Dictionary<int, List<PlexMetadataItem>>();
                 foreach (var item in items)
@@ -158,8 +165,10 @@ public class SyncToPlex(
                     }
                 }
 
-                var itemProgress = bucketStages.Throttle().ForItems(Math.Max(1, userWatched.Count));
+                var itemProgress = bucketStages.Throttle().ForItems(Math.Max(1, userWatched.Count + (actualProgress ? plexMap.Count : 0)));
                 itemProgress.Report(0);
+
+                var candidateSkippedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var (userData, episode) in userWatched)
                 {
@@ -180,7 +189,7 @@ public class SyncToPlex(
                             {
                                 if (!dryRun)
                                 {
-                                    using var request = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, userToken);
+                                    using var request = plexClient.CreateRequest(HttpMethod.Put, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, userToken);
                                     using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
                                     if (!response.IsSuccessStatusCode)
                                     {
@@ -246,7 +255,7 @@ public class SyncToPlex(
                                     if (!dryRun)
                                     {
                                         using var rateRequest = plexClient.CreateRequest(
-                                            HttpMethod.Get,
+                                            HttpMethod.Put,
                                             $"/:/rate?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}&rating={userData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
                                             target.ServerUrl,
                                             userToken
@@ -307,8 +316,8 @@ public class SyncToPlex(
                                 }
                             }
 
-                            if (!scrobbled && !rated)
-                                result = SyncHelper.IncSkipped(result, result.PerUser, userName);
+                            if (!scrobbled && !rated && !string.IsNullOrEmpty(plexItem.RatingKey))
+                                candidateSkippedKeys.Add(plexItem.RatingKey);
                         }
                     }
                     finally
@@ -316,6 +325,109 @@ public class SyncToPlex(
                         itemProgress.Increment();
                     }
                 }
+
+                if (actualProgress)
+                    foreach (var (episodeId, plexItems) in plexMap)
+                    {
+                        try
+                        {
+                            if (watchedInShokoIds.Contains(episodeId))
+                                continue;
+
+                            var unwatchedItems = plexItems.DistinctBy(item => item.RatingKey).Where(item => !(item.ViewCount > 0)).ToList();
+                            if (unwatchedItems.Count == 0 || metadataService.GetShokoEpisodeByID(episodeId) is not { Videos.Count: > 0 } episode)
+                                continue;
+
+                            long shokoProgressMs = 0;
+                            foreach (var video in episode.Videos)
+                                if (userDataService.GetVideoUserData(video, targetShokoUser) is { } videoData && (long)videoData.ProgressPosition.TotalMilliseconds > shokoProgressMs)
+                                    shokoProgressMs = (long)videoData.ProgressPosition.TotalMilliseconds;
+
+                            if (shokoProgressMs < 5000)
+                                continue;
+
+                            if (activeSourceEpisodes.Add((userName, episode.LocalID)))
+                                activeUserEpisodeCount++;
+                            matchedGlobal.Add((userName, episode.LocalID));
+
+                            string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
+                            var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
+                            string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
+
+                            foreach (var plexItem in unwatchedItems)
+                            {
+                                long durationMs = plexItem.Duration ?? (long)episode.Runtime.TotalMilliseconds;
+                                if (durationMs <= 0 || shokoProgressMs >= durationMs || Math.Abs(shokoProgressMs - (plexItem.ViewOffset ?? 0)) < 5000)
+                                {
+                                    if (!string.IsNullOrEmpty(plexItem.RatingKey))
+                                        candidateSkippedKeys.Add(plexItem.RatingKey);
+                                    continue;
+                                }
+
+                                if (!dryRun)
+                                {
+                                    string timelinePath =
+                                        $"/:/timeline?ratingKey={plexItem.RatingKey}&key={Uri.EscapeDataString($"/library/metadata/{plexItem.RatingKey}")}&state=stopped&time={shokoProgressMs}&duration={durationMs}";
+                                    using var timelineRequest = plexClient.CreateRequest(HttpMethod.Post, timelinePath, target.ServerUrl, userToken);
+                                    using var timelineResponse = await plexClient.SendAsync(timelineRequest, cancellationToken).ConfigureAwait(false);
+                                    if (!timelineResponse.IsSuccessStatusCode)
+                                    {
+                                        if (bucket.IsSharedFriend && timelineResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                                            logger.LogDebug("WatchedSyncService: Plex shared server token for '{User}' cannot update playback progress (HTTP {Status})", userName, timelineResponse.StatusCode);
+                                        else
+                                            result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to update progress for RatingKey {plexItem.RatingKey} on {target.ServerName}");
+                                        continue;
+                                    }
+                                }
+
+                                if (!string.IsNullOrEmpty(plexItem.RatingKey))
+                                    candidateSkippedKeys.Remove(plexItem.RatingKey);
+                                result = SyncHelper.IncProgressUpdated(result, result.PerUser, userName);
+                                logger.LogInformation(
+                                    "WatchedSyncService: {Prefix}Plex <- Shoko: {User} updated progress for {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} to {Offset} (RatingKey: {RatingKey}) on {Server}",
+                                    logPrefix,
+                                    userName,
+                                    typeLabel,
+                                    episode.Series?.GetDisplayTitle(),
+                                    episode.ShokoSeriesID,
+                                    coords.Season,
+                                    coords.Episode,
+                                    TimeSpan.FromMilliseconds(shokoProgressMs),
+                                    plexItem.RatingKey,
+                                    target.ServerName
+                                );
+                                SyncHelper.AddPerUserChange(
+                                    result.PerUserChanges,
+                                    userName,
+                                    SyncHelper.MakeChange(
+                                        userName,
+                                        shokoUser: mappedLabel,
+                                        libraryName: target.Title,
+                                        episode.LocalID,
+                                        $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
+                                        plexItem.ParentIndex ?? episode.SeasonNumber,
+                                        plexItem.Index ?? episode.EpisodeNumber,
+                                        plexItem.RatingKey,
+                                        plexItem.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
+                                        null,
+                                        null,
+                                        true,
+                                        false,
+                                        reason: "progress_updated"
+                                    )
+                                );
+                            }
+                        }
+                        finally
+                        {
+                            itemProgress.Increment();
+                        }
+                    }
+
+                result.PerUser[userName] = result.PerUser[userName] with { Processed = Math.Max(result.PerUser[userName].Processed, activeUserEpisodeCount) };
+                foreach (var _ in candidateSkippedKeys)
+                    result = SyncHelper.IncSkipped(result, result.PerUser, userName);
+
                 bucketStages.NextStage();
             }
             bucketStages.Complete();

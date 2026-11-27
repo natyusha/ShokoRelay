@@ -46,7 +46,7 @@ public class SyncWatchedAction(SyncToShoko syncToShoko, SyncToPlex syncToPlex, P
     [Display(Name = "Include Ratings", Description = "Override the Include Ratings setting for this run.")]
     public bool? IncludeRatings { get; set; }
 
-    /// <summary>Gets or sets an optional override for including playback progress (Plex to Shoko only).</summary>
+    /// <summary>Gets or sets an optional override for including playback progress.</summary>
     [Display(Name = "Include Progress", Description = "Override the Include Progress setting for this run.")]
     public bool? IncludeProgress { get; set; }
 
@@ -73,7 +73,7 @@ public class SyncWatchedAction(SyncToShoko syncToShoko, SyncToPlex syncToPlex, P
                 {
                     _progress.Report(10);
                     var result = ImportToPlex
-                        ? await syncToPlex.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, cancellationToken: token).ConfigureAwait(false)
+                        ? await syncToPlex.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, IncludeProgress, cancellationToken: token).ConfigureAwait(false)
                         : await syncToShoko.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, IncludeProgress, cancellationToken: token).ConfigureAwait(false);
 
                     result = result with { Direction = ImportToPlex ? "Plex<-Shoko" : "Plex->Shoko" };

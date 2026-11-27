@@ -179,7 +179,7 @@ com.plexapp.agents.shokorelay
   - _Requires Plex authentication_
 - `Sync Int.` An input which will schedule watched state syncing from Plex to Shoko every `N` hours
   - This includes ratings (votes) and progress if `Include Ratings` or `Include Progress` are enabled respectively in the `Quick Actions > Watch Sync Menu` (Sync Watched States Menu)
-    - Currently progress will only sync from Plex to Shoko and not the other way around
+    - The scheduled sync runs from Plex to Shoko while manual syncs support both watched states, ratings, and playback progress in either direction
   - To speed up the process the scheduled watched sync only considers things watched during the scheduled interval +1 hour
     - A full sync may need to be run if Shoko or Plex downtime exceeds the considered time period
   - _Requires Plex authentication_

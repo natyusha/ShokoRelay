@@ -510,14 +510,19 @@ public static class CastHelper
         : role.IndexOf(',') is var commaIndex && commaIndex > 0 && s_tmdbDepartments.Contains(role[..commaIndex].Trim()) ? role[(commaIndex + 1)..].Trim()
         : role.Trim();
 
-    /// <summary>Filters the crew by a specific predicate and returns a formatted array of tags.</summary>
+    /// <summary>Filters the crew by a specific predicate and returns a formatted array of tags with optional creator thumbnails.</summary>
     /// <param name="item">The media item containing cast and crew.</param>
     /// <param name="predicate">Filter predicate to evaluate each crew member against.</param>
     /// <param name="metadataService">Optional metadata service used to pre-warm cross-series deduplication.</param>
-    /// <returns>An array of anonymous objects containing crew tags.</returns>
+    /// <returns>An array of anonymous objects containing crew tags and thumbnail URLs.</returns>
     private static object[] FilterCrew(IWithCastAndCrew item, Func<ICrew, bool> predicate, IMetadataService? metadataService = null)
     {
         EnsureWarmed(metadataService);
+
+        var tmdbCrewIndex =
+            Settings.TmdbCastImages && item.Crew?.Where(crew => crew.Source == MetadataSource.TMDB && crew.Creator != null).ToList() is { Count: > 0 } tmdbCrew
+                ? new TmdbRoleIndex<ICrew>(tmdbCrew, role => role.Creator, role => role.Creator?.Title)
+                : null;
 
         return
         [
@@ -526,15 +531,30 @@ public static class CastHelper
                 {
                     if (crew.Creator == null)
                         return null;
+
                     string? rawName = crew.Creator.Title;
                     if (string.IsNullOrWhiteSpace(rawName) || IsCreditBlacklisted(rawName))
                         return null;
-                    string preferredName = ResolvePreferredCreditName(rawName, crew.Creator.Type == CreatorType.Person, crew.Source == MetadataSource.TMDB ? 2 : 1);
-                    return IsCreditBlacklisted(preferredName) ? null : preferredName;
+
+                    bool isPerson = crew.Creator.Type == CreatorType.Person;
+                    int priority = crew.Source == MetadataSource.TMDB ? 2 : 1;
+                    string tag = ResolvePreferredCreditName(rawName, isPerson, priority);
+                    if (IsCreditBlacklisted(tag))
+                        return null;
+
+                    var thumbImage =
+                        priority == 1 && Settings.TmdbCastImages && tmdbCrewIndex?.FindMatch(crew.Creator, crew.Creator.Title) is { Creator.PrimaryImage: { } tmdbImage } ? tmdbImage : crew.Creator.PrimaryImage;
+
+                    string? thumb =
+                        priority == 1 && Settings.TmdbCastImages && !isPerson && s_globalStudioThumbs.TryGetValue(NormalizeCreditKey(tag), out var cachedLogo)
+                            ? cachedLogo
+                            : (thumbImage != null ? ImageHelper.GetImageUrl(thumbImage, forceRemote: true) : null);
+
+                    return new { Tag = tag, Thumb = thumb };
                 })
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .DistinctBy(name => NormalizeCreditKey(name!))
-                .Select(name => (object)new { tag = name }),
+                .Where(entry => entry != null)
+                .DistinctBy(entry => NormalizeCreditKey(entry!.Tag))
+                .Select(entry => (object)new { tag = entry!.Tag, thumb = entry.Thumb }),
         ];
     }
 

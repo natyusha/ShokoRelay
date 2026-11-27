@@ -138,7 +138,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         {
             try
             {
-                using var request = CreateRequest(HttpMethod.Get, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", target.ServerUrl);
+                using var request = CreateRequest(HttpMethod.Post, $"/library/sections/{target.SectionId}/refresh?path={Uri.EscapeDataString(guessedPath)}", target.ServerUrl);
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
                 if (response.IsSuccessStatusCode)
                 {

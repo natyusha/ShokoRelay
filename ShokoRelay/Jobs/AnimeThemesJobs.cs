@@ -99,6 +99,7 @@ public sealed class AtWebmDownloadJob(AnimeThemesWebmDownloader webmDownloader, 
 /// <summary>Queue job generating <c>Theme.mp3</c> files in batch across a directory tree.</summary>
 [NetworkRequired]
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class AtMp3BatchJob(AnimeThemesMp3Generator mp3Generator, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<AtMp3BatchJob> logger)

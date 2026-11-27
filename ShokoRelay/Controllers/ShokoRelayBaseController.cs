@@ -260,6 +260,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         }
         catch (Exception exception)
         {
+            TaskHelper.TakeJobResult(jobKey);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: exception.Message));
         }
     }
@@ -426,14 +427,18 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
     /// <returns>A tuple containing the Start offset and Size limit.</returns>
     protected (int Start, int Size) GetPaging()
     {
-        int start =
+        int start = Math.Max(
+            0,
             int.TryParse(Request.Headers["X-Plex-Container-Start"], out var startHeader) ? startHeader
-            : int.TryParse(Request.Query["X-Plex-Container-Start"], out var startQuery) ? startQuery
-            : 0;
-        int size =
+                : int.TryParse(Request.Query["X-Plex-Container-Start"], out var startQuery) ? startQuery
+                : 0
+        );
+        int size = Math.Max(
+            0,
             int.TryParse(Request.Headers["X-Plex-Container-Size"], out var sizeHeader) ? sizeHeader
-            : int.TryParse(Request.Query["X-Plex-Container-Size"], out var sizeQuery) ? sizeQuery
-            : 50;
+                : int.TryParse(Request.Query["X-Plex-Container-Size"], out var sizeQuery) ? sizeQuery
+                : 20
+        );
         return (start, size);
     }
 

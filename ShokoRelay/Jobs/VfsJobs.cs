@@ -14,6 +14,7 @@ namespace ShokoRelay.Jobs;
 
 /// <summary>Queue job building or rebuilding the Shoko Relay VFS and restoring AnimeThemes VFS links.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class VfsBuildJob(
@@ -81,6 +82,7 @@ public sealed class VfsBuildJob(
 
 /// <summary>Queue job auditing VFS directories to remove broken symlinks and orphaned folders.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class VfsAuditJob(VfsBuilder vfsBuilder, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<VfsAuditJob> logger) : RelayJobBase(cancellation, progress, logger)
@@ -110,6 +112,7 @@ public sealed class VfsAuditJob(VfsBuilder vfsBuilder, IJobCancellationAccessor 
 
 /// <summary>Queue job applying AnimeThemes cross-reference mappings to VFS Shorts folders.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class AtVfsBuildJob(AnimeThemesMapping atMapping, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<AtVfsBuildJob> logger)
@@ -155,6 +158,7 @@ public sealed class AtVfsBuildJob(AnimeThemesMapping atMapping, IJobCancellation
 
 /// <summary>Queue job purging missing Shoko file records and safely emptying Plex trash.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class PurgeMissingJob(ShokoImportService shokoImportService, PlexClient plexClient, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<PurgeMissingJob> logger)
@@ -222,6 +226,7 @@ public sealed class PurgeMissingJob(ShokoImportService shokoImportService, PlexC
 
 /// <summary>Queue job creating or purging relative source symlinks across managed folders.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class SourceLinksJob(SourceLinkService sourceLinkService, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<SourceLinksJob> logger)

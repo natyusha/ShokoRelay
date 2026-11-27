@@ -123,24 +123,39 @@ public static class ContentRatingHelper
         }
 
         // Fallback to TMDB content ratings when assumed ratings are disabled or undetermined
-        string? tmdbRating = GetTmdbContentRating(series, fallbackRatings);
-        return !string.IsNullOrWhiteSpace(tmdbRating) ? (tmdbRating, tmdbRating is "X" or "18+" or "R18+") : (null, false);
+        var (tmdbRating, isTmdbAdult) = GetTmdbContentRating(series, fallbackRatings);
+        return !string.IsNullOrWhiteSpace(tmdbRating) ? (tmdbRating, isTmdbAdult) : (null, false);
     }
 
-    /// <summary>Resolves the best available TMDB content rating, prioritizing US ratings before falling back to the first available entry.</summary>
+    /// <summary>Resolves the best available TMDB content rating, prioritizing US ratings before falling back to the first available entry with a country prefix.</summary>
     /// <param name="series">The primary series entity.</param>
     /// <param name="fallback">The optional fallback content rating container.</param>
-    /// <returns>The resolved rating string or null.</returns>
-    private static string? GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback) =>
-        (
-            fallback?.ContentRatings is { Count: > 0 } ? fallback.ContentRatings
-            : series is IWithContentRatings { ContentRatings: { Count: > 0 } seriesRatings } ? seriesRatings
-            : (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings
+    /// <returns>A tuple containing the formatted rating string (or <c>null</c>) and whether it represents adult content.</returns>
+    private static (string? Rating, bool IsAdult) GetTmdbContentRating(ISeries? series, IWithContentRatings? fallback)
+    {
+        if (
+            (
+                fallback?.ContentRatings is { Count: > 0 } ? fallback.ContentRatings
+                : series is IWithContentRatings { ContentRatings: { Count: > 0 } seriesRatings } ? seriesRatings
+                : (series as IShokoSeries)?.GetLinkedSeries(MetadataSource.TMDB)?.FirstOrDefault()?.ContentRatings
+            )
+            is not { Count: > 0 } ratings
         )
-            is { Count: > 0 } ratings
-            ? ratings.FirstOrDefault(rating => string.Equals(rating.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(rating.Value))?.Value
-                ?? ratings.FirstOrDefault(rating => !string.IsNullOrWhiteSpace(rating.Value))?.Value
-            : null;
+            return (null, false);
+
+        var selected = ratings.FirstOrDefault(rating => string.Equals(rating.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(rating.Value))
+            ?? ratings.FirstOrDefault(rating => !string.IsNullOrWhiteSpace(rating.Value));
+        if (selected == null)
+            return (null, false);
+
+        string rawValue = selected.Value.Trim();
+        string formatted =
+            !string.IsNullOrWhiteSpace(selected.CountryCode) && !string.Equals(selected.CountryCode, "US", StringComparison.OrdinalIgnoreCase) && !rawValue.Contains('/')
+                ? $"{selected.CountryCode.Trim().ToLowerInvariant()}/{rawValue}"
+                : rawValue;
+
+        return (formatted, rawValue is "X" or "18+" or "R18+");
+    }
 
     #endregion
 }

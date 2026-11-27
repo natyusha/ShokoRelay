@@ -136,8 +136,9 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
 - `GetMediaProvider` returns the agent descriptor describing supported types for TV Shows (`/` or `/options/{overrides}`) or Movies (`/movie` or `/movie/options/{overrides}`).
 - `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
   - `filename`: The file path provided by Plex.
-  - `title`: The Shoko Series ID (used when `manual=1`).
+  - `title`: The Shoko Series ID (used when `manual=1`; also supports `a{AniDBID}` and `m{EpisodeID}` for movies).
   - `manual`: (default 0) set to 1 to force identification via the `title` parameter.
+    - Manual title/GUID searches are intentionally omitted since files always originate from the VFS and encode expected IDs.
   - Testing the `GET` endpoint would use the following format: `/matches?title={ShokoSeriesID}&manual=1`
 - `GetCollection` retrieves collection metadata for a given group ID.
 - `GetCollectionImage` returns the image from the `!CollectionImages` directory matching the given Shoko group name/ID or a Plex smart collection rating key prefixed with 'sc'.

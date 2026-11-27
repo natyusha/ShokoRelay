@@ -138,7 +138,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         {
             ["ratingKey"]             = group.GetPlexRatingKey(),
             ["guid"]                  = group.GetPlexGuid(),
-            ["key"]                   = $"/collection/{group.LocalID}",
+            ["key"]                   = $"/collections/{group.LocalID}",
             ["type"]                  = "collection",
             ["subtype"]               = "show",
             ["title"]                 = title,

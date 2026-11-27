@@ -13,6 +13,7 @@ namespace ShokoRelay.Jobs;
 
 /// <summary>Queue job refreshing discovered Plex servers and Shoko Relay libraries.</summary>
 [NetworkRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_Plex")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class PlexDiscoveryJob(PlexAuth plexAuth, ConfigProvider configProvider, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<PlexDiscoveryJob> logger)
@@ -50,6 +51,7 @@ public sealed class PlexDiscoveryJob(PlexAuth plexAuth, ConfigProvider configPro
 
 /// <summary>Queue job creating and updating Plex collections and collection artwork.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_Plex")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class PlexCollectionsJob(
@@ -101,6 +103,7 @@ public sealed class PlexCollectionsJob(
 
 /// <summary>Queue job applying configured AniDB or TMDB critic ratings to Plex libraries.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_Plex")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class PlexRatingsJob(CriticRatingService criticRatingService, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<PlexRatingsJob> logger)
@@ -138,6 +141,7 @@ public sealed class PlexRatingsJob(CriticRatingService criticRatingService, IJob
 
 /// <summary>Queue job synchronizing unique local artwork and Plex thumbnails back to Shoko.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_Plex")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class PlexImagesSyncJob(ImageSyncService imageSyncService, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<PlexImagesSyncJob> logger)
@@ -175,6 +179,7 @@ public sealed class PlexImagesSyncJob(ImageSyncService imageSyncService, IJobCan
 
 /// <summary>Queue job running Collections, Critic Ratings, Image Sync, and safe Trash emptying sequentially.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_Plex")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class PlexAutomationJob(
@@ -213,6 +218,7 @@ public sealed class PlexAutomationJob(
 
 /// <summary>Queue job synchronizing watched states, progress, and ratings between Plex and Shoko.</summary>
 [DatabaseRequired]
+[LimitConcurrency(1)]
 [DisallowConcurrencyGroup("ShokoRelay_Plex")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class WatchSyncJob(SyncToShoko syncToShoko, SyncToPlex syncToPlex, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<WatchSyncJob> logger)
@@ -263,7 +269,7 @@ public sealed class WatchSyncJob(SyncToShoko syncToShoko, SyncToPlex syncToPlex,
             async () =>
             {
                 var result = Import
-                    ? await syncToPlex.SyncWatchedAsync(DryRun, SinceHours, Ratings, Users, LibraryName, CancellationToken, Progress).ConfigureAwait(false)
+                    ? await syncToPlex.SyncWatchedAsync(DryRun, SinceHours, Ratings, SyncProgress, Users, LibraryName, CancellationToken, Progress).ConfigureAwait(false)
                     : await syncToShoko.SyncWatchedAsync(DryRun, SinceHours, Ratings, SyncProgress, Users, LibraryName, CancellationToken, Progress).ConfigureAwait(false);
                 return result with { Direction = Import ? "Plex<-Shoko" : "Plex->Shoko" };
             },

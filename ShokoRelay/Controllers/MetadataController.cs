@@ -63,6 +63,10 @@ public class MetadataController(
     #region Matching
 
     /// <summary>Attempts to match a Plex media lookup request to a Shoko series, season, episode, or movie.</summary>
+    /// <remarks>
+    ///   Manual matching (<c>manual=1</c>) is intentionally limited to direct Shoko/AniDB/Movie IDs (<c>123</c>, <c>a123</c>, <c>m890</c>) rather than title or external GUID searches.
+    ///   Users should not need manual matching because all library media originates from the VFS and already encodes the expected identifier in its path.
+    /// </remarks>
     /// <param name="body">Match parameters including filename, title, media type, and indices.</param>
     /// <returns>A match result MediaContainer.</returns>
     [HttpGet]
@@ -74,12 +78,16 @@ public class MetadataController(
             string? rawPath = body?.Filename ?? Request.Query["filename"];
             string? title = body?.Title ?? Request.Query["title"];
             int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var manualFlag) ? manualFlag : null);
+            int? manualEpisodeId =
+                manual == 1 && title?.StartsWith(PlexConstants.MoviePrefix, StringComparison.OrdinalIgnoreCase) == true && int.TryParse(title[PlexConstants.MoviePrefix.Length..], out var movieEpisodeId)
+                    ? movieEpisodeId
+                    : null;
             int? manualId = int.TryParse(title, out var manualSeriesId)
                 ? manualSeriesId
                 : (
                     title?.StartsWith(PlexConstants.AniDbPrefix, StringComparison.OrdinalIgnoreCase) == true && int.TryParse(title[1..], out var anidbId)
                         ? MetadataService.GetShokoSeriesByAnidbID(anidbId)?.LocalID
-                        : null
+                        : (manualEpisodeId.HasValue ? MetadataService.GetShokoEpisodeByID(manualEpisodeId.Value)?.ShokoSeriesID : null)
                 );
             int? id = (manual == 1 && manualId.HasValue) ? manualId : (string.IsNullOrWhiteSpace(rawPath) ? null : ExtractSeriesId(rawPath));
 
@@ -100,8 +108,10 @@ public class MetadataController(
             if (typeInt == PlexConstants.TypeMovie || IsMovieRoute() || isMoviePath)
                 typeInt = PlexConstants.TypeMovie;
 
-            var episode = manual != 1 && (isMoviePath || MetadataService.GetShokoSeriesByID(id.Value) == null) ? MetadataService.GetShokoEpisodeByID(id.Value) : null; // In case the extracted ID was a movie episode ID
-            var series = (typeInt == PlexConstants.TypeMovie && episode?.Series != null && manual != 1) ? episode.Series : MetadataService.GetShokoSeriesByID(id.Value);
+            var episode = manualEpisodeId.HasValue
+                ? MetadataService.GetShokoEpisodeByID(manualEpisodeId.Value)
+                : (manual != 1 && (isMoviePath || MetadataService.GetShokoSeriesByID(id.Value) == null) ? MetadataService.GetShokoEpisodeByID(id.Value) : null); // In case the extracted ID was a movie episode ID
+            var series = (typeInt == PlexConstants.TypeMovie && episode?.Series != null && (manual != 1 || manualEpisodeId.HasValue)) ? episode.Series : MetadataService.GetShokoSeriesByID(id.Value);
 
             if (series == null && episode?.Series != null)
             {
