@@ -18,11 +18,11 @@ public sealed class AtMapBuildJob(AnimeThemesMapping atMapping, IJobCancellation
 {
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Build AnimeThemes Mapping";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Build AnimeThemes Mapping";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => "Build AnimeThemes Mapping";
+    public override string Title => $"{ShokoRelayConstants.Name}: Build AnimeThemes Mapping";
 
     /// <inheritdoc/>
     public override Task Process() =>
@@ -72,14 +72,14 @@ public sealed class AtWebmDownloadJob(AnimeThemesWebmDownloader webmDownloader, 
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Download AnimeThemes WebMs";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Download AnimeThemes WebMs";
 
     /// <inheritdoc/>
     [JsonIgnore]
     public override string Title =>
-        Recent is > 0 ? $"Download Recent AnimeThemes ({Recent})"
-        : !string.IsNullOrWhiteSpace(Name) ? $"Download AnimeThemes ({Name})"
-        : $"Download AnimeThemes ({string.Join(" ", new[] { Season, Year?.ToString() }.Where(part => !string.IsNullOrWhiteSpace(part)))})";
+        Recent is > 0 ? $"{ShokoRelayConstants.Name}: Download Recent AnimeThemes ({Recent})"
+        : !string.IsNullOrWhiteSpace(Name) ? $"{ShokoRelayConstants.Name}: Download AnimeThemes ({Name})"
+        : $"{ShokoRelayConstants.Name}: Download AnimeThemes ({string.Join(" ", new[] { Season, Year?.ToString() }.Where(part => !string.IsNullOrWhiteSpace(part)))})";
 
     /// <inheritdoc/>
     public override Task Process() =>
@@ -97,8 +97,8 @@ public sealed class AtWebmDownloadJob(AnimeThemesWebmDownloader webmDownloader, 
 #region MP3 Batch & Audit
 
 /// <summary>Queue job generating <c>Theme.mp3</c> files in batch across a directory tree.</summary>
-[DatabaseRequired]
 [NetworkRequired]
+[DatabaseRequired]
 [DisallowConcurrencyGroup("ShokoRelay_VFS")]
 [JobKeyGroup("ShokoRelay")]
 public sealed class AtMp3BatchJob(AnimeThemesMp3Generator mp3Generator, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<AtMp3BatchJob> logger)
@@ -126,11 +126,11 @@ public sealed class AtMp3BatchJob(AnimeThemesMp3Generator mp3Generator, IJobCanc
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Generate Theme.mp3 Batch";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Generate Theme.mp3 Batch";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => $"Generate Theme.mp3 Batch ({Path.GetFileName(FolderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))})";
+    public override string Title => $"{ShokoRelayConstants.Name}: Generate Theme.mp3 Batch ({Path.GetFileName(FolderPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))})";
 
     /// <inheritdoc/>
     public override Task Process() =>
@@ -145,8 +145,8 @@ public sealed class AtMp3BatchJob(AnimeThemesMp3Generator mp3Generator, IJobCanc
 }
 
 /// <summary>Queue job auditing cached non-OP1 <c>Theme.mp3</c> files for available upgrades.</summary>
-[DatabaseRequired]
 [NetworkRequired]
+[DatabaseRequired]
 [DisallowConcurrentExecution]
 [JobKeyGroup("ShokoRelay")]
 public sealed class AtMp3AuditJob(AnimeThemesMp3Generator mp3Generator, IJobCancellationAccessor cancellation, IJobProgressAccessor progress, ILogger<AtMp3AuditJob> logger)
@@ -154,11 +154,11 @@ public sealed class AtMp3AuditJob(AnimeThemesMp3Generator mp3Generator, IJobCanc
 {
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Audit Theme.mp3s";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Audit Theme.mp3s";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => "Audit Theme.mp3 Files";
+    public override string Title => $"{ShokoRelayConstants.Name}: Audit Theme.mp3 Files";
 
     /// <inheritdoc/>
     public override Task Process() =>

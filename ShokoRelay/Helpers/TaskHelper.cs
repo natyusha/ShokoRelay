@@ -29,7 +29,8 @@ public static class TaskHelper
     /// <returns><c>true</c> if this call registered the task as active; <c>false</c> if it was already active.</returns>
     public static bool StartTask(string taskName)
     {
-        TaskResults.TryRemove(taskName, out _);
+        if (!s_queuedJobsByTask.TryGetValue(taskName, out var jobs) || jobs.IsEmpty)
+            TaskResults.TryRemove(taskName, out _);
         return ActiveTasks.TryAdd(taskName, DateTime.UtcNow);
     }
 

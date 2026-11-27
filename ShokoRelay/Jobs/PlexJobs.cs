@@ -20,11 +20,11 @@ public sealed class PlexDiscoveryJob(PlexAuth plexAuth, ConfigProvider configPro
 {
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Plex Discovery";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Plex Discovery";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => "Refresh Plex Libraries";
+    public override string Title => $"{ShokoRelayConstants.Name}: Refresh Plex Libraries";
 
     /// <inheritdoc/>
     public override Task Process() =>
@@ -46,7 +46,7 @@ public sealed class PlexDiscoveryJob(PlexAuth plexAuth, ConfigProvider configPro
 
 #endregion
 
-#region Collections, Ratings & Images
+#region Plex Automations
 
 /// <summary>Queue job creating and updating Plex collections and collection artwork.</summary>
 [DatabaseRequired]
@@ -78,11 +78,11 @@ public sealed class PlexCollectionsJob(
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Build Plex Collections";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Build Plex Collections";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => string.IsNullOrWhiteSpace(Filter) ? "Build Plex Collections" : $"Build Plex Collections ({FilterKey})";
+    public override string Title => string.IsNullOrWhiteSpace(Filter) ? $"{ShokoRelayConstants.Name}: Build Plex Collections" : $"{ShokoRelayConstants.Name}: Build Plex Collections ({FilterKey})";
 
     /// <inheritdoc/>
     public override Task Process()
@@ -116,11 +116,11 @@ public sealed class PlexRatingsJob(CriticRatingService criticRatingService, IJob
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Apply Critic Ratings";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Apply Critic Ratings";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => string.IsNullOrWhiteSpace(Filter) ? "Apply Plex Critic Ratings" : $"Apply Plex Critic Ratings ({FilterKey})";
+    public override string Title => string.IsNullOrWhiteSpace(Filter) ? $"{ShokoRelayConstants.Name}: Apply Plex Critic Ratings" : $"{ShokoRelayConstants.Name}: Apply Plex Critic Ratings ({FilterKey})";
 
     /// <inheritdoc/>
     public override Task Process()
@@ -153,11 +153,11 @@ public sealed class PlexImagesSyncJob(ImageSyncService imageSyncService, IJobCan
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Sync Plex Images";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Sync Plex Images";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => string.IsNullOrWhiteSpace(Filter) ? "Sync Plex Images" : $"Sync Plex Images ({FilterKey})";
+    public override string Title => string.IsNullOrWhiteSpace(Filter) ? $"{ShokoRelayConstants.Name}: Sync Plex Images" : $"{ShokoRelayConstants.Name}: Sync Plex Images ({FilterKey})";
 
     /// <inheritdoc/>
     public override Task Process()
@@ -187,11 +187,11 @@ public sealed class PlexAutomationJob(
 {
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Plex Automation";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Plex Automation";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => "Run Plex Automation";
+    public override string Title => $"{ShokoRelayConstants.Name}: Run Plex Automation";
 
     /// <inheritdoc/>
     public override Task Process()
@@ -248,11 +248,11 @@ public sealed class WatchSyncJob(SyncToShoko syncToShoko, SyncToPlex syncToPlex,
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Watch Sync";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Watch Sync";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => $"{(Import ? "Watch Sync (Shoko -> Plex)" : "Watch Sync (Plex -> Shoko)")}{(DryRun ? " [Dry Run]" : "")}";
+    public override string Title => $"{ShokoRelayConstants.Name}: {(Import ? "Watch Sync (Shoko -> Plex)" : "Watch Sync (Plex -> Shoko)")}{(DryRun ? " [Dry Run]" : "")}";
 
     /// <inheritdoc/>
     public override Task Process() =>

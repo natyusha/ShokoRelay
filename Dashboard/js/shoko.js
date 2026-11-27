@@ -3,7 +3,7 @@
  * @description Dedicated logic for Shoko VFS and Automation tasks on the Shoko Relay dashboard.
  */
 (() => {
-  const { base, configUrl, element, fetchJson, showToast, toastOperation, summarizeResult, initToggle, openModal, setButtonLoading, getData } = window._sr;
+  const { base, configUrl, element, fetchJson, showToast, toastOperation, initToggle, openModal } = window._sr;
 
   // #region Param Providers
   /**

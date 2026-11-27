@@ -40,11 +40,12 @@ public sealed class VfsBuildJob(
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Build VFS";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Build VFS";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => string.IsNullOrWhiteSpace(Filter) ? (Clean ? "Clean & Build VFS" : "Build VFS") : $"Build VFS ({FilterKey})";
+    public override string Title =>
+        string.IsNullOrWhiteSpace(Filter) ? (Clean ? $"{ShokoRelayConstants.Name}: Clean & Build VFS" : $"{ShokoRelayConstants.Name}: Build VFS") : $"{ShokoRelayConstants.Name}: Build VFS ({FilterKey})";
 
     /// <inheritdoc/>
     [JsonIgnore]
@@ -86,11 +87,11 @@ public sealed class VfsAuditJob(VfsBuilder vfsBuilder, IJobCancellationAccessor 
 {
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Audit VFS";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Audit VFS";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => "Audit VFS";
+    public override string Title => $"{ShokoRelayConstants.Name}: Audit VFS";
 
     /// <inheritdoc/>
     public override Task Process() =>
@@ -124,11 +125,11 @@ public sealed class AtVfsBuildJob(AnimeThemesMapping atMapping, IJobCancellation
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Apply AnimeThemes VFS";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Apply AnimeThemes VFS";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => string.IsNullOrWhiteSpace(Filter) ? "Apply AnimeThemes VFS" : $"Apply AnimeThemes VFS ({FilterKey})";
+    public override string Title => string.IsNullOrWhiteSpace(Filter) ? $"{ShokoRelayConstants.Name}: Apply AnimeThemes VFS" : $"{ShokoRelayConstants.Name}: Apply AnimeThemes VFS ({FilterKey})";
 
     /// <inheritdoc/>
     [JsonIgnore]
@@ -173,11 +174,11 @@ public sealed class PurgeMissingJob(ShokoImportService shokoImportService, PlexC
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Purge Missing";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Purge Missing";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => DryRun ? "Purge Missing Files (Dry Run)" : "Purge Missing Files";
+    public override string Title => DryRun ? $"{ShokoRelayConstants.Name}: Purge Missing Files (Dry Run)" : $"{ShokoRelayConstants.Name}: Purge Missing Files";
 
     /// <inheritdoc/>
     [JsonIgnore]
@@ -236,11 +237,11 @@ public sealed class SourceLinksJob(SourceLinkService sourceLinkService, IJobCanc
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string TypeName => "Shoko Relay: Source Links";
+    public override string TypeName => $"{ShokoRelayConstants.Name}: Source Links";
 
     /// <inheritdoc/>
     [JsonIgnore]
-    public override string Title => PurgeLinks ? "Purge Source Symlinks" : $"Map Source Symlinks ({Path.GetFileName(MapFile)})";
+    public override string Title => PurgeLinks ? $"{ShokoRelayConstants.Name}: Purge Source Symlinks" : $"{ShokoRelayConstants.Name}: Map Source Symlinks ({Path.GetFileName(MapFile)})";
 
     /// <inheritdoc/>
     public override Task Process() =>
