@@ -77,18 +77,23 @@ public abstract class RelayJobBase(IJobCancellationAccessor cancellation, IJobPr
     )
     {
         string jobKey = !string.IsNullOrEmpty(TrackedJobKey) ? TrackedJobKey : JobKeyBuilder.BuildFor(this);
-        if (semaphore != null)
-            await semaphore.WaitAsync(CancellationToken).ConfigureAwait(false);
-
-        TaskHelper.StartTask(taskName);
-        Progress.Report(0);
-
         string resolvedBase = string.IsNullOrWhiteSpace(ApiBase) ? $"{ServerBaseUrl}{ShokoRelayConstants.BasePath}" : ApiBase;
         string reportUrl = $"{resolvedBase}/reports/{reportFileName}";
+        bool acquired = false;
         bool wroteReport = false;
+        bool completed = false;
 
         try
         {
+            if (semaphore != null)
+            {
+                await semaphore.WaitAsync(CancellationToken).ConfigureAwait(false);
+                acquired = true;
+            }
+
+            TaskHelper.StartTask(taskName);
+            Progress.Report(0);
+
             TResult result = await executeAsync().ConfigureAwait(false);
             ReportHelper.WriteReport(reportFileName, result, reportBuilder, logger);
             wroteReport = true;
@@ -99,6 +104,7 @@ public abstract class RelayJobBase(IJobCancellationAccessor cancellation, IJobPr
                 : new ShokoRelayBaseController.RelayResponse<TResult>(Data: result, ReportUrl: reportUrl);
 
             TaskHelper.CompleteTask(taskName, response, jobKey, storeForDashboard: TrackInDashboard);
+            completed = true;
             if (cancelled)
                 throw new OperationCanceledException(CancellationToken);
 
@@ -106,22 +112,25 @@ public abstract class RelayJobBase(IJobCancellationAccessor cancellation, IJobPr
         }
         catch (OperationCanceledException)
         {
-            TaskHelper.CompleteTask(
-                taskName,
-                new ShokoRelayBaseController.RelayResponse<object>(Status: "cancelled", Message: "Task was cancelled.", ReportUrl: wroteReport ? reportUrl : null),
-                jobKey,
-                storeForDashboard: TrackInDashboard
-            );
+            if (!completed)
+                TaskHelper.CompleteTask(
+                    taskName,
+                    new ShokoRelayBaseController.RelayResponse<object>(Status: "cancelled", Message: "Task was cancelled.", ReportUrl: wroteReport ? reportUrl : null),
+                    jobKey,
+                    storeForDashboard: TrackInDashboard
+                );
             throw;
         }
         catch (Exception exception)
         {
-            TaskHelper.CompleteTask(taskName, new ShokoRelayBaseController.RelayResponse<object>(Status: "error", Message: exception.Message), jobKey, storeForDashboard: TrackInDashboard);
+            if (!completed)
+                TaskHelper.CompleteTask(taskName, new ShokoRelayBaseController.RelayResponse<object>(Status: "error", Message: exception.Message), jobKey, storeForDashboard: TrackInDashboard);
             throw;
         }
         finally
         {
-            semaphore?.Release();
+            if (acquired)
+                semaphore?.Release();
         }
     }
 

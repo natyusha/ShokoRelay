@@ -274,11 +274,11 @@ public partial class AnimeThemesMapping
         /// <summary>Per-relative-path locks synchronizing source lookup and Move updates.</summary>
         public ConcurrentDictionary<string, Lock> RelativeLocks { get; } = new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>Per-destination-path semaphores preventing parallel threads from writing the same target path simultaneously.</summary>
-        public ConcurrentDictionary<string, SemaphoreSlim> DestinationLocks { get; } = new(VfsShared.PathComparer);
+        /// <summary>Per-destination-path locks preventing parallel threads from writing the same target path simultaneously.</summary>
+        public ConcurrentDictionary<string, Lock> DestinationLocks { get; } = new(VfsShared.PathComparer);
 
-        /// <summary>Set of (Root, NormalizedRelativePath) pairs actively referenced by a series in that root so Move avoids breaking live symlinks.</summary>
-        public HashSet<(string Root, string RelativePath)> NeededInRoots { get; } = [];
+        /// <summary>Set of normalized (Root, RelativePath) keys actively referenced by a series in that root so Move avoids breaking live symlinks.</summary>
+        public HashSet<string> NeededInRoots { get; } = new(VfsShared.PathComparer);
 
         /// <summary>Checks whether any managed folder holds the specified relative theme path.</summary>
         /// <param name="relativePath">The relative theme path inside the AnimeThemes root.</param>
@@ -343,7 +343,7 @@ public partial class AnimeThemesMapping
                     {
                         string key = NormalizeRelativeThemeKey(entry.FilePath);
                         foreach (var root in roots)
-                            context.NeededInRoots.Add((VfsShared.TrimRoot(root)!, key));
+                            context.NeededInRoots.Add(BuildRootThemeKey(VfsShared.TrimRoot(root)!, key));
                     }
                 }
             }
@@ -363,7 +363,7 @@ public partial class AnimeThemesMapping
                     foreach (var season in series.Seasons)
                     foreach (var file in season.Files)
                         if (Path.IsPathRooted(file.Source) && VfsShared.IsPathUnderDirectory(file.Source, themePrefix))
-                            context.NeededInRoots.Add((root, NormalizeRelativeThemeKey(Path.GetRelativePath(themePrefix, file.Source))));
+                            context.NeededInRoots.Add(BuildRootThemeKey(root, NormalizeRelativeThemeKey(Path.GetRelativePath(themePrefix, file.Source))));
                 }
 
                 string cachePath = Path.Combine(configProvider.CacheDirectory, ShokoRelayConstants.FileAtWebmCache);
@@ -380,7 +380,7 @@ public partial class AnimeThemesMapping
                         string? matchedRoot = normalizedManagedRoots.FirstOrDefault(root => VfsShared.IsPathUnderDirectory(VfsShared.NormalizeSeparators(parts[0]), root));
                         if (matchedRoot != null)
                             foreach (var entry in entriesByVideoId[videoId])
-                                context.NeededInRoots.Add((matchedRoot, NormalizeRelativeThemeKey(entry.FilePath)));
+                                context.NeededInRoots.Add(BuildRootThemeKey(matchedRoot, NormalizeRelativeThemeKey(entry.FilePath)));
                     }
                 }
             }
@@ -404,72 +404,74 @@ public partial class AnimeThemesMapping
 
         string normalizedTargetRoot = VfsShared.TrimRoot(targetRoot)!;
         string key = NormalizeRelativeThemeKey(relativePath);
-        var destinationLock = context.DestinationLocks.GetOrAdd(destinationPath, _ => new SemaphoreSlim(1, 1));
-        destinationLock.Wait();
+        var destinationLock = context.DestinationLocks.GetOrAdd(destinationPath, _ => new Lock());
         try
         {
-            if (fileSystem.FileExists(destinationPath))
-                return true;
-
-            var relativeLock = context.RelativeLocks.GetOrAdd(key, _ => new Lock());
-            lock (relativeLock)
+            lock (destinationLock)
             {
                 if (fileSystem.FileExists(destinationPath))
                     return true;
 
-                if (!context.PhysicalThemes.TryGetValue(key, out var locations))
-                    return false;
-
-                var source = locations.FirstOrDefault(location => !string.Equals(location.Root, normalizedTargetRoot, VfsShared.PathComparison) && fileSystem.FileExists(location.FullPath));
-                if (string.IsNullOrEmpty(source.FullPath))
-                    return false;
-
-                string destinationDir = Path.GetDirectoryName(destinationPath)!;
-                fileSystem.CreateDirectory(destinationDir);
-
-                bool canMove = transferMode == AnimeThemesTransferMode.Move && !context.NeededInRoots.Contains((source.Root, key));
-                if (canMove)
+                var relativeLock = context.RelativeLocks.GetOrAdd(key, _ => new Lock());
+                lock (relativeLock)
                 {
-                    fileSystem.MoveFile(source.FullPath, destinationPath, overwrite: false);
-                    locations.Remove(source);
-                    locations.Add((normalizedTargetRoot, destinationPath));
-                    Interlocked.Increment(ref state.Moved);
-                    state.TransferDetails.Add($"MOVED: {source.FullPath} -> {destinationPath}");
-                    logger.LogInformation("AnimeThemes VFS: Moved cross-root theme '{Source}' -> '{Destination}'", source.FullPath, destinationPath);
+                    if (fileSystem.FileExists(destinationPath))
+                        return true;
+
+                    if (!context.PhysicalThemes.TryGetValue(key, out var locations))
+                        return false;
+
+                    var source = locations.FirstOrDefault(location => !string.Equals(location.Root, normalizedTargetRoot, VfsShared.PathComparison) && fileSystem.FileExists(location.FullPath));
+                    if (string.IsNullOrEmpty(source.FullPath))
+                        return false;
+
+                    string destinationDir = Path.GetDirectoryName(destinationPath)!;
+                    fileSystem.CreateDirectory(destinationDir);
+
+                    bool canMove = transferMode == AnimeThemesTransferMode.Move && !context.NeededInRoots.Contains(BuildRootThemeKey(source.Root, key));
+                    if (canMove)
+                    {
+                        fileSystem.MoveFile(source.FullPath, destinationPath, overwrite: false);
+                        locations.Remove(source);
+                        locations.Add((normalizedTargetRoot, destinationPath));
+                        Interlocked.Increment(ref state.Moved);
+                        state.TransferDetails.Add($"MOVED: {source.FullPath} -> {destinationPath}");
+                        logger.LogInformation("AnimeThemes VFS: Moved cross-root theme '{Source}' -> '{Destination}'", source.FullPath, destinationPath);
+                        return true;
+                    }
+
+                    string? sourceVolume = fileSystem.GetFileStat(source.FullPath)?.Identity.VolumeID;
+                    string? destinationVolume = fileSystem.GetDirectoryStat(destinationDir)?.Identity.VolumeID;
+                    bool hardlinked = false;
+                    if (sourceVolume != null && string.Equals(sourceVolume, destinationVolume, StringComparison.OrdinalIgnoreCase))
+                        try
+                        {
+                            fileSystem.CreateHardLink(source.FullPath, destinationPath);
+                            hardlinked = true;
+                        }
+                        catch (IOException)
+                        {
+                            hardlinked = false;
+                        }
+
+                    if (hardlinked)
+                    {
+                        locations.Add((normalizedTargetRoot, destinationPath));
+                        Interlocked.Increment(ref state.Hardlinked);
+                        state.TransferDetails.Add($"HARDLINKED: {source.FullPath} -> {destinationPath}");
+                        logger.LogInformation("AnimeThemes VFS: Hardlinked cross-root theme '{Source}' -> '{Destination}'", source.FullPath, destinationPath);
+                    }
+                    else
+                    {
+                        fileSystem.CopyFile(source.FullPath, destinationPath, overwrite: false);
+                        locations.Add((normalizedTargetRoot, destinationPath));
+                        Interlocked.Increment(ref state.Copied);
+                        string fallbackNote = transferMode == AnimeThemesTransferMode.Move ? " (source still needed in origin root)" : "";
+                        state.TransferDetails.Add($"COPIED: {source.FullPath} -> {destinationPath}{fallbackNote}");
+                        logger.LogInformation("AnimeThemes VFS: Copied cross-root theme '{Source}' -> '{Destination}'{Note}", source.FullPath, destinationPath, fallbackNote);
+                    }
                     return true;
                 }
-
-                string? sourceVolume = fileSystem.GetFileStat(source.FullPath)?.Identity.VolumeID;
-                string? destinationVolume = fileSystem.GetDirectoryStat(destinationDir)?.Identity.VolumeID;
-                bool hardlinked = false;
-                if (sourceVolume != null && string.Equals(sourceVolume, destinationVolume, StringComparison.OrdinalIgnoreCase))
-                    try
-                    {
-                        fileSystem.CreateHardLink(source.FullPath, destinationPath);
-                        hardlinked = true;
-                    }
-                    catch (IOException)
-                    {
-                        hardlinked = false;
-                    }
-
-                if (hardlinked)
-                {
-                    locations.Add((normalizedTargetRoot, destinationPath));
-                    Interlocked.Increment(ref state.Hardlinked);
-                    state.TransferDetails.Add($"HARDLINKED: {source.FullPath} -> {destinationPath}");
-                    logger.LogInformation("AnimeThemes VFS: Hardlinked cross-root theme '{Source}' -> '{Destination}'", source.FullPath, destinationPath);
-                }
-                else
-                {
-                    fileSystem.CopyFile(source.FullPath, destinationPath, overwrite: false);
-                    locations.Add((normalizedTargetRoot, destinationPath));
-                    Interlocked.Increment(ref state.Copied);
-                    string fallbackNote = transferMode == AnimeThemesTransferMode.Move ? " (source still needed in origin root)" : "";
-                    state.TransferDetails.Add($"COPIED: {source.FullPath} -> {destinationPath}{fallbackNote}");
-                    logger.LogInformation("AnimeThemes VFS: Copied cross-root theme '{Source}' -> '{Destination}'{Note}", source.FullPath, destinationPath, fallbackNote);
-                }
-                return true;
             }
         }
         catch (Exception exception)
@@ -478,16 +480,18 @@ public partial class AnimeThemesMapping
             logger.LogWarning(exception, "AnimeThemes VFS: Cross-root transfer failed for '{Destination}'", destinationPath);
             return false;
         }
-        finally
-        {
-            destinationLock.Release();
-        }
     }
 
     /// <summary>Normalizes a relative theme path into a forward-slash dictionary lookup key.</summary>
     /// <param name="relativePath">The relative theme path.</param>
     /// <returns>A normalized lookup key without leading slashes.</returns>
     private static string NormalizeRelativeThemeKey(string relativePath) => relativePath.TrimLeadingSlashes().Replace('\\', '/');
+
+    /// <summary>Builds an OS-aware root key combined with a case-insensitive relative theme path key.</summary>
+    /// <param name="root">The normalized managed folder root path.</param>
+    /// <param name="relativeKey">The normalized relative theme key.</param>
+    /// <returns>A composite lookup key suitable for <see cref="VfsShared.PathComparer"/>.</returns>
+    private static string BuildRootThemeKey(string root, string relativeKey) => $"{root}\0{relativeKey.ToLowerInvariant()}";
 
     #endregion
 

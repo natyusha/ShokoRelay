@@ -5,42 +5,34 @@
 (() => {
   const { base, shokoBase, configUrl, element, fetchJson, unwrapConfig, setValueByPath, openModal, updatePlaybackTooltip, saveSettings, getData, initSearchInteractions } = window._sr;
 
-  // DOM Elements - UI Indicators
+  // DOM Elements
   /** @type {HTMLElement} */ const playerTime = element("time-display");
   /** @type {HTMLElement} */ const playerVolText = element("volume-text");
   /** @type {HTMLElement} */ const playerFullscreenBtn = element("fullscreen");
   /** @type {HTMLElement} */ const playerCloseBtn = element("close-session");
   /** @type {HTMLElement} */ const playerMuteBtn = element("volume-icon");
-  /** @type {HTMLElement} */ const playerContainer = element("video").parentElement;
   /** @type {HTMLVideoElement} */ const playerVideo = element("video");
+  /** @type {HTMLElement} */ const playerContainer = playerVideo.parentElement;
   /** @type {HTMLElement} */ const playerVideoBtn = element("video-toggle");
-
-  // DOM Elements - Navigation & Search
   /** @type {HTMLElement} */ const playerTree = element("tree");
   /** @type {HTMLInputElement} */ const uiFilter = element("filter");
   /** @type {HTMLElement} */ const uiFilterClear = element("filter-clear");
   /** @type {HTMLElement} */ const playerNextBtn = element("next");
   /** @type {HTMLElement} */ const playerModeBtn = element("mode");
   /** @type {HTMLElement} */ const playerSortBtn = element("sort-toggle");
-
-  // DOM Elements - Metadata Header
   /** @type {HTMLElement} */ const playerTitle = element("title");
   /** @type {HTMLElement} */ const playerAnime = element("anime");
   /** @type {HTMLElement} */ const playerAnidb = element("anidb");
   /** @type {HTMLElement} */ const playerNowPlayingFav = element("now-playing-fav");
   /** @type {HTMLElement} */ const playerLocateBtn = element("locate-current");
-
-  // DOM Elements - Progress Bar
   /** @type {HTMLElement} */ const playerFill = element("player-progress-fill");
   /** @type {HTMLElement} */ const playerTrack = element("player-progress-track");
-
-  // DOM Elements - Help
   /** @type {HTMLElement} */ const helpModal = element("player-help-modal");
   /** @type {HTMLElement} */ const helpOpenBtn = element("help-open");
 
   /** @type {Function|null} Reference to the active modal close callback to support toggle hotkeys. */
   let activeModalClose = null;
-  /** @type {Object[]} The hierarchical list of WebM themes. */
+  /** @type {Object[]} The pre-sorted list of WebM themes from the server. */
   let webmTreeData = [];
   /** @type {string} The relative VFS path of the currently playing theme. */
   let currentWebmPath = "";
@@ -110,10 +102,7 @@
    * @returns {void}
    */
   const syncProgressUI = () => {
-    if (playerFill && playerVideo.duration) {
-      const percent = (playerVideo.currentTime / playerVideo.duration) * 100;
-      playerFill.style.width = percent + "%";
-    }
+    if (playerFill && playerVideo.duration) playerFill.style.width = `${(playerVideo.currentTime / playerVideo.duration) * 100}%`;
   };
 
   /**
@@ -124,18 +113,9 @@
     if (!playerVideo) return;
     const volume = playerVideo.volume;
     const isMuted = playerVideo.muted || volume === 0;
-
     if (playerVolText) playerVolText.textContent = isMuted ? "Muted" : `${Math.round(volume * 100)}%`;
     if (playerMuteBtn) playerMuteBtn.title = isMuted ? "Unmute" : "Mute";
-
-    let level = "mute";
-    if (!isMuted) {
-      if (volume > 0.66) level = "high";
-      else if (volume > 0.33) level = "med";
-      else level = "low";
-    }
-    if (playerContainer) playerContainer.dataset.volumeLevel = level;
-
+    if (playerContainer) playerContainer.dataset.volumeLevel = isMuted ? "mute" : volume > 0.66 ? "high" : volume > 0.33 ? "med" : "low";
     localStorage.setItem("player-volume", volume);
     localStorage.setItem("player-muted", playerVideo.muted);
   };
@@ -151,13 +131,6 @@
   };
 
   /**
-   * Decodes unicode escape sequences back into their actual Unicode characters.
-   * @param {string} stringValue - The string containing escape sequences.
-   * @returns {string} A decoded string.
-   */
-  const decodeUnicode = (stringValue) => (stringValue || "").replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
-
-  /**
    * Toggles the help modal visibility, safely managing event listeners via the close callback.
    * @returns {void}
    */
@@ -171,21 +144,18 @@
         helpModal.classList.remove("open");
         document.body.style.overflow = "";
       }
-    } else
-      activeModalClose = openModal(helpModal, () => {
-        activeModalClose = null;
-      });
+    } else activeModalClose = openModal(helpModal, () => (activeModalClose = null));
   };
 
   /**
-   * Evaluates the full list of themes against active search terms, heart status, and metadata tags.
+   * Evaluates the full list of themes against active search terms, heart status, and pre-indexed server tags.
    * @returns {Object[]} The filtered list of theme entries.
    */
   const getFilteredItems = () => {
     const rawFilter = (uiFilter?.value || "").toLowerCase().trim();
     if (!rawFilter) return webmTreeData;
 
-    const words = rawFilter.split(/\s+/).filter((word) => word.length > 0);
+    const words = rawFilter.split(/\s+/).filter(Boolean);
     const isFavQuery = words.includes("favs");
     const tagExclusions = [];
     const tagInclusions = [];
@@ -196,41 +166,37 @@
       word.startsWith("-") ? tagExclusions.push(word.substring(1)) : word.startsWith("+") ? tagInclusions.push(word.substring(1)) : searchTerms.push(word);
     });
 
-    /**
-     * Checks if a theme item possesses a given attribute tag without object allocation.
-     * @param {string} tag - The tag identifier to test.
-     * @param {Object} item - The theme item to evaluate.
-     * @returns {boolean} True if the item matches the tag.
-     */
-    const matchesTag = (tag, item) => {
-      switch (tag) {
-        case "spoil":
-          return !!item.spoiler;
-        case "nsfw":
-          return !!item.nsfw;
-        case "lyrics":
-          return !!item.lyrics;
-        case "subs":
-          return !!item.subs;
-        case "uncen":
-          return !!item.uncen;
-        case "nc":
-          return !!item.nc;
-        case "trans":
-          return !!item.trans;
-        case "over":
-          return !!item.over;
-        default:
-          return false;
-      }
-    };
-
     return webmTreeData.filter((item) => {
       if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;
-      if (tagExclusions.some((tag) => matchesTag(tag, item)) || tagInclusions.some((tag) => !matchesTag(tag, item))) return false;
-      return searchTerms.every((word) => item._searchIndex.includes(word));
+      const tags = item.tags || [];
+      if (tagExclusions.some((tag) => tags.includes(tag)) || tagInclusions.some((tag) => !tags.includes(tag))) return false;
+      return searchTerms.every((word) => item.searchIndex.includes(word));
     });
   };
+
+  /**
+   * Computes the set of group names that contain multiple series within the provided item list.
+   * @param {Object[]} items - The list of theme entries.
+   * @returns {Set<string>} Set of group names requiring a parent group folder.
+   */
+  const getMultiSeriesGroups = (items) => {
+    const groupSeries = new Map();
+    const multiGroups = new Set();
+    items.forEach((item) => {
+      const existing = groupSeries.get(item.group);
+      if (existing === undefined) groupSeries.set(item.group, item.series);
+      else if (existing !== item.series) multiGroups.add(item.group);
+    });
+    return multiGroups;
+  };
+
+  /**
+   * Resolves the ordered folder path segments for an item under the active view mode.
+   * @param {Object} item - The theme entry.
+   * @param {Set<string>} multiSeriesGroups - Groups that contain multiple series.
+   * @returns {string[]} The folder path segments leading to the item.
+   */
+  const getItemPathSegments = (item, multiSeriesGroups) => (useFolderView ? item.folderSegments : multiSeriesGroups.has(item.group) || item.group === MISSING_LABEL ? [item.group, item.series] : [item.series]);
 
   /**
    * Resets the navigation stack and history tracking.
@@ -290,10 +256,9 @@
   /**
    * Toggles the favourite status of a video on the server and synchronizes UI heart icons.
    * @param {number} videoId - The AnimeThemes video ID to toggle.
-   * @param {HTMLElement} [heartElement] - The optional heart icon element inside the tree to toggle.
    * @returns {Promise<void>}
    */
-  async function toggleFavourite(videoId, heartElement) {
+  async function toggleFavourite(videoId) {
     if (!canModifyServerState()) return;
     if (!videoId || videoId <= 0) return console.warn("VideoId missing.");
     const response = await fetchJson(base + "/animethemes/webm/favourites", {
@@ -305,19 +270,15 @@
     const isFav = getData(response)?.isFavourite;
     if (response.isOk && isFav !== undefined) {
       isFav ? favourites.add(videoId) : favourites.delete(videoId);
-
-      if (heartElement) heartElement.classList.toggle("favourited", isFav);
+      playerTree?.querySelectorAll(`.leaf[data-video-id="${videoId}"] .fav-icon`).forEach((icon) => icon.classList.toggle("favourited", isFav));
       const isCurrentVideo = webmTreeData.find((item) => item.path === currentWebmPath)?.videoId === videoId;
-      const treeHeart = isCurrentVideo ? playerTree.querySelector(`.leaf[data-path="${CSS.escape(currentWebmPath)}"] .fav-icon`) : null;
-      if (treeHeart) treeHeart.classList.toggle("favourited", isFav);
-
       if (playerNowPlayingFav && isCurrentVideo) playerNowPlayingFav.classList.toggle("favourited", isFav);
       if (uiFilter?.value.toLowerCase().includes("favs")) renderTree(getFilteredItems());
     }
   }
 
   /**
-   * Constructs the hierarchical DOM for the theme list.
+   * Constructs the hierarchical DOM for the theme list using server-computed sort keys and segments.
    * @param {Object[]} items - The filtered list of theme entries.
    * @returns {void}
    */
@@ -333,20 +294,46 @@
     const rootUl = document.createElement("ul");
     rootUl.className = "tree";
     const hasFilter = !!uiFilter?.value.trim();
+    const favAllowed = canModifyServerState();
+    const orderedItems = useFolderView ? [...items].sort((left, right) => (left.folderSortKey < right.folderSortKey ? -1 : left.folderSortKey > right.folderSortKey ? 1 : 0)) : items;
+    const multiSeriesGroups = useFolderView ? null : getMultiSeriesGroups(orderedItems);
+    const rootNode = { folders: new Map(), files: [] };
+
+    orderedItems.forEach((item) => {
+      let current = rootNode;
+      getItemPathSegments(item, multiSeriesGroups).forEach((segment) => {
+        if (!current.folders.has(segment)) current.folders.set(segment, { folders: new Map(), files: [] });
+        current = current.folders.get(segment);
+      });
+      current.isSeries = true;
+      current.seriesId = item.seriesId;
+      current.anidbId = item.anidbId;
+      if (item.group === MISSING_LABEL) current.isMissing = true;
+      current.files.push(item);
+    });
 
     /**
-     * Helper to construct a standard file node in the tree.
+     * Generates external links for a given series.
+     * @param {number} seriesId - The Shoko Series ID.
+     * @param {number} anidbId - The AniDB ID.
+     * @returns {string} The concatenated anchor HTML.
+     */
+    const buildSeriesLinks = (seriesId, anidbId) =>
+      `${seriesId ? `<a href="${shokoBase}/webui/collection/series/${seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${seriesId}]</a>` : ""}` +
+      `${anidbId ? `<a href="https://anidb.net/a${anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${anidbId}]</a>` : ""}`;
+
+    /**
+     * Constructs a single theme leaf node in the tree.
      * @param {Object} item - The theme entry metadata.
-     * @param {string} displayName - The text to display for the file.
      * @returns {HTMLLIElement} The completed file list item node.
      */
-    const createFileLeaf = (item, displayName) => {
+    const createFileLeaf = (item) => {
       const listItem = document.createElement("li");
       const leaf = document.createElement("div");
       leaf.className = `leaf ${item.path === currentWebmPath ? "active" : ""}`;
       leaf.dataset.path = item.path;
+      if (item.videoId) leaf.dataset.videoId = String(item.videoId);
 
-      const favAllowed = canModifyServerState();
       const heart = document.createElement("span");
       heart.className = `fav-icon ${favourites.has(item.videoId) ? "favourited" : ""}`;
       heart.textContent = "❤";
@@ -354,14 +341,13 @@
       if (!favAllowed) heart.title = "Authentication Required to Modify Favourites";
       heart.onclick = (event) => {
         event.stopPropagation();
-        if (canModifyServerState()) toggleFavourite(item.videoId, heart);
+        if (canModifyServerState()) toggleFavourite(item.videoId);
       };
 
       const text = document.createElement("span");
-      text.textContent = displayName;
-      text.title = displayName;
+      text.textContent = item.file;
+      text.title = item.file;
       text.dataset.tooltipOverflowOnly = "true";
-
       if (item.group === MISSING_LABEL) text.classList.add("tree-missing");
 
       leaf.onclick = () => {
@@ -374,153 +360,25 @@
     };
 
     /**
-     * Helper to construct a standard folder node in the tree with deferred child rendering.
-     * @param {string} name - The display name for the folder.
-     * @param {Function} renderFn - Callback that appends child list-item elements when expanded.
-     * @param {boolean} isOpen - If true, forces children to render immediately.
-     * @param {boolean} [isMissing=false] - Whether to apply missing collection styling to the title.
-     * @param {string} [extraHtml=""] - Additional HTML to append to the folder title.
-     * @returns {HTMLLIElement} The completed folder list item node.
+     * Recursively renders a pre-ordered folder hierarchy into the target list container.
+     * @param {Object} node - The current hierarchy node.
+     * @param {HTMLUListElement} container - The target unordered list element.
+     * @returns {void}
      */
-    const createFolderNode = (name, renderFn, isOpen, isMissing = false, extraHtml = "") => {
-      const listItem = document.createElement("li");
-      const unorderedList = document.createElement("ul");
-      const details = window._sr.createLazyDetails(name, unorderedList, renderFn, isOpen, extraHtml);
-      const summary = details.querySelector("summary");
-      if (isMissing) summary.querySelector(".vfs-title")?.classList.add("tree-missing");
-      listItem.appendChild(details);
-      return listItem;
+    const renderHierarchy = (node, container) => {
+      node.folders.forEach((childNode, folderName) => {
+        const listItem = document.createElement("li");
+        const childList = document.createElement("ul");
+        const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
+        const details = window._sr.createLazyDetails(folderName, childList, (subContainer) => renderHierarchy(childNode, subContainer), hasFilter, extraHtml);
+        if (childNode.isMissing || folderName === MISSING_LABEL) details.querySelector("summary .vfs-title")?.classList.add("tree-missing");
+        listItem.appendChild(details);
+        container.appendChild(listItem);
+      });
+      node.files.forEach((file) => container.appendChild(createFileLeaf(file)));
     };
 
-    /**
-     * Generates external links for a given series.
-     * @param {number} seriesId - The Shoko Series ID.
-     * @param {number} anidbId - The AniDB ID.
-     * @returns {string} The concatenated anchor HTML.
-     */
-    const buildSeriesLinks = (seriesId, anidbId) => {
-      let html = "";
-      if (seriesId) html += `<a href="${shokoBase}/webui/collection/series/${seriesId}/overview" class="vfs-link small" target="_blank" rel="noopener noreferrer">[${seriesId}]</a>`;
-      if (anidbId) html += `<a href="https://anidb.net/a${anidbId}" class="vfs-link small" target="_blank" rel="noopener noreferrer">[a${anidbId}]</a>`;
-      return html;
-    };
-
-    if (useFolderView) {
-      // Source Folder Structure View (Year -> Season -> Series -> Song)
-      const rootNode = { folders: new Map(), files: [] };
-      items.forEach((item) => {
-        const parts = (item.relPath || `Unknown/${item.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
-        item._originalName = parts.pop(); // Remove original filename
-        parts.push(item.series); // Group by series within the source folders
-        let current = rootNode;
-        parts.forEach((part) => {
-          if (!current.folders.has(part)) current.folders.set(part, { folders: new Map(), files: [] });
-          current = current.folders.get(part);
-        });
-        current.isSeries = true;
-        current.seriesId = item.seriesId;
-        current.anidbId = item.anidbId;
-        if (item.group === MISSING_LABEL) current.isMissing = true;
-
-        current.files.push(item);
-      });
-
-      const seasonOrder = { winter: 1, spring: 2, summer: 3, fall: 4 };
-
-      /**
-       * Maps a seasonal folder name to a chronological sort weight.
-       * @param {string} name - The folder name.
-       * @returns {number} The sort weight for ordering seasons.
-       */
-      const getSeasonWeight = (name) => seasonOrder[name.toLowerCase()] || 99;
-
-      /**
-       * Recursively renders a folder hierarchy into the target list container.
-       * @param {Object} node - The current folder tree node.
-       * @param {boolean} isRoot - Whether this node is the root container.
-       * @param {HTMLUListElement} container - The target unordered list element.
-       * @returns {void}
-       */
-      const renderFolderTree = (node, isRoot, container) => {
-        const sortedFolders = [...node.folders.keys()].sort((left, right) => {
-          const weightLeft = getSeasonWeight(left);
-          const weightRight = getSeasonWeight(right);
-          if (weightLeft !== 99 || weightRight !== 99) return weightLeft !== weightRight ? weightLeft - weightRight : left.localeCompare(right, undefined, { numeric: true });
-          return left.localeCompare(right, undefined, { numeric: true });
-        });
-
-        sortedFolders.forEach((folderName) => {
-          const childNode = node.folders.get(folderName);
-          const extraHtml = childNode.isSeries ? buildSeriesLinks(childNode.seriesId, childNode.anidbId) : "";
-          container.appendChild(createFolderNode(folderName, (childContainer) => renderFolderTree(childNode, false, childContainer), hasFilter, childNode.isMissing, extraHtml));
-        });
-
-        const sortedFiles = node.files.sort((left, right) => left.file.localeCompare(right.file, undefined, { numeric: true }));
-        sortedFiles.forEach((file) => container.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
-      };
-
-      renderFolderTree(rootNode, true, rootUl);
-    } else {
-      // Standard Metadata View (Group -> Series -> File)
-      const groups = new Map();
-      items.forEach((item) => {
-        if (!groups.has(item.group)) groups.set(item.group, new Map());
-        const seriesMap = groups.get(item.group);
-        if (!seriesMap.has(item.series)) seriesMap.set(item.series, []);
-        seriesMap.get(item.series).push(item);
-      });
-
-      const sortedGroupNames = [...groups.keys()].sort((leftGroup, rightGroup) => {
-        if (leftGroup === MISSING_LABEL && rightGroup !== MISSING_LABEL) return -1;
-        if (rightGroup === MISSING_LABEL && leftGroup !== MISSING_LABEL) return 1;
-        return leftGroup.localeCompare(rightGroup);
-      });
-
-      sortedGroupNames.forEach((groupName) => {
-        const seriesMap = groups.get(groupName);
-        const isMissing = groupName === MISSING_LABEL;
-        const seriesKeys = [...seriesMap.keys()].sort((leftName, rightName) => leftName.localeCompare(rightName));
-
-        /**
-         * Renders all series subfolders within a group container.
-         * @param {HTMLUListElement} container - The parent group list element.
-         * @returns {void}
-         */
-        const renderSeriesFolders = (container) => {
-          seriesKeys.forEach((seriesName) => {
-            const seriesFiles = seriesMap.get(seriesName);
-            const firstFile = seriesFiles[0];
-            const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-
-            /**
-             * Renders all theme file leaves for a series.
-             * @param {HTMLUListElement} fileContainer - The parent series list element.
-             * @returns {void}
-             */
-            const renderFiles = (fileContainer) => seriesFiles.forEach((file) => fileContainer.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
-            container.appendChild(createFolderNode(seriesName, renderFiles, hasFilter, isMissing, extraHtml));
-          });
-        };
-
-        if (seriesKeys.length === 1 && !isMissing) {
-          const seriesName = seriesKeys[0];
-          const seriesFiles = seriesMap.get(seriesName);
-          const firstFile = seriesFiles[0];
-          const extraHtml = buildSeriesLinks(firstFile.seriesId, firstFile.anidbId);
-
-          /**
-           * Renders all theme file leaves for a single-series group directly at the root.
-           * @param {HTMLUListElement} container - The parent root list element.
-           * @returns {void}
-           */
-          const renderFiles = (container) => seriesFiles.forEach((file) => container.appendChild(createFileLeaf(file, decodeUnicode(file.file))));
-          rootUl.appendChild(createFolderNode(seriesName, renderFiles, hasFilter, isMissing, extraHtml));
-        } else {
-          rootUl.appendChild(createFolderNode(groupName, renderSeriesFolders, hasFilter, isMissing));
-        }
-      });
-    }
-
+    renderHierarchy(rootNode, rootUl);
     playerTree.appendChild(rootUl);
   }
 
@@ -530,39 +388,18 @@
    */
   function locateCurrentInTree() {
     if (!currentWebmPath) return;
-
     const currentItem = webmTreeData.find((themeItem) => themeItem.path === currentWebmPath);
     if (!currentItem) return;
 
-    // Collapse all open folders to reset the tree state before locating
     playerTree.querySelectorAll("details[open]").forEach((details) => (details.open = false));
-
-    /**
-     * Extracts the display title from a folder summary element.
-     * @param {HTMLElement|null} summary - The summary DOM element.
-     * @returns {string} The resolved title string.
-     */
-    const getSummaryTitle = (summary) => (summary ? summary.dataset.tooltipText || summary.getAttribute("title") || "" : "");
-    const pathSegments = [];
-
-    if (useFolderView) {
-      const parts = (currentItem.relPath || `Unknown/${currentItem.file}`).replace(/\\/g, "/").split("/").filter(Boolean);
-      parts.pop();
-      parts.push(currentItem.series);
-      pathSegments.push(...parts);
-    } else {
-      const groupSeriesCount = new Set(
-        getFilteredItems()
-          .filter((entry) => entry.group === currentItem.group)
-          .map((entry) => entry.series),
-      ).size;
-      if (groupSeriesCount > 1 || currentItem.group === MISSING_LABEL) pathSegments.push(currentItem.group);
-      pathSegments.push(currentItem.series);
-    }
+    const multiSeriesGroups = useFolderView ? null : getMultiSeriesGroups(getFilteredItems());
 
     let currentScope = playerTree;
-    pathSegments.forEach((segment) => {
-      const details = [...currentScope.querySelectorAll("details")].find((detailsElement) => getSummaryTitle(detailsElement.querySelector("summary")) === segment);
+    getItemPathSegments(currentItem, multiSeriesGroups).forEach((segment) => {
+      const details = [...currentScope.querySelectorAll("details")].find((detailsElement) => {
+        const summary = detailsElement.querySelector("summary");
+        return (summary?.dataset.tooltipText || summary?.getAttribute("title") || "") === segment;
+      });
       if (details) {
         details.open = true;
         if (!details.dataset.rendered) details.dispatchEvent(new Event("toggle"));
@@ -603,42 +440,30 @@
     playerVideo.play().catch(() => {});
 
     const item = webmTreeData.find((themeItem) => themeItem.path === path);
-    if (playerTitle) playerTitle.textContent = playerTitle.title = item ? decodeUnicode(item.file) : "Video Player";
+    if (playerTitle) playerTitle.textContent = playerTitle.title = item ? item.file : "AnimeThemes: VFS Video Player";
 
     if (playerNowPlayingFav && item) {
       playerNowPlayingFav.style.pointerEvents = "auto";
       playerNowPlayingFav.classList.toggle("favourited", favourites.has(item.videoId));
       playerNowPlayingFav.onclick = (event) => {
         event.stopPropagation();
-        if (canModifyServerState()) toggleFavourite(item.videoId, playerNowPlayingFav);
+        if (canModifyServerState()) toggleFavourite(item.videoId);
       };
     }
     if (playerLocateBtn && item) playerLocateBtn.style.pointerEvents = "auto";
 
     if (playerAnime) {
       playerAnime.textContent = playerAnime.title = item ? item.series : "Select a theme to begin...";
-      const isMissing = item?.group === MISSING_LABEL;
-      playerAnime.classList.toggle("tree-missing", isMissing);
-
-      if (item?.seriesId) {
-        playerAnime.href = `${shokoBase}/webui/collection/series/${item.seriesId}/overview`;
-        playerAnime.target = "_blank";
-        playerAnime.rel = "noopener noreferrer";
-        playerAnime.style.pointerEvents = "auto";
-        playerAnime.style.color = "";
-      } else {
-        playerAnime.href = "#";
-        playerAnime.style.pointerEvents = "none";
-        playerAnime.style.color = "var(--text-color)";
-      }
+      playerAnime.classList.toggle("tree-missing", item?.group === MISSING_LABEL);
+      playerAnime.href = item?.seriesId ? `${shokoBase}/webui/collection/series/${item.seriesId}/overview` : "#";
+      playerAnime.style.pointerEvents = item?.seriesId ? "auto" : "none";
+      playerAnime.style.color = item?.seriesId ? "" : "var(--text-color)";
     }
 
     if (playerAnidb) {
-      playerAnidb.textContent = item && item.anidbId ? `[a${item.anidbId}]` : "";
-      playerAnidb.href = item && item.anidbId ? `https://anidb.net/a${item.anidbId}` : "#";
-      playerAnidb.target = "_blank";
-      playerAnidb.rel = "noopener noreferrer";
-      playerAnidb.style.pointerEvents = item && item.anidbId ? "auto" : "none";
+      playerAnidb.textContent = item?.anidbId ? `[a${item.anidbId}]` : "";
+      playerAnidb.href = item?.anidbId ? `https://anidb.net/a${item.anidbId}` : "#";
+      playerAnidb.style.pointerEvents = item?.anidbId ? "auto" : "none";
     }
     playerTree?.querySelectorAll(".leaf").forEach((leafElement) => leafElement.classList.toggle("active", leafElement.dataset.path === path));
   }
@@ -660,7 +485,6 @@
     }
 
     if (isShuffle) {
-      // Seed history with the currently playing track if entering shuffle mode fresh
       if (navigationStack.length === 0 && currentWebmPath) {
         navigationStack.push(currentWebmPath);
         shuffleHistory.add(currentWebmPath);
@@ -668,7 +492,6 @@
       }
 
       if (direction === 1) {
-        // Move forward in history or pick new random
         if (stackIndex < navigationStack.length - 1) {
           stackIndex++;
         } else {
@@ -684,16 +507,14 @@
           stackIndex = navigationStack.length - 1;
         }
       } else if (direction === -1) {
-        // Move back in history
         if (stackIndex > 0) stackIndex--;
-        else return; // At start of shuffle history
+        else return;
       }
       playFile(navigationStack[stackIndex]);
     } else {
       resetNavigationHistory();
       const currentIndex = items.findIndex((item) => item.path === currentWebmPath);
-      const nextIndex = (currentIndex + direction + items.length) % items.length;
-      playFile(items[nextIndex].path);
+      playFile(items[(currentIndex + direction + items.length) % items.length].path);
     }
   }
 
@@ -702,11 +523,10 @@
    * @returns {void}
    */
   function syncPlaybackUI() {
-    if (playerNextBtn) {
-      const isPlaying = playerVideo && !playerVideo.paused && !playerVideo.ended;
-      playerNextBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
-      updatePlaybackTooltip(playerNextBtn);
-    }
+    if (!playerNextBtn) return;
+    const isPlaying = playerVideo && !playerVideo.paused && !playerVideo.ended;
+    playerNextBtn.setAttribute("data-state", isPlaying ? "playing" : "idle");
+    updatePlaybackTooltip(playerNextBtn);
   }
 
   /**
@@ -716,8 +536,7 @@
    */
   async function updateMode(direction = 1) {
     if (!playerModeBtn) return;
-    const modes = ["loop", "shuffle", "next", "off"];
-    const nextMode = window._sr.cycleMode(playerModeBtn.getAttribute("data-mode") || "off", modes, direction);
+    const nextMode = window._sr.cycleMode(playerModeBtn.getAttribute("data-mode") || "off", ["loop", "shuffle", "next", "off"], direction);
     playerModeBtn.setAttribute("data-mode", nextMode);
     updatePlaybackTooltip(playerModeBtn);
     resetNavigationHistory();
@@ -784,9 +603,7 @@
         if (playbackMode === "loop") {
           playerVideo.currentTime = 0;
           playerVideo.play().catch(() => {});
-        } else if (playbackMode === "shuffle" || playbackMode === "next") {
-          playMove(playbackMode === "shuffle", 1);
-        }
+        } else if (playbackMode === "shuffle" || playbackMode === "next") playMove(playbackMode === "shuffle", 1);
       }, 0);
     });
 
@@ -808,38 +625,24 @@
       const updateSeek = (event) => {
         if (!playerVideo.duration) return;
         const bounds = playerTrack.getBoundingClientRect();
-        const position = (event.clientX - bounds.left) / bounds.width;
-        playerVideo.currentTime = Math.max(0, Math.min(1, position)) * playerVideo.duration;
+        playerVideo.currentTime = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width)) * playerVideo.duration;
         if (playerVideo.paused) syncProgressUI();
       };
       playerTrack.onmousedown = (event) => {
         if (event.button === 1 && playerVideo.src) {
           event.preventDefault();
           playerVideo.paused ? playerVideo.play() : playerVideo.pause();
-          return;
-        }
-        if (event.button === 0) {
+        } else if (event.button === 0) {
           updateSeek(event);
-          const onMouseMove = (moveEvent) => updateSeek(moveEvent);
           const onMouseUp = () => {
-            window.removeEventListener("mousemove", onMouseMove);
+            window.removeEventListener("mousemove", updateSeek);
             window.removeEventListener("mouseup", onMouseUp);
           };
-          window.addEventListener("mousemove", onMouseMove);
+          window.addEventListener("mousemove", updateSeek);
           window.addEventListener("mouseup", onMouseUp);
         }
       };
     }
-
-    /**
-     * Adjusts the video player volume by a relative delta and unmutes when increasing from mute.
-     * @param {number} delta - Volume change step in the range [-1, 1].
-     * @returns {void}
-     */
-    const stepVolume = (delta) => {
-      if (playerVideo.muted && delta > 0) playerVideo.muted = false;
-      playerVideo.volume = Math.max(0, Math.min(1, Math.round((playerVideo.volume + delta) * 100) / 100));
-    };
 
     /**
      * Handles mouse wheel scrolling over volume controls to adjust playback volume.
@@ -850,7 +653,9 @@
       event.preventDefault();
       event.stopPropagation();
       resetIdle(event);
-      stepVolume(event.deltaY < 0 ? 0.05 : -0.05);
+      const delta = event.deltaY < 0 ? 0.05 : -0.05;
+      if (playerVideo.muted && delta > 0) playerVideo.muted = false;
+      playerVideo.volume = Math.max(0, Math.min(1, Math.round((playerVideo.volume + delta) * 100) / 100));
     };
 
     if (playerMuteBtn) {
@@ -872,18 +677,10 @@
 
     if (playerNextBtn) {
       playerNextBtn.onclick = () => {
-        if (playerVideo.src) {
-          if (playerVideo.ended) {
-            playerVideo.currentTime = 0;
-            playerVideo.play();
-            return;
-          }
-          if (playerVideo.paused) {
-            playerVideo.play();
-            return;
-          }
-        }
-        playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle", 1);
+        if (playerVideo.src && (playerVideo.ended || playerVideo.paused)) {
+          if (playerVideo.ended) playerVideo.currentTime = 0;
+          playerVideo.play();
+        } else playMove(playerModeBtn?.getAttribute("data-mode") === "shuffle", 1);
       };
     }
 
@@ -903,11 +700,13 @@
         localStorage.removeItem(PATH_KEY);
         currentWebmPath = "";
 
-        if (playerTitle) playerTitle.textContent = playerTitle.title = "AnimeThemes Player";
+        if (playerTitle) playerTitle.textContent = playerTitle.title = "AnimeThemes: VFS Video Player";
         if (playerAnime) {
           playerAnime.textContent = playerAnime.title = "Select a theme to begin...";
+          playerAnime.classList.remove("tree-missing");
           playerAnime.href = "#";
           playerAnime.style.pointerEvents = "none";
+          playerAnime.style.color = "";
         }
         if (playerAnidb) {
           playerAnidb.textContent = "";
@@ -940,6 +739,7 @@
     }
 
     window.addEventListener("keydown", (event) => {
+      if (event.ctrlKey || event.metaKey || event.altKey) return;
       if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA" || document.querySelector(".modal-overlay.open")) return;
       const key = event.key.toLowerCase();
       const handledKeys = [" ", "k", "arrowleft", "arrowright", "j", "l", ",", ".", "b", "n", ";", "'", "arrowdown", "arrowup", "m", "f", "v", "r", "g", "h", "?", "q"];
@@ -954,7 +754,7 @@
         case "j": if (playerVideo.src) { playerVideo.currentTime -= 10; syncProgressUI(); } break;
         case "l": if (playerVideo.src) { playerVideo.currentTime += 10; syncProgressUI(); } break;
         case ",": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.max(0, playerVideo.currentTime - 1 / 24); } break;
-        case ".": if (playerVideo.src) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
+        case ".": if (playerVideo.src && Number.isFinite(playerVideo.duration)) { playerVideo.pause(); playerVideo.currentTime = Math.min(playerVideo.duration, playerVideo.currentTime + 1 / 24); } break;
         case "b": playMove(isShuffle, -1); break;
         case "n": playMove(isShuffle, 1); break;
         case ";": updateMode(1); break;
@@ -977,32 +777,13 @@
       syncFavouriteControls();
       if (playerTree) playerTree.innerHTML = '<div class="placeholder"><svg class="loading-spinner"><use href="img/icons.svg#loading"></use></svg><div>Loading video tree...</div></div>';
       const canReadConfig = canModifyServerState();
-      const [treeResponse, configResponse, favouritesResponse] = await Promise.all([
-        fetchJson(base + "/animethemes/webm/tree"),
-        canReadConfig ? fetchJson(configUrl) : Promise.resolve({ isOk: false }),
-        fetchJson(base + "/animethemes/webm/favourites"),
-      ]);
-      if (favouritesResponse.isOk) favourites = new Set(getData(favouritesResponse) || []);
+      const [treeResponse, configResponse] = await Promise.all([fetchJson(base + "/animethemes/webm/tree"), canReadConfig ? fetchJson(configUrl) : Promise.resolve({ isOk: false })]);
       const treePayload = getData(treeResponse);
       if (treeResponse.isOk) {
-        webmTreeData = (treePayload?.items || [])
-          .map((item) => {
-            item._searchIndex = `${item.group} ${item.series} ${decodeUnicode(item.file)} ${item.relPath || ""}`.toLowerCase().replace(/[\u200B\u200A]/g, "");
-            return item;
-          })
-          .sort((left, right) => {
-            if (left.group === MISSING_LABEL && right.group !== MISSING_LABEL) return -1;
-            if (right.group === MISSING_LABEL && left.group !== MISSING_LABEL) return 1;
-
-            const groupComparison = left.group.localeCompare(right.group);
-            if (groupComparison !== 0) return groupComparison;
-            const seriesComparison = left.series.localeCompare(right.series);
-            if (seriesComparison !== 0) return seriesComparison;
-            return left.file.localeCompare(right.file);
-          });
+        favourites = new Set(treePayload?.favourites || []);
+        webmTreeData = treePayload?.items || [];
         renderTree(getFilteredItems());
 
-        // Retrieve, validate, and restore the currently playing video across sessions
         const savedPath = localStorage.getItem(PATH_KEY);
         if (savedPath && webmTreeData.some((item) => item.path === savedPath)) {
           currentWebmPath = savedPath;

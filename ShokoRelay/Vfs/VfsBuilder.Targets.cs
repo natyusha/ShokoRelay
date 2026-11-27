@@ -160,6 +160,7 @@ public partial class VfsBuilder
                 if (!TryResolveAndValidate(state, mapping, out var sourceInfo))
                     continue;
 
+                int? extraVersionIndex = GetNextVersionIndex(state, movieVersionCounters, mapping, out bool hasExtraPeer);
                 (string Folder, string Subtype) extraSeason = PlexMapping.TryGetExtraSeason(mapping.Coords.Season, out var extraMatch) ? extraMatch : ("Featurettes", "featurette");
                 string fileName = VfsHelper.BuildExtrasFileName(
                     mapping,
@@ -167,10 +168,11 @@ public partial class VfsBuilder
                     state.ExtraPad.GetValueOrDefault(mapping.Coords.Season, 1),
                     Path.GetExtension(sourceInfo.SourcePath),
                     state.DisplayTitle,
-                    mapping.PartIndex,
-                    mapping.PartCount,
-                    null,
-                    mapping.IsVariation
+                    hasExtraPeer ? mapping.PartIndex : null,
+                    hasExtraPeer ? mapping.PartCount : 1,
+                    extraVersionIndex,
+                    mapping.IsVariation,
+                    metadataService
                 );
 
                 foreach (var (moviePath, (rootPath, folderName)) in movieDirs)

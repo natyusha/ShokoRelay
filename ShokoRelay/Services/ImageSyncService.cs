@@ -240,7 +240,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         else
                         {
                             string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
-                            coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId);
+                            coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
                         }
 
                         bool isMovie = target.LibraryType == PlexLibraryType.Movie;
@@ -559,6 +559,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="uploadDetail">Optional detail label recorded on successful upload.</param>
     /// <param name="uploadedBag">Thread-safe collection for recording uploaded asset details.</param>
     /// <param name="errorsBag">Thread-safe collection for recording upload errors.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A tuple indicating whether the file exists, was uploaded, was skipped, or errored.</returns>
     private async Task<(bool FileExists, bool Uploaded, bool Skipped, bool Error)> ProcessLocalAssetAsync(
         string? foundFile,
@@ -568,7 +569,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         string entityName,
         string? uploadDetail,
         ConcurrentBag<string> uploadedBag,
-        ConcurrentBag<string> errorsBag
+        ConcurrentBag<string> errorsBag,
+        CancellationToken cancellationToken = default
     )
     {
         // Resolve a file's physical target (bypassing symlinks)
@@ -600,7 +602,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             if (existingXrefs.Count > 0)
             {
                 logger.LogDebug("ImageSyncService: Local {Label} for -> {Entity} no longer present on disk ... Purging from Shoko", label, entityName);
-                await PurgeEntityImagesAsync(entity, imageType, ServiceRegistration.RelaySource).ConfigureAwait(false);
+                await PurgeEntityImagesAsync(entity, imageType, ServiceRegistration.RelaySource, cancellationToken).ConfigureAwait(false);
             }
             return (false, false, false, false);
         }
@@ -617,7 +619,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
         try
         {
-            await _imageWriteLock.WaitAsync().ConfigureAwait(false);
+            await _imageWriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
             try
             {
                 await PurgeEntityImagesUnlockedAsync(entity, imageType, xref => xref.Source == ServiceRegistration.RelaySource).ConfigureAwait(false);
@@ -637,6 +639,10 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 logger.LogDebug("ImageSyncService: Successfully uploaded and preferred {Label} for -> {Entity}", label, entityName);
             }
             return (true, true, false, false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
@@ -754,18 +760,27 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
     /// <param name="xrefSource">The cross-reference metadata source to purge.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous purge operation.</returns>
-    private Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, MetadataSource xrefSource) => PurgeEntityImagesAsync(entity, imageType, xref => xref.Source == xrefSource, xrefSource);
+    private Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, MetadataSource xrefSource, CancellationToken cancellationToken = default) =>
+        PurgeEntityImagesAsync(entity, imageType, xref => xref.Source == xrefSource, xrefSource, cancellationToken);
 
     /// <summary>Purges stale or demoted cross-referenced images for an entity based on a matching predicate.</summary>
     /// <param name="entity">The Shoko metadata entity.</param>
     /// <param name="imageType">The target image entity type.</param>
     /// <param name="predicate">Filter predicate to select cross-references for purging.</param>
     /// <param name="xrefSource">Optional cross-reference metadata source to filter on at the database level.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A task representing the asynchronous purge operation.</returns>
-    private async Task PurgeEntityImagesAsync(IWithImages entity, ImageEntityType imageType, Func<IImageCrossReference, bool> predicate, MetadataSource? xrefSource = null)
+    private async Task PurgeEntityImagesAsync(
+        IWithImages entity,
+        ImageEntityType imageType,
+        Func<IImageCrossReference, bool> predicate,
+        MetadataSource? xrefSource = null,
+        CancellationToken cancellationToken = default
+    )
     {
-        await _imageWriteLock.WaitAsync().ConfigureAwait(false);
+        await _imageWriteLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await PurgeEntityImagesUnlockedAsync(entity, imageType, predicate, xrefSource).ConfigureAwait(false);

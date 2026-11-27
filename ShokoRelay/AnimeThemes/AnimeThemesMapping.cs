@@ -472,9 +472,14 @@ public partial class AnimeThemesMapping(
             else
                 logger.LogInformation("AnimeThemes Map: Saved mapping for '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", relativePath, effectiveLookup.VideoId, effectiveLookup.AniDbId);
 
-            // If the entry has a valid AniDB ID, refresh the VFS symlink immediately so the renamed file is visible in Plex
+            // If the entry has a valid AniDB ID (or changed from a previous one), refresh the affected VFS symlinks immediately so the change is visible in Plex
+            var refreshIds = new List<int>();
+            if (match != null && match.AniDbId > 0 && match.AniDbId != entry.AniDbId && metadataService.GetShokoSeriesByAnidbID(match.AniDbId) is { } previousSeries)
+                refreshIds.Add(previousSeries.LocalID);
             if (entry.AniDbId > 0 && metadataService.GetShokoSeriesByAnidbID(entry.AniDbId) is { } shokoSeries)
-                await ApplyMappingAsync([shokoSeries.LocalID], CancellationToken.None).ConfigureAwait(false);
+                refreshIds.Add(shokoSeries.LocalID);
+            if (refreshIds.Count > 0)
+                await ApplyMappingAsync(refreshIds, CancellationToken.None).ConfigureAwait(false);
 
             return (entry, null, generatedFileName, true, changedFields);
         }

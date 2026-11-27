@@ -180,6 +180,7 @@ public class AnimeThemesMp3Generator(
         {
             var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true, fileSystem: fileSystem).Select(path => VfsShared.TrimRoot(path)!).ToList();
 
+            var previousCache = _themeMp3Cache;
             var newCache = new ConcurrentDictionary<string, string>(VfsShared.PathComparer);
 
             Parallel.ForEach(roots, root =>
@@ -194,7 +195,11 @@ public class AnimeThemesMp3Generator(
                 };
 
                 foreach (var file in fileSystem.GetFilePaths(root!, listingOptions))
-                    newCache.TryAdd(Path.GetDirectoryName(file)!, "|");
+                {
+                    string directory = Path.GetDirectoryName(file)!;
+                    string cachedValue = previousCache != null && previousCache.TryGetValue(directory, out var existingValue) ? existingValue : "|";
+                    newCache.TryAdd(directory, cachedValue);
+                }
             });
 
             _themeMp3Cache = newCache;
@@ -582,6 +587,10 @@ public class AnimeThemesMp3Generator(
             logger.LogInformation("AnimeThemes MP3: Successfully generated Theme.mp3 -> {Title} [{LocalId}] ({Slug})", series.GetDisplayTitle(), series.LocalID, slugDisplay);
             return new(folder, "ok", null, themePath, vfsLink, animeTitle, animeSlug, series.LocalID, slugRaw, duration.TotalSeconds);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception exception)
         {
             logger.LogError(exception, "AnimeThemes MP3: Failed to process -> {Folder}", folder);
@@ -721,7 +730,7 @@ public class AnimeThemesMp3Generator(
                                     Interlocked.Exchange(ref cacheUpdated, 1);
                                 }
                             }
-                            catch (Exception exception)
+                            catch (Exception exception) when (exception is not OperationCanceledException || !token.IsCancellationRequested)
                             {
                                 errors.Add($"Failed to audit {folder}: {exception.Message}");
                                 logger.LogWarning(exception, "AnimeThemes MP3: Failed to audit -> {Folder}", folder);

@@ -107,15 +107,11 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var cached = _contextCache.GetOrAdd(primaryId, _ => new ContextCacheEntry(globalSettings, CreateSeriesContext));
 
         if (!ReferenceEquals(cached.Config, globalSettings) || cached.ExpirationTicks < now)
-        {
             lock (_cacheLock)
-            {
                 if (_contextCache.TryGetValue(primaryId, out var fresh) && ReferenceEquals(fresh.Config, globalSettings) && fresh.ExpirationTicks >= now)
                     cached = fresh;
                 else
                     _contextCache[primaryId] = cached = new ContextCacheEntry(globalSettings, CreateSeriesContext);
-            }
-        }
 
         var context = cached.LazyContext.Value;
         cached.ExpirationTicks = DateTime.UtcNow.Ticks + TimeSpan.FromMinutes(1).Ticks;
@@ -185,9 +181,15 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
         var series = context.Series;
         var tmdbSeries = context.TmdbSeries;
         var tmdbMovie = context.TmdbMovie;
-        var duration = series.Episodes is { Count: > 0 } episodes
-            ? (int?)Math.Min(int.MaxValue, episodes.Sum(episode => episode.Runtime.TotalMilliseconds))
-            : (tmdbMovie?.Runtime.HasValue == true ? (int?)Math.Min(int.MaxValue, tmdbMovie.Runtime.Value.TotalMilliseconds) : null);
+
+        static int? AverageEpisodeRuntimeMs(IEnumerable<IEpisode> source)
+        {
+            var runtimes = source.Where(episode => episode.Runtime > TimeSpan.Zero).Select(episode => episode.Runtime.TotalMilliseconds).ToList();
+            return runtimes.Count > 0 ? (int)Math.Min(int.MaxValue, Math.Round(runtimes.Average())) : null;
+        }
+
+        int? duration = (series.Episodes is { Count: > 0 } episodes ? AverageEpisodeRuntimeMs(episodes.Where(episode => episode.Type == EpisodeType.Episode)) ?? AverageEpisodeRuntimeMs(episodes) : null)
+            ?? (tmdbMovie?.Runtime.HasValue == true ? (int?)Math.Min(int.MaxValue, tmdbMovie.Runtime.Value.TotalMilliseconds) : null);
         var studios = CastHelper.GetStudioTags(series, metadataService);
         double? tmdbRating =
             tmdbSeries?.Rating > 0 ? tmdbSeries.Rating
@@ -420,7 +422,8 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             : TextHelper.ResolveEpisodeTitle(
                 episode,
                 actualSeries.LocalID == series.LocalID ? context.Titles.DisplayTitle : (actualSeries.GetDisplayTitle() ?? context.Titles.DisplayTitle),
-                resolvedTmdbEpisode
+                resolvedTmdbEpisode,
+                metadataService
             );
 
         string episodeDescription =
@@ -432,10 +435,9 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
                 ? movieOverview
                 : TextHelper.GetDescriptionByLanguage(actualSeries, Settings.DescriptionLanguage);
 
-        string? parentThumb =
-            Settings.TmdbSeasonPosters && mapped.Season >= 0 && string.IsNullOrEmpty(context.PreferredOrderingId)
-                ? FindTmdbSeason(series, mapped.Season)?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage)
-                : null;
+        ISeason? tmdbSeason = mapped.Season >= 0 && string.IsNullOrEmpty(context.PreferredOrderingId) ? FindTmdbSeason(series, mapped.Season) : null;
+        string parentTitle = tmdbSeason?.PreferredTitle?.Value ?? GetSeasonFolder(mapped.Season);
+        string? parentThumb = Settings.TmdbSeasonPosters ? tmdbSeason?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage) : null;
 
         string? thumb = Settings.TmdbThumbnails
             ? (episode.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage) ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage))
@@ -478,7 +480,7 @@ public class PlexMetadata(IMetadataService metadataService, ConfigProvider confi
             ["parentKey"]             = $"/metadata/{series.GetPlexRatingKey(mapped.Season)}",
             ["parentGuid"]            = series.GetPlexGuid(mapped.Season),
             ["parentType"]            = "season",
-            ["parentTitle"]           = GetSeasonFolder(mapped.Season),
+            ["parentTitle"]           = parentTitle,
             ["parentThumb"]           = parentThumb ?? series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage),
             ["parentArt"]             = series.GetPreferredImageUrl(ImageEntityType.Backdrop, Settings.TmdbImageLanguage),
             ["index"]                 = mapped.Episode,

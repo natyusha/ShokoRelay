@@ -14,7 +14,7 @@ public static partial class VfsHelper
     [GeneratedRegex("\"(.*?)\"")]
     private static partial Regex QuotedTextRegex();
 
-    /// <summary>Regex to match whitespace except for Hair Space and Zero Width Spaceas they are part of some Plex Extra filename formatting.</summary>
+    /// <summary>Regex to match whitespace except for Hair Space and Zero Width Space as they are part of some Plex Extra filename formatting.</summary>
     [GeneratedRegex(@"((?![\u200A\u200B])\s)+")]
     private static partial Regex WhitespaceRegex();
 
@@ -230,6 +230,7 @@ public static partial class VfsHelper
     /// <param name="partCount">Optional total number of parts for multi-part extras.</param>
     /// <param name="versionIndex">Optional version index for duplicate extras.</param>
     /// <param name="isVariation">Whether the file is marked as a variation in Shoko.</param>
+    /// <param name="metadataService">Optional metadata service used to verify manual override primary series presence.</param>
     /// <returns>A sanitized and formatted filename string for Plex extras (e.g., "C01 ❯ Episode Title [variation].mkv").</returns>
     public static string BuildExtrasFileName(
         MapHelper.FileMapping mapping,
@@ -240,14 +241,15 @@ public static partial class VfsHelper
         int? partIndex = null,
         int? partCount = null,
         int? versionIndex = null,
-        bool isVariation = false
+        bool isVariation = false,
+        IMetadataService? metadataService = null
     )
     {
         string episode = s_extraTypePrefixes.TryGetValue(extra.Subtype, out var prefix) ? prefix + mapping.Coords.Episode.ToString($"D{padding}") : mapping.Coords.Episode.ToString($"D{padding}");
         int totalParts = partCount ?? mapping.PartCount;
         string part = totalParts > 1 ? $"-pt{partIndex ?? mapping.PartIndex}" : (versionIndex.HasValue ? $"-dup{versionIndex}" : "");
 
-        string name = $"{episode}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle))}";
+        string name = $"{episode}{part} ❯ {CleanEpisodeTitleForFilename(TextHelper.ResolveEpisodeTitle(mapping.PrimaryEpisode, seriesTitle, metadataService: metadataService))}";
         if (isVariation && totalParts <= 1)
             name += "[variation]";
         return SanitizeName(name + extension);
@@ -372,7 +374,6 @@ public static partial class VfsHelper
             {
                 var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 if (fileSystem.DirectoryExists(root))
-                {
                     try
                     {
                         var options = new FileSystemListingOptions { Recursive = true, Extensions = [".webm"] };
@@ -380,7 +381,6 @@ public static partial class VfsHelper
                             dict[Path.GetRelativePath(root, file).Replace('\\', '/').TrimLeadingSlashes()] = Path.GetFullPath(file);
                     }
                     catch { }
-                }
                 return dict;
             }))
             .Value;

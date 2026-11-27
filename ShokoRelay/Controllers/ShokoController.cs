@@ -349,14 +349,27 @@ public class ShokoController(
     [HttpGet("sync-watched/start")]
     public async Task<IActionResult> StartWatchedSyncNow()
     {
+        if (!PlexClient.IsEnabled)
+            return BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing."));
         if (!await SyncHelper.SyncLock.WaitAsync(0).ConfigureAwait(false))
             return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for item to complete."));
 
+        bool startedTask = TaskHelper.StartTask(ShokoRelayConstants.TaskShokoSyncWatched);
         try
         {
             var settings = ConfigProvider.GetSettings();
             int freqHours = settings.Automation.ShokoSyncWatchedFrequencyHours;
-            var result = await watchedSyncService.SyncWatchedAsync(false, freqHours > 0 ? freqHours + 1 : null, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+            int lookback = freqHours > 0 ? freqHours + 1 : 25;
+            var result = await watchedSyncService.SyncWatchedAsync(false, lookback, cancellationToken: CancellationToken.None).ConfigureAwait(false);
+
+            string reportFile = $"{ShokoRelayConstants.TaskShokoSyncWatched}.report";
+            ReportHelper.WriteReport(
+                reportFile,
+                result,
+                (builder, report) => ReportHelper.BuildSyncWatchedReport(builder, report, report.Direction, report.DryRun, settings.Automation.ShokoSyncWatchedIncludeRatings),
+                Logger
+            );
+
             var actionInfo = scheduledActionService.GetScheduledAction<PlexWatchedSyncAction>();
             return Ok(
                 new RelayResponse<object>(
@@ -366,7 +379,8 @@ public class ShokoController(
                         scheduled = actionInfo?.Triggers.Count > 0,
                         nextRun = actionInfo?.NextRunAt,
                         result,
-                    }
+                    },
+                    ReportUrl: $"{ApiBase}/reports/{reportFile}"
                 )
             );
         }
@@ -376,6 +390,8 @@ public class ShokoController(
         }
         finally
         {
+            if (startedTask)
+                TaskHelper.FinishTask(ShokoRelayConstants.TaskShokoSyncWatched);
             SyncHelper.SyncLock.Release();
         }
     }

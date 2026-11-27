@@ -198,6 +198,11 @@ public class AnimeThemesWebmDownloader(
             {
                 await TryDownloadVideoAsync().ConfigureAwait(false);
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                DeletePartialFile(targetPath);
+                throw;
+            }
             catch (HttpRequestException exception) when (exception.StatusCode is HttpStatusCode.ServiceUnavailable or HttpStatusCode.TooManyRequests)
             {
                 DeletePartialFile(targetPath);
@@ -207,6 +212,11 @@ public class AnimeThemesWebmDownloader(
                 try
                 {
                     await TryDownloadVideoAsync().ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    DeletePartialFile(targetPath);
+                    throw;
                 }
                 catch (Exception retryException)
                 {
@@ -303,7 +313,7 @@ public class AnimeThemesWebmDownloader(
                                 if (video != null)
                                     await DownloadSingleVideoAsync(video.Basename, video.Link, anime.Year, anime.Season, $"theme ID {theme.Id}").ConfigureAwait(false);
                             }
-                            catch (Exception exception) when (exception is not RateLimitAbortException)
+                            catch (Exception exception) when (exception is not RateLimitAbortException && (exception is not OperationCanceledException || !cancellationToken.IsCancellationRequested))
                             {
                                 errors++;
                                 messages.Add($"Failed to process theme ID {theme.Id}: {exception.Message}");

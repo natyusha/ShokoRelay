@@ -64,10 +64,11 @@ public class MetadataController(
 
     /// <summary>Attempts to match a Plex media lookup request to a Shoko series, season, episode, or movie.</summary>
     /// <remarks>
-    ///   Manual matching (<c>manual=1</c>) is intentionally limited to direct Shoko/AniDB/Movie IDs (<c>123</c>, <c>a123</c>, <c>m890</c>) rather than title or external GUID searches.
-    ///   Users should not need manual matching because all library media originates from the VFS and already encodes the expected identifier in its path.
+    ///   - Manual matching (<c>manual=1</c>) is intentionally limited to direct Shoko/AniDB/Movie IDs (<c>123</c>, <c>a123</c>, <c>m890</c>) rather than title searches
+    ///   - Users should not need manual matching because all library media originates from the VFS and already encodes the expected identifier in its path.
+    ///   - Shoko Relay <c>guid</c> inputs are also supported as a fallback when <c>filename</c> is absent
     /// </remarks>
-    /// <param name="body">Match parameters including filename, title, media type, and indices.</param>
+    /// <param name="body">Match parameters including filename, title, guid, media type, and indices.</param>
     /// <returns>A match result MediaContainer.</returns>
     [HttpGet]
     [HttpPost]
@@ -77,6 +78,7 @@ public class MetadataController(
         {
             string? rawPath = body?.Filename ?? Request.Query["filename"];
             string? title = body?.Title ?? Request.Query["title"];
+            string? rawGuid = body?.Guid ?? Request.Query["guid"];
             int? manual = body?.Manual ?? (int.TryParse(Request.Query["manual"], out var manualFlag) ? manualFlag : null);
             int? manualEpisodeId =
                 manual == 1 && title?.StartsWith(PlexConstants.MoviePrefix, StringComparison.OrdinalIgnoreCase) == true && int.TryParse(title[PlexConstants.MoviePrefix.Length..], out var movieEpisodeId)
@@ -89,7 +91,16 @@ public class MetadataController(
                         ? MetadataService.GetShokoSeriesByAnidbID(anidbId)?.LocalID
                         : (manualEpisodeId.HasValue ? MetadataService.GetShokoEpisodeByID(manualEpisodeId.Value)?.ShokoSeriesID : null)
                 );
-            int? id = (manual == 1 && manualId.HasValue) ? manualId : (string.IsNullOrWhiteSpace(rawPath) ? null : ExtractSeriesId(rawPath));
+            bool isMovieGuid = !string.IsNullOrWhiteSpace(rawGuid) && rawGuid.Contains("/movie/", StringComparison.OrdinalIgnoreCase);
+            int? guidMovieEpisodeId = isMovieGuid ? PlexHelper.ExtractShokoEpisodeIdFromGuid(rawGuid) : null;
+            int? guidSeriesId = !string.IsNullOrWhiteSpace(rawGuid)
+                ? PlexHelper.ExtractShokoSeriesIdFromGuid(rawGuid)
+                    ?? (PlexHelper.ExtractShokoEpisodeIdFromGuid(rawGuid) is { } guidEpisodeId ? MetadataService.GetShokoEpisodeByID(guidEpisodeId)?.ShokoSeriesID : null)
+                : null;
+            int? id =
+                (manual == 1 && manualId.HasValue) ? manualId
+                : !string.IsNullOrWhiteSpace(rawPath) ? ExtractSeriesId(rawPath)
+                : guidSeriesId;
 
             if (!id.HasValue)
                 return EmptyMatch();
@@ -105,13 +116,14 @@ public class MetadataController(
             };
 
             bool isMoviePath = rawPath?.Contains(VfsShared.ResolveMovieRootFolderName(), StringComparison.OrdinalIgnoreCase) == true;
-            if (typeInt == PlexConstants.TypeMovie || IsMovieRoute() || isMoviePath)
+            if (typeInt == PlexConstants.TypeMovie || IsMovieRoute() || isMoviePath || isMovieGuid)
                 typeInt = PlexConstants.TypeMovie;
 
-            var episode = manualEpisodeId.HasValue
-                ? MetadataService.GetShokoEpisodeByID(manualEpisodeId.Value)
+            int? explicitMovieEpisodeId = manualEpisodeId ?? guidMovieEpisodeId;
+            var episode = explicitMovieEpisodeId.HasValue
+                ? MetadataService.GetShokoEpisodeByID(explicitMovieEpisodeId.Value)
                 : (manual != 1 && (isMoviePath || MetadataService.GetShokoSeriesByID(id.Value) == null) ? MetadataService.GetShokoEpisodeByID(id.Value) : null); // In case the extracted ID was a movie episode ID
-            var series = (typeInt == PlexConstants.TypeMovie && episode?.Series != null && (manual != 1 || manualEpisodeId.HasValue)) ? episode.Series : MetadataService.GetShokoSeriesByID(id.Value);
+            var series = (typeInt == PlexConstants.TypeMovie && episode?.Series != null && (manual != 1 || explicitMovieEpisodeId.HasValue)) ? episode.Series : MetadataService.GetShokoSeriesByID(id.Value);
 
             if (series == null && episode?.Series != null)
             {
@@ -179,41 +191,23 @@ public class MetadataController(
             // Fallback to Movie (type 1)
             episode ??= series.Episodes.FirstOrDefault(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode && !MapHelper.IsHidden(seriesEpisode))
                 ?? series.Episodes.FirstOrDefault(seriesEpisode => seriesEpisode.Type == EpisodeType.Episode);
-            if (episode == null)
+            if (episode == null || mapper.GetSeriesContext(series.ID.ID) is not { } movieContext)
                 return EmptyMatch();
 
-            var movieContext = mapper.GetSeriesContext(series.ID.ID);
-            var tmdbMovie = episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieContext?.TmdbMovie;
-
-            return Ok(
-                new
-                {
-                    MediaContainer = new
-                    {
-                        size = 1,
-                        identifier = ShokoRelayConstants.MovieAgentScheme,
-                        Metadata = new[]
-                        {
-                            new
-                            {
-                                guid = episode.GetPlexMovieGuid(),
-                                type = "movie",
-                                title = TextHelper.ResolveMovieTitle(episode, series, tmdbMovie, isStandaloneMovie: true, seriesTitle: movieContext?.Titles.DisplayTitle),
-                                year = episode.AirDate?.Year ?? tmdbMovie?.ReleaseDate?.Year ?? series.AirDate?.Year,
-                                score = 100,
-                                thumb = (episode.EpisodeNumber > 1 && tmdbMovie != null ? tmdbMovie.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true) : null)
-                                    ?? series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true)
-                                    ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true),
-                            },
-                        },
-                    },
-                }
-            );
+            var tmdbMovie = episode.GetLinkedMovies(MetadataSource.TMDB)?.FirstOrDefault() ?? movieContext.TmdbMovie;
+            var movieMetadata = mapper.MapMovie(episode, movieContext, tmdbMovie);
+            // Force remote URLs for Fix Match UI to bypass browser Mixed Content blocks
+            movieMetadata["thumb"] = (episode.EpisodeNumber > 1 && tmdbMovie != null ? tmdbMovie.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true) : null)
+                ?? series.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true)
+                ?? tmdbMovie?.GetPreferredImageUrl(ImageEntityType.Primary, Settings.TmdbImageLanguage, true);
+            movieMetadata["score"] = 100;
+            return WrapInContainer(movieMetadata, ShokoRelayConstants.MovieAgentScheme);
         });
 
     /// <summary>Represents the JSON body of a Plex matching request.</summary>
     /// <param name="Filename">The filename of the media being matched.</param>
     /// <param name="Title">The title string, often used for manual Shoko ID entry in Plex.</param>
+    /// <param name="Guid">Optional Plex or Shoko Relay GUID for direct lookup.</param>
     /// <param name="Manual">Flag indicating if the match was triggered manually (1 for true).</param>
     /// <param name="Type">The media type indicator (1 or "movie" for standalone movies, 2 for shows, 3 for seasons, 4 for episodes).</param>
     /// <param name="Index">The index of the item (e.g., episode or season number).</param>
@@ -222,6 +216,7 @@ public class MetadataController(
     public record PlexMatchBody(
         [property: JsonProperty("filename")] string? Filename,
         [property: JsonProperty("title")] string? Title = null,
+        [property: JsonProperty("guid")] string? Guid = null,
         [property: JsonProperty("manual")] int? Manual = null,
         [property: JsonProperty("type")] object? Type = null,
         [property: JsonProperty("index")] int? Index = null,

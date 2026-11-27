@@ -379,9 +379,7 @@ internal static partial class AnimeThemesHelper
             stringBuilder.AppendLine();
         }
         else
-        {
             stringBuilder.AppendLine("## Shoko Relay AniDB AnimeThemes Xrefs ##\n");
-        }
 
         stringBuilder.AppendLine("# filepath, videoId, anidbId, nc, slug, version, songTitle, artistName, lyrics, subbed, uncen, nsfw, spoiler, source, resolution, episodes, overlap");
 

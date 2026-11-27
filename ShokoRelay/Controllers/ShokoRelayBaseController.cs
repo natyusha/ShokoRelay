@@ -246,7 +246,7 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
                 return Ok(new RelayResponse<object>(Status: "queued", Message: "Queued in Shoko Job Queue.", Data: new { jobKey, queued = true }));
             }
 
-            TaskHelper.TrackQueuedJob(taskName, jobKey, storeForDashboard: false, scheduler);
+            TaskHelper.TakeJobResult(jobKey);
             await scheduler.EnqueueImmediate<TJob>(ConfigureWithKey, ct: CancellationToken.None).ConfigureAwait(false);
             return TaskHelper.TakeJobResult(jobKey) is { } jobResult ? Ok(jobResult) : Ok(new RelayResponse<object>());
         }
@@ -400,6 +400,9 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
         var pagedData = allItems.Skip(start).Take(size).ToArray();
         string defaultIdentifier = IsMovieRoute() ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme;
 
+        Response.Headers["X-Plex-Container-Start"] = start.ToString();
+        Response.Headers["X-Plex-Container-Total-Size"] = allItems.Count.ToString();
+
         return Ok(
             new
             {
@@ -417,7 +420,20 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     /// <summary>Return an empty Plex match response (zero results).</summary>
     /// <returns>Plex-compatible empty MediaContainer result.</returns>
-    protected IActionResult EmptyMatch() => Ok(new { MediaContainer = new { size = 0, Metadata = Array.Empty<object>() } });
+    protected IActionResult EmptyMatch() =>
+        Ok(
+            new
+            {
+                MediaContainer = new
+                {
+                    offset = 0,
+                    totalSize = 0,
+                    identifier = IsMovieRoute() ? ShokoRelayConstants.MovieAgentScheme : ShokoRelayConstants.AgentScheme,
+                    size = 0,
+                    Metadata = Array.Empty<object>(),
+                },
+            }
+        );
 
     #endregion
 

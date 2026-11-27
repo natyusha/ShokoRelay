@@ -34,8 +34,55 @@ public class AnimeThemesController(
 {
     #region Setup
 
+    /// <summary>Display group label for themes whose series are not in the local Shoko collection.</summary>
+    private const string MissingCollectionLabel = "Missing from Collection";
+
     /// <summary>Lock object synchronizing reads and writes to the AnimeThemes favourites file.</summary>
     private static readonly Lock s_favsLock = new();
+
+    /// <summary>Normalized player tree item payload pre-sorted and pre-indexed for the standalone video player.</summary>
+    /// <param name="Group">Shoko group title or missing-collection label.</param>
+    /// <param name="Series">Resolved series display title.</param>
+    /// <param name="SeriesId">Shoko Series ID, or <c>0</c> if missing from collection.</param>
+    /// <param name="AnidbId">AniDB anime ID.</param>
+    /// <param name="File">Unescaped display filename without extension.</param>
+    /// <param name="RelPath">Relative source path inside the AnimeThemes root.</param>
+    /// <param name="FolderSegments">Ordered folder path segments for source-folder view.</param>
+    /// <param name="FolderSortKey">Chronological and alphabetical sort key for source-folder view.</param>
+    /// <param name="SearchIndex">Pre-computed lowercase search text stripped of zero-width formatting characters.</param>
+    /// <param name="Path">Normalized filesystem path used by the streaming endpoint.</param>
+    /// <param name="VideoId">AnimeThemes video identifier.</param>
+    /// <param name="Tags">Active attribute tag keywords (<c>nc</c>, <c>lyrics</c>, <c>subs</c>, <c>uncen</c>, <c>nsfw</c>, <c>spoil</c>, <c>trans</c>, <c>over</c>).</param>
+    /// <param name="Nc">No Credits flag.</param>
+    /// <param name="Lyrics">Karaoke lyrics flag.</param>
+    /// <param name="Subs">Subtitles flag.</param>
+    /// <param name="Uncen">Uncensored flag.</param>
+    /// <param name="Nsfw">NSFW flag.</param>
+    /// <param name="Spoiler">Spoiler flag.</param>
+    /// <param name="Trans">Transitional overlap flag.</param>
+    /// <param name="Over">Full overlap flag.</param>
+    private sealed record WebmTreeItem(
+        string Group,
+        string Series,
+        int SeriesId,
+        int AnidbId,
+        string File,
+        string? RelPath,
+        string[] FolderSegments,
+        string FolderSortKey,
+        string SearchIndex,
+        string Path,
+        int VideoId,
+        string[] Tags,
+        bool Nc,
+        bool Lyrics,
+        bool Subs,
+        bool Uncen,
+        bool Nsfw,
+        bool Spoiler,
+        bool Trans,
+        bool Over
+    );
 
     #endregion
 
@@ -250,14 +297,14 @@ public class AnimeThemesController(
 
     #region WebM & Player
 
-    /// <summary>Returns the hierarchical tree of WebM files for the standalone player.</summary>
+    /// <summary>Returns the pre-sorted, pre-indexed tree of WebM files and favourites for the standalone player.</summary>
     /// <remarks>Restricted-tag visibility (<c>IUser.IsAllowedToSee</c>) is intentionally not enforced here so <see cref="AllowPlayerAccessAttribute"/> remains usable without a user session.</remarks>
-    /// <returns>A JSON object containing the hierarchical theme list.</returns>
+    /// <returns>A JSON object containing the sorted theme list, favourites, and configured playback mode.</returns>
     [AllowPlayerAccess]
     [HttpGet("animethemes/webm/tree")]
     public IActionResult AnimeThemesWebmTree()
     {
-        var items = new List<object>();
+        var items = new List<WebmTreeItem>();
         var seriesTitleCache = new Dictionary<int, (string GroupTitle, string SeriesTitle, int AniDbId)>();
         var seenSeriesVideoKeys = new HashSet<(int SeriesId, int VideoId)>();
 
@@ -309,25 +356,24 @@ public class AnimeThemesController(
                     }
 
                     items.Add(
-                        new
-                        {
-                            group = info.GroupTitle,
-                            series = info.SeriesTitle,
-                            seriesId = seriesId.Value,
-                            anidbId = info.AniDbId,
-                            file = Path.GetFileNameWithoutExtension(segments[^1]),
-                            relPath = videoIdToRelativePath.GetValueOrDefault(videoId),
-                            path = rawPath.Replace('\\', '/').Trim(),
+                        BuildWebmTreeItem(
+                            info.GroupTitle,
+                            info.SeriesTitle,
+                            seriesId.Value,
+                            info.AniDbId,
+                            Path.GetFileNameWithoutExtension(segments[^1]),
+                            videoIdToRelativePath.GetValueOrDefault(videoId),
+                            rawPath.Replace('\\', '/').Trim(),
                             videoId,
-                            nc = (flags & 1) != 0,
-                            lyrics = (flags & 2) != 0,
-                            subs = (flags & 4) != 0,
-                            uncen = (flags & 8) != 0,
-                            nsfw = (flags & 16) != 0,
-                            spoiler = (flags & 32) != 0,
-                            trans = (flags & 64) != 0,
-                            over = (flags & 128) != 0,
-                        }
+                            (flags & 1) != 0,
+                            (flags & 2) != 0,
+                            (flags & 4) != 0,
+                            (flags & 8) != 0,
+                            (flags & 16) != 0,
+                            (flags & 32) != 0,
+                            (flags & 64) != 0,
+                            (flags & 128) != 0
+                        )
                     );
                 }
             }
@@ -340,7 +386,44 @@ public class AnimeThemesController(
         if (entries.Count > 0)
             AppendMissingMappingWebms(entries, items);
 
-        return Ok(new { items, playbackMode = Settings.Playback.AnimeThemesWebmMode });
+        var sortedItems = items
+            .OrderBy(item => item.Group == MissingCollectionLabel ? 0 : 1)
+            .ThenBy(item => item.Group, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.Series, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(item => item.File, StringComparer.OrdinalIgnoreCase)
+            .Select(item => new
+            {
+                group = item.Group,
+                series = item.Series,
+                seriesId = item.SeriesId,
+                anidbId = item.AnidbId,
+                file = item.File,
+                relPath = item.RelPath,
+                folderSegments = item.FolderSegments,
+                folderSortKey = item.FolderSortKey,
+                searchIndex = item.SearchIndex,
+                path = item.Path,
+                videoId = item.VideoId,
+                tags = item.Tags,
+                nc = item.Nc,
+                lyrics = item.Lyrics,
+                subs = item.Subs,
+                uncen = item.Uncen,
+                nsfw = item.Nsfw,
+                spoiler = item.Spoiler,
+                trans = item.Trans,
+                over = item.Over,
+            })
+            .ToList();
+
+        return Ok(
+            new
+            {
+                items = sortedItems,
+                favourites = ReadFavouriteIds(),
+                playbackMode = Settings.Playback.AnimeThemesWebmMode,
+            }
+        );
     }
 
     /// <summary>Streams a WebM theme file from the VFS.</summary>
@@ -376,23 +459,7 @@ public class AnimeThemesController(
     /// <returns>An array of video IDs.</returns>
     [AllowPlayerAccess]
     [HttpGet("animethemes/webm/favourites")]
-    public IActionResult GetAnimeThemesFavourites()
-    {
-        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavs);
-        lock (s_favsLock)
-        {
-            if (!IoFile.Exists(path))
-                return Ok(new RelayResponse<List<int>>(Data: []));
-            try
-            {
-                return Ok(new RelayResponse<List<int>>(Data: [.. IoFile.ReadAllLines(path).Select(line => line.Trim()).Where(line => !line.StartsWith('#') && int.TryParse(line, out _)).Select(int.Parse)]));
-            }
-            catch
-            {
-                return Ok(new RelayResponse<List<int>>(Data: []));
-            }
-        }
-    }
+    public IActionResult GetAnimeThemesFavourites() => Ok(new RelayResponse<List<int>>(Data: ReadFavouriteIds()));
 
     /// <summary>Toggles a VideoId in the favourites list.</summary>
     /// <param name="videoId">The AnimeThemes video ID to toggle.</param>
@@ -499,10 +566,94 @@ public class AnimeThemesController(
         return null;
     }
 
+    /// <summary>Constructs a pre-indexed player tree item including normalized tags, folder path segments, and search text.</summary>
+    /// <param name="group">Shoko group title or missing-collection label.</param>
+    /// <param name="series">Resolved series display title.</param>
+    /// <param name="seriesId">Shoko Series ID, or <c>0</c> when missing.</param>
+    /// <param name="anidbId">AniDB anime ID.</param>
+    /// <param name="rawFile">Raw display filename without extension.</param>
+    /// <param name="relPath">Relative source path inside the AnimeThemes root.</param>
+    /// <param name="path">Normalized filesystem path used for streaming.</param>
+    /// <param name="videoId">AnimeThemes video ID.</param>
+    /// <param name="nc">No Credits flag.</param>
+    /// <param name="lyrics">Karaoke lyrics flag.</param>
+    /// <param name="subs">Subtitles flag.</param>
+    /// <param name="uncen">Uncensored flag.</param>
+    /// <param name="nsfw">NSFW flag.</param>
+    /// <param name="spoiler">Spoiler flag.</param>
+    /// <param name="trans">Transitional overlap flag.</param>
+    /// <param name="over">Full overlap flag.</param>
+    /// <returns>A populated <see cref="WebmTreeItem"/>.</returns>
+    private static WebmTreeItem BuildWebmTreeItem(
+        string group,
+        string series,
+        int seriesId,
+        int anidbId,
+        string rawFile,
+        string? relPath,
+        string path,
+        int videoId,
+        bool nc,
+        bool lyrics,
+        bool subs,
+        bool uncen,
+        bool nsfw,
+        bool spoiler,
+        bool trans,
+        bool over
+    )
+    {
+        string file = TextHelper.UnescapeUnicode(rawFile);
+        var rawParts = (string.IsNullOrWhiteSpace(relPath) ? $"Unknown/{file}" : relPath).Replace('\\', '/').Split('/', StringSplitOptions.RemoveEmptyEntries);
+        string[] folderSegments = [.. rawParts.Take(Math.Max(0, rawParts.Length - 1)), series];
+        string folderSortKey =
+            string.Join(
+                '/',
+                folderSegments.Select(segment =>
+                    segment.ToLowerInvariant() switch
+                    {
+                        "winter" => "0001",
+                        "spring" => "0002",
+                        "summer" => "0003",
+                        "fall" => "0004",
+                        _ when segment.EndsWith('s') && int.TryParse(segment[..^1], out int decade) => (1900 + decade).ToString("D4"),
+                        _ when int.TryParse(segment, out int year) => year.ToString("D4"),
+                        _ => segment.ToLowerInvariant(),
+                    }
+                )
+            )
+            + "/"
+            + file.ToLowerInvariant();
+        string searchIndex = $"{group} {series} {file} {relPath ?? ""}"
+            .ToLowerInvariant()
+            .Replace(TextHelper.ZeroWidthSpace, "", StringComparison.Ordinal)
+            .Replace(TextHelper.HairSpace, "", StringComparison.Ordinal);
+
+        var tags = new List<string>(8);
+        if (nc)
+            tags.Add("nc");
+        if (lyrics)
+            tags.Add("lyrics");
+        if (subs)
+            tags.Add("subs");
+        if (uncen)
+            tags.Add("uncen");
+        if (nsfw)
+            tags.Add("nsfw");
+        if (spoiler)
+            tags.Add("spoil");
+        if (trans)
+            tags.Add("trans");
+        if (over)
+            tags.Add("over");
+
+        return new WebmTreeItem(group, series, seriesId, anidbId, file, relPath, folderSegments, folderSortKey, searchIndex, path, videoId, [.. tags], nc, lyrics, subs, uncen, nsfw, spoiler, trans, over);
+    }
+
     /// <summary>Appends physically present WebM files from the AnimeThemes mapping CSV whose series are missing or have no active videos in Shoko.</summary>
     /// <param name="entries">Parsed entries from the AnimeThemes mapping CSV.</param>
-    /// <param name="items">Target list receiving anonymous player item payloads.</param>
-    private void AppendMissingMappingWebms(List<AnimeThemesMappingEntry> entries, List<object> items)
+    /// <param name="items">Target list receiving player tree item payloads.</param>
+    private void AppendMissingMappingWebms(List<AnimeThemesMappingEntry> entries, List<WebmTreeItem> items)
     {
         try
         {
@@ -549,31 +700,50 @@ public class AnimeThemesController(
                 var lookup = new AnimeThemesVideoLookup(entry);
 
                 items.Add(
-                    new
-                    {
-                        group = "Missing from Collection",
-                        series = pseudoTitle,
-                        seriesId = 0,
-                        anidbId = entry.AniDbId,
-                        file = AnimeThemesHelper.BuildNewFileName(lookup, ""),
-                        relPath = entry.FilePath,
-                        path = absolutePath.Replace('\\', '/').Trim(),
-                        videoId = entry.VideoId,
-                        nc = entry.Nc,
-                        lyrics = entry.Lyrics,
-                        subs = entry.Subbed,
-                        uncen = entry.Uncen,
-                        nsfw = entry.NSFW,
-                        spoiler = entry.Spoiler,
-                        trans = entry.Overlap == "Transition",
-                        over = entry.Overlap == "Over",
-                    }
+                    BuildWebmTreeItem(
+                        MissingCollectionLabel,
+                        pseudoTitle,
+                        0,
+                        entry.AniDbId,
+                        AnimeThemesHelper.BuildNewFileName(lookup, ""),
+                        entry.FilePath,
+                        absolutePath.Replace('\\', '/').Trim(),
+                        entry.VideoId,
+                        entry.Nc,
+                        entry.Lyrics,
+                        entry.Subbed,
+                        entry.Uncen,
+                        entry.NSFW,
+                        entry.Spoiler,
+                        entry.Overlap == "Transition",
+                        entry.Overlap == "Over"
+                    )
                 );
             }
         }
         catch (Exception exception)
         {
             Logger.LogWarning(exception, "AnimeThemes Player: Failed to append missing themes to tree");
+        }
+    }
+
+    /// <summary>Reads the list of favourited AnimeThemes video IDs from disk under synchronization.</summary>
+    /// <returns>The list of favourited video IDs.</returns>
+    private List<int> ReadFavouriteIds()
+    {
+        string path = Path.Combine(ConfigProvider.ConfigDirectory, ShokoRelayConstants.FileAtFavs);
+        lock (s_favsLock)
+        {
+            if (!IoFile.Exists(path))
+                return [];
+            try
+            {
+                return [.. IoFile.ReadAllLines(path).Select(line => line.Trim()).Where(line => !line.StartsWith('#') && int.TryParse(line, out _)).Select(int.Parse)];
+            }
+            catch
+            {
+                return [];
+            }
         }
     }
 

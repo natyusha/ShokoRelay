@@ -73,12 +73,16 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
         if (isCleanBuild)
         {
             logger.LogInformation("VFS: Performing global root cleanup...");
-            var allRoots = VfsShared.GetManagedFolderPaths(videoService);
-            foreach (var root in allRoots)
+            bool doMovie = Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
+            string movieRootName = VfsShared.ResolveMovieRootFolderName();
+            var seenRoots = new HashSet<string>(VfsShared.PathComparer);
+            foreach (var folder in videoService.GetAllManagedFolders() ?? [])
             {
-                CleanVfsRoot(Path.Combine(root, rootName), cleanupDetails);
-                bool doMovie = Settings.Advanced.MovieGenerationMode != MovieGenerationMode.Disabled;
-                CleanVfsRoot(Path.Combine(root, VfsShared.ResolveMovieRootFolderName()), cleanupDetails, true, doMovie);
+                if (string.IsNullOrWhiteSpace(folder.Path) || !seenRoots.Add(folder.Path))
+                    continue;
+                bool isVfsEnabled = VfsShared.IsVfsEnabledFolder(folder);
+                CleanVfsRoot(Path.Combine(folder.Path, rootName), cleanupDetails, recreate: isVfsEnabled);
+                CleanVfsRoot(Path.Combine(folder.Path, movieRootName), cleanupDetails, true, doMovie && isVfsEnabled);
             }
         }
 
@@ -495,7 +499,6 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
     private void FlushSeriesMetadataLinks(SeriesBuildState state)
     {
         foreach (var (sourceDir, destinationSeriesDir, importRoot, seriesSeasonLabel, _) in state.PendingSeriesMetaDirs.OrderByDescending(item => item.IsPrimary))
-        {
             assetLinker.LinkSeriesMetadata(
                 sourceDir,
                 destinationSeriesDir,
@@ -511,7 +514,6 @@ public partial class VfsBuilder(IMetadataService metadataService, VfsAssetLinker
                 },
                 state.SkipCheck
             );
-        }
         state.PendingSeriesMetaDirs.Clear();
     }
 

@@ -17,24 +17,31 @@ public class VfsResourceResolver(IServiceProvider serviceProvider) : IResourceRe
     /// <inheritdoc/>
     public IReadOnlyList<Resource> Resolve(IWithResources entity)
     {
-        if (entity is not IAnidbAnime anime || serviceProvider.GetService<IMetadataService>() is not { } metadataService)
-            return [];
+        try
+        {
+            if (entity is not IAnidbAnime anime || serviceProvider.GetService<IMetadataService>() is not { } metadataService)
+                return [];
 
-        if (metadataService.GetShokoSeriesByAnidbID(anime.AnidbID) is not { } shokoSeries)
-            return [];
+            if (metadataService.GetShokoSeriesByAnidbID(anime.AnidbID) is not { } shokoSeries)
+                return [];
 
-        int primaryId = shokoSeries.GetPrimaryId(metadataService);
-        return
-        [
-            new()
-            {
-                Type = ResourceType.CrossReference,
-                Name = Name,
-                Title = "VFS Browser",
-                ID = primaryId.ToString(),
-                Url = $"{ShokoRelayConstants.BasePath}/browser?seriesId={primaryId}",
-            },
-        ];
+            int primaryId = shokoSeries.GetPrimaryId(metadataService);
+            return
+            [
+                new()
+                {
+                    Type = ResourceType.CrossReference,
+                    Name = Name,
+                    Title = "VFS Browser",
+                    ID = primaryId.ToString(),
+                    Url = $"{ShokoRelayConstants.BasePath}/browser?seriesId={primaryId}",
+                },
+            ];
+        }
+        catch
+        {
+            return [];
+        }
     }
 
     #endregion

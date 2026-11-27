@@ -148,7 +148,7 @@ public class CollectionService(
                     .GroupBy(collection => collection.Title!, StringComparer.OrdinalIgnoreCase)
                     .ToDictionary(group => group.Key, group => int.Parse(group.First().RatingKey!), StringComparer.OrdinalIgnoreCase);
 
-                if (PruneStaleCollectionCacheKeys(cache, target.SectionId, collectionRatingKeyMap))
+                if (collections.Count > 0 && PruneStaleCollectionCacheKeys(cache, target.SectionId, collectionRatingKeyMap))
                     cacheModified = true;
 
                 var posted = new HashSet<(int CollectionId, string Prefix)>();
@@ -284,32 +284,33 @@ public class CollectionService(
                     }
                 }
 
-                // Apply custom images to smart collections
-                foreach (var collection in collections)
-                    if (PlexHelper.IsPlexTrue(collection.Smart) && int.TryParse(collection.RatingKey, out int collectionId) && !string.IsNullOrEmpty(collection.Title))
-                        foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
-                        {
-                            var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots, fileSystem);
-                            bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
-                            RecordUploadOutcome(
-                                await TryUploadCollectionImageAsync(
-                                        target,
-                                        collectionId,
-                                        collection.Title,
-                                        posterPath,
-                                        prefix,
-                                        $"custom {label}",
-                                        $"{target.SectionId}|sc{collectionId}|{prefix}",
-                                        plexHasPoster,
-                                        isMovieTarget,
-                                        "Applied smart collection",
-                                        cache,
-                                        uploadedDetails,
-                                        cancellationToken
-                                    )
-                                    .ConfigureAwait(false)
-                            );
-                        }
+                // Apply custom images to smart collections on full runs
+                if (allowedIds == null)
+                    foreach (var collection in collections)
+                        if (PlexHelper.IsPlexTrue(collection.Smart) && int.TryParse(collection.RatingKey, out int collectionId) && !string.IsNullOrEmpty(collection.Title))
+                            foreach (var (prefix, suffix, suffixes, label, _) in PlexConstants.CollectionImageConfigs)
+                            {
+                                var posterPath = PlexHelper.FindCollectionImagePath(null, collection.Title, collectionId, suffixes, metadataService, globalRoots, fileSystem);
+                                bool plexHasPoster = prefix != "posters" || (collection.Thumb != null && !collection.Thumb.Contains("/composite/", StringComparison.OrdinalIgnoreCase));
+                                RecordUploadOutcome(
+                                    await TryUploadCollectionImageAsync(
+                                            target,
+                                            collectionId,
+                                            collection.Title,
+                                            posterPath,
+                                            prefix,
+                                            $"custom {label}",
+                                            $"{target.SectionId}|sc{collectionId}|{prefix}",
+                                            plexHasPoster,
+                                            isMovieTarget,
+                                            "Applied smart collection",
+                                            cache,
+                                            uploadedDetails,
+                                            cancellationToken
+                                        )
+                                        .ConfigureAwait(false)
+                                );
+                            }
 
                 targetStages?.NextStage();
             }

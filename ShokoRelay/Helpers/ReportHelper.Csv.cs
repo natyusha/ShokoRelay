@@ -95,7 +95,6 @@ public static partial class ReportHelper
                 local =>
                 {
                     lock (_mergeLock)
-                    {
                         foreach (var (groupKey, localGroup) in local.Groups)
                         {
                             if (!_globalGroups.TryGetValue(groupKey, out var globalGroup))
@@ -112,7 +111,6 @@ public static partial class ReportHelper
                                 globalVariantStats.Count += variantStats.Count;
                             }
                         }
-                    }
                 }
             );
 

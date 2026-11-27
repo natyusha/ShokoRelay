@@ -372,7 +372,7 @@ public class VfsWatcher(
                         await VfsShared.VfsLock.WaitAsync(stopToken).ConfigureAwait(false);
                         try
                         {
-                            builder.Build(removedIds, cleanRoot: false);
+                            builder.Build(removedIds, cleanRoot: false, cancellationToken: stopToken);
                             await atMapping.ApplyMappingIfExistsAsync(removedIds, stopToken).ConfigureAwait(false);
                         }
                         finally
@@ -398,7 +398,7 @@ public class VfsWatcher(
                     try
                     {
                         var stopwatch = Stopwatch.StartNew();
-                        var result = builder.Build(seriesIds, cleanRoot: false);
+                        var result = builder.Build(seriesIds, cleanRoot: false, cancellationToken: stopToken);
 
                         // Restore AnimeThemes links for the affected series if a mapping file exists
                         await atMapping.ApplyMappingIfExistsAsync(seriesIds, stopToken).ConfigureAwait(false);
@@ -574,7 +574,7 @@ public class VfsWatcher(
             try
             {
                 // Regenerate the VFS to account for cases where the episode/season numbering was updated in Shoko after the initial file event was processed
-                var vfsResult = builder.Build(seriesId, cleanRoot: false);
+                var vfsResult = builder.Build(seriesId, cleanRoot: false, cancellationToken: token);
                 if (vfsResult.CreatedLinks > 0)
                 {
                     string title = metadataService.GetShokoSeriesByID(seriesId)?.GetDisplayTitle() ?? seriesId.ToString();

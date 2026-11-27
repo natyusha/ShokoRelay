@@ -119,8 +119,8 @@ GET  /                                                         -> GetMediaProvid
 GET  /options/{overrides}                                      -> GetMediaProvider           (TV Shows with option overrides)
 GET  /movie                                                    -> GetMediaProvider           (Movies)
 GET  /movie/options/{overrides}                                -> GetMediaProvider           (Movies with option overrides)
-GET  /matches?filename={path}&title={id}&manual=1              -> Match                      (for preview/testing)
-POST /matches?filename={path}&title={id}&manual=1              -> Match
+GET  /matches?filename={path}&title={id}&guid={guid}&manual=1  -> Match                      (for preview/testing)
+POST /matches?filename={path}&title={id}&guid={guid}&manual=1  -> Match
 
 GET  /collections/{groupId}                                    -> GetCollection
 GET  /collections/user/{groupId}                               -> GetCollectionImage         (image)
@@ -134,11 +134,12 @@ GET  /metadata/{ratingKey}/extras                              -> GetMetadataExt
 ```
 
 - `GetMediaProvider` returns the agent descriptor describing supported types for TV Shows (`/` or `/options/{overrides}`) or Movies (`/movie` or `/movie/options/{overrides}`).
-- `Match` looks up a series by filename or title. Priority is given to IDs found in the path.
+- `Match` looks up a series by filename, title, or Shoko Relay GUID. Priority is given to manual IDs when `manual=1`, followed by IDs found in `filename`, then `guid`.
   - `filename`: The file path provided by Plex.
   - `title`: The Shoko Series ID (used when `manual=1`; also supports `a{AniDBID}` and `m{EpisodeID}` for movies).
+  - `guid`: (largely unused) Optional Shoko Relay GUID fallback (e.g., `tv.plex.agents.custom.shoko://show/123` or `tv.plex.agents.custom.shoko.movie://movie/m890`) when `filename` is omitted.
   - `manual`: (default 0) set to 1 to force identification via the `title` parameter.
-    - Manual title/GUID searches are intentionally omitted since files always originate from the VFS and encode expected IDs.
+    - Manual title searches are intentionally omitted since files always originate from the VFS and encode expected IDs.
   - Testing the `GET` endpoint would use the following format: `/matches?title={ShokoSeriesID}&manual=1`
 - `GetCollection` retrieves collection metadata for a given group ID.
 - `GetCollectionImage` returns the image from the `!CollectionImages` directory matching the given Shoko group name/ID or a Plex smart collection rating key prefixed with 'sc'.
@@ -459,7 +460,8 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
      [?name={string}&year={int}&season={string}&recent={int}&force={true|false}&destination={path}&queue={true|false}]
 ```
 
-- `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, `relPath` (source folder path for folder view support), and the configured `playbackMode`.
+- `AnimeThemesWebmTree` returns the pre-sorted, pre-indexed hierarchical tree (`items`), inlined `favourites`, and the configured `playbackMode`.
+  - Each item includes `tags`, `folderSegments`, `folderSortKey`, `searchIndex`, `videoId`, `relPath`, and bitmask boolean flags.
   - Employs single-pass in-memory dictionary caching of physical files to avoid redundant disk I/O on large mapping catalogs.
   - Differentiates deterministically between TV and Movie VFS structures.
   - When `Advanced.RequireAuth` is set to `Allow Player Access`, this unauthenticated response includes full server filesystem paths (`path`) for streaming.

@@ -403,8 +403,9 @@ public static partial class TextHelper
     /// <param name="episode">Episode metadata.</param>
     /// <param name="displaySeriesTitle">Resolved series title for fallback.</param>
     /// <param name="tmdbEpisode">Optional pre-resolved TMDB episode override.</param>
+    /// <param name="metadataService">Optional metadata service used to verify manual override primary series presence.</param>
     /// <returns>The resolved episode title string.</returns>
-    public static string ResolveEpisodeTitle(IEpisode episode, string displaySeriesTitle, IEpisode? tmdbEpisode = null)
+    public static string ResolveEpisodeTitle(IEpisode episode, string displaySeriesTitle, IEpisode? tmdbEpisode = null, IMetadataService? metadataService = null)
     {
         string raw = GetTitleByLanguage(episode, Settings.EpisodeTitleLanguage);
         var resolvedTmdbEpisode = tmdbEpisode ?? (episode as IShokoEpisode)?.GetLinkedEpisodes(MetadataSource.TMDB)?.FirstOrDefault();
@@ -429,11 +430,11 @@ public static partial class TextHelper
             return title;
         }
 
-        // If TMDB episode group names enabled and multiple links exist, prefer TMDB titles (unless custom VFS overrides bypassed grouping)
+        // If TMDB episode group names is enabled and multiple links exist, prefer TMDB titles (unless custom VFS overrides bypassed grouping)
         if (
             Settings.TmdbEpGroupNames
             && episode is IShokoEpisode tmdbGrouped
-            && !OverrideHelper.HasCustomCoords(tmdbGrouped)
+            && !OverrideHelper.HasCustomCoords(tmdbGrouped, metadataService)
             && tmdbGrouped.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 }
             && !string.IsNullOrEmpty(tmdbTitle)
         )

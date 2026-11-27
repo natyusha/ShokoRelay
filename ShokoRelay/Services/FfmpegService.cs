@@ -80,7 +80,7 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
             outputPath,
         };
 
-        await RunProcessAsync(_ffmpegPath, args, null, null, cancellationToken, workingDir).ConfigureAwait(false);
+        await RunProcessAsync(_ffmpegPath, args, cancellationToken, workingDir).ConfigureAwait(false);
     }
 
     #endregion
@@ -198,20 +198,15 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
 
     #region Process Execution
 
-    /// <summary>Executes an FFmpeg process with optional stream redirection and robust error handling.</summary>
+    /// <summary>Executes an FFmpeg process with robust error handling and cancellation cleanup.</summary>
     /// <param name="fileName">The path to the FFmpeg/FFprobe binary.</param>
     /// <param name="args">The list of command line arguments.</param>
-    /// <param name="stdIn">Optional input stream to pipe into the process.</param>
-    /// <param name="stdOut">Optional output stream to capture process output.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="workingDir">Optional working directory for the process.</param>
     /// <returns>A task representing the asynchronous process execution.</returns>
-    private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, Stream? stdIn, Stream? stdOut, CancellationToken cancellationToken, string? workingDir = null)
+    private async Task RunProcessAsync(string fileName, IReadOnlyList<string> args, CancellationToken cancellationToken, string? workingDir = null)
     {
         var startInfo = CreateProcessStartInfo(fileName, args, workingDir);
-        startInfo.RedirectStandardInput = stdIn != null;
-        startInfo.RedirectStandardOutput = stdOut != null;
-
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = false };
         var stderr = new StringBuilder();
         process.ErrorDataReceived += (_, eventArgs) =>
@@ -224,32 +219,7 @@ public sealed class FfmpegService(string applicationPath, string dataPath, ILogg
         {
             process.Start();
             process.BeginErrorReadLine();
-
-            var tasks = new List<Task>();
-            if (stdIn != null)
-                tasks.Add(
-                    Task.Run(
-                        async () =>
-                        {
-                            try
-                            {
-                                await stdIn.CopyToAsync(process.StandardInput.BaseStream, cancellationToken).ConfigureAwait(false);
-                                await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
-                            }
-                            finally
-                            {
-                                process.StandardInput.Close();
-                            }
-                        },
-                        cancellationToken
-                    )
-                );
-
-            if (stdOut != null)
-                tasks.Add(process.StandardOutput.BaseStream.CopyToAsync(stdOut, cancellationToken));
-
-            tasks.Add(process.WaitForExitAsync(cancellationToken));
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             process.WaitForExit();
 
             if (process.ExitCode != 0)

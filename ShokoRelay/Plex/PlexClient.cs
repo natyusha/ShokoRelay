@@ -18,10 +18,10 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
     public bool IsEnabled => !string.IsNullOrWhiteSpace(Token) && GetConfiguredTargets().Count > 0;
 
     /// <summary>Cached array of prioritized Shoko-to-Plex path mappings.</summary>
-    private (string In, string Out)[] _shokoToPlexMappings = [];
+    private (string Source, string Target)[] _shokoToPlexMappings = [];
 
     /// <summary>Cached array of prioritized Plex-to-Shoko path mappings.</summary>
-    private (string In, string Out)[] _plexToShokoMappings = [];
+    private (string Source, string Target)[] _plexToShokoMappings = [];
 
     /// <summary>Reference to the last cached raw path mappings dictionary used to detect configuration changes.</summary>
     private Dictionary<string, string>? _lastCachedMappings;
@@ -694,7 +694,7 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
         if (currentMappings == null || currentMappings.Count == 0)
             return path;
 
-        (string In, string Out)[] list;
+        (string Source, string Target)[] list;
         lock (_mappingLock)
         {
             if (!ReferenceEquals(_lastCachedMappings, currentMappings))
@@ -711,12 +711,12 @@ public class PlexClient(HttpClient httpClient, ConfigProvider configProvider, IL
             return path;
 
         string inputPath = PlexHelper.NormalizePathForPlex(path);
-        var (matchIn, matchOut) = list.FirstOrDefault(pair => !string.IsNullOrEmpty(pair.In) && inputPath.StartsWith(pair.In, StringComparison.OrdinalIgnoreCase));
-        if (matchIn == null)
+        var (matchSource, matchTarget) = list.FirstOrDefault(pair => !string.IsNullOrEmpty(pair.Source) && inputPath.StartsWith(pair.Source, StringComparison.OrdinalIgnoreCase));
+        if (matchSource == null)
             return path;
 
-        string remainder = inputPath.Length > matchIn.Length ? inputPath[matchIn.Length..].TrimStart('/') : "";
-        string result = string.IsNullOrEmpty(remainder) ? matchOut : $"{matchOut.TrimEnd('/')}/{remainder}";
+        string remainder = inputPath.Length > matchSource.Length ? inputPath[matchSource.Length..].TrimStart('/') : "";
+        string result = string.IsNullOrEmpty(remainder) ? matchTarget : $"{matchTarget.TrimEnd('/')}/{remainder}";
 
         return shokoToPlex ? result : result.Replace('/', Path.DirectorySeparatorChar);
     }
