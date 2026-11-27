@@ -2,13 +2,13 @@
 
 ![Shoko Relay Logo](https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Assets/shoko-relay-logo-small.png "Shoko Relay")  
 [![Discord](https://img.shields.io/discord/96234011612958720?logo=discord&logoColor=fff&label=Discord&color=5865F2 "Shoko Discord")](https://discord.gg/shokoanime)
-[![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/daily/)
+[![Shoko Docs](https://img.shields.io/badge/VitePress-Shoko_Docs-4E7CF5?logo=vitepress&logoColor=fff)](https://docs.shokoanime.com/)
 [![GitHub Latest](https://img.shields.io/github/v/tag/natyusha/ShokoRelay?label=Latest&logo=github&logoColor=fff)](https://github.com/natyusha/ShokoRelay/releases/latest)
 -
 
 <!-- prettier-ignore-end -->
 
-This is a plugin for [Shoko](https://shokoanime.com/) that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library but separate movie library support is included as well. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) (_using a daily build_) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
+This is a plugin for [Shoko](https://shokoanime.com/) that acts as a [Custom Metadata Provider](https://forums.plex.tv/t/announcement-custom-metadata-providers/934384) for Plex. It is a successor to the [ShokoRelay.bundle](https://github.com/natyusha/ShokoRelay.bundle) legacy agent/scanner and mirrors all of its functionality (including the automation scripts). Scanning is much faster and there are many new features included as well. Just like the old bundle this is intended to work with series of all types within a single "TV Shows" library but separate movie library support is included as well. All you need to get started is a populated [Shoko Server](https://shokoanime.com/downloads/shoko-server) and [Plex Media Server](https://www.plex.tv/media-server-downloads/).
 
 Due to the lack of a custom scanner this plugin leverages a VFS (Virtual File System) to ensure that varied folder structures are supported. This means that your anime can be organised with whatever file or folder structure you want. There is one caveat though. A folder cannot contain more than one AniDB series at a time if you want it to fully support every single type of [local media asset](https://support.plex.tv/articles/200220717-local-media-assets-tv-shows/) (posters, theme songs, etc.). The VFS will be automatically updated when any file changes are detected by Shoko.
 
@@ -65,11 +65,11 @@ Installation can be completed via Shoko's WebUI (Recommended) or Manually. Both 
 
 > [!TIP]
 > If you are sharing the symlinks over an SMB share they may not appear depending on the [Samba Configuration](https://www.samba.org/samba/docs/current/man-html/smb.conf.5.html). An example entry for `smb.conf` that may help to mitigate this is listed below:
-
-```ini
-[global]
-    follow symlinks = yes
-```
+>
+> ```ini
+> [global]
+>     follow symlinks = yes
+> ```
 
 <details>
 <summary><b>Recommended Shoko Server Configuration</b></summary><br />
