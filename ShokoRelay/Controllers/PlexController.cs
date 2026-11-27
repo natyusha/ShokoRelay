@@ -2,12 +2,10 @@ using System.Text.Json;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Shoko.Abstractions.Extensions;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
-using ShokoRelay.Services;
-using ShokoRelay.Sync;
+using ShokoRelay.Jobs;
 
 namespace ShokoRelay.Controllers;
 
@@ -25,12 +23,8 @@ public sealed record PlexDiscoveryResult(List<PlexAvailableLibrary> Libraries, s
 /// <param name="metadataService">Shoko metadata service.</param>
 /// <param name="plexClient">Plex client.</param>
 /// <param name="plexAuth">Plex authentication service.</param>
-/// <param name="collectionService">Plex collection service.</param>
-/// <param name="criticRatingService">Plex critic rating service.</param>
 /// <param name="userService">Shoko user service.</param>
 /// <param name="userDataService">Shoko user data service.</param>
-/// <param name="imageSyncService">Shoko image sync service.</param>
-/// <param name="plexAutomationService">Plex automation service.</param>
 /// <param name="plexMetadata">Plex metadata mapper.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
@@ -42,12 +36,8 @@ public class PlexController(
     IMetadataService metadataService,
     PlexClient plexClient,
     PlexAuth plexAuth,
-    CollectionService collectionService,
-    CriticRatingService criticRatingService,
     IUserService userService,
     IUserDataService userDataService,
-    ImageSyncService imageSyncService,
-    PlexAutomationService plexAutomationService,
     PlexMetadata plexMetadata,
     ILogger<PlexController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
@@ -138,24 +128,13 @@ public class PlexController(
     }
 
     /// <summary>Forces a rediscovery of servers and libraries.</summary>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A discovery report response.</returns>
     [HttpPost("plex/auth/refresh")]
-    public Task<IActionResult> RefreshPlexLibraries() =>
+    public Task<IActionResult> RefreshPlexLibraries([FromQuery] bool queue = false) =>
         string.IsNullOrWhiteSpace(ConfigProvider.GetPlexToken())
             ? Task.FromResult<IActionResult>(Unauthorized(new RelayResponse<object>(Status: "error", Message: "Plex token is missing.")))
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskPlexAuthRefresh,
-                ReportHelper.BuildDiscoveryReport,
-                async () =>
-                {
-                    Logger.LogInformation("Plex: Refreshing servers and libraries...");
-                    await ConfigProvider.RefreshAdminUsername(plexAuth, HttpContext.RequestAborted).ConfigureAwait(false);
-                    var discovery = await plexAuth.DiscoverShokoLibrariesAsync(ConfigProvider.GetPlexToken(), ConfigProvider.GetPlexClientIdentifier(), HttpContext.RequestAborted).ConfigureAwait(false);
-                    PersistDiscoveryResults(discovery);
-                    return new PlexDiscoveryResult(CollectDiscoveredLibraries(discovery.ShokoLibraries), ConfigProvider.GetSettings().Advanced.PlexServerUrl);
-                },
-                SyncHelper.SyncLock
-            );
+            : ExecuteQueuedJobAsync<PlexDiscoveryJob>(ShokoRelayConstants.TaskPlexAuthRefresh, queue);
 
     /// <summary>Revokes the current Plex token.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -258,58 +237,71 @@ public class PlexController(
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB IDs.</param>
     /// <param name="assignment">If false, skips assigning series to collections and only applies posters.</param>
     /// <param name="clean">If true, prunes old cached custom posters from Plex's local metadata directory.</param>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A collection build report.</returns>
     [HttpGet("plex/collections/build")]
-    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null, [FromQuery] bool assignment = true, [FromQuery] bool clean = true) =>
-        ValidatePlexFilterRequest(filter, out var seriesList, out var filterIds) is { } guard
-            ? Task.FromResult(guard)
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskPlexCollectionsBuild,
-                ReportHelper.BuildCollectionsReport,
-                () => collectionService.BuildCollectionsAsync(filterIds.Count > 0 ? seriesList : null, assignment, clean, CancellationToken.None),
-                SyncHelper.SyncLock
-            );
+    public Task<IActionResult> BuildPlexCollections([FromQuery] string? filter = null, [FromQuery] bool assignment = true, [FromQuery] bool clean = true, [FromQuery] bool queue = false)
+    {
+        if (ValidatePlexFilterRequest(filter, out _, out var filterIds) is { } guard)
+            return Task.FromResult(guard);
+
+        string normalizedFilter = string.Join(",", filterIds.Order());
+        string filterKey = RelayJobBase.ComputeFilterKey(normalizedFilter);
+        return ExecuteQueuedJobAsync<PlexCollectionsJob>(ShokoRelayConstants.TaskPlexCollectionsBuild, queue, job =>
+        {
+            job.Filter = normalizedFilter;
+            job.FilterKey = filterKey;
+            job.Assignment = assignment;
+            job.Clean = clean;
+        });
+    }
 
     /// <summary>Updates ratings in Plex based on Shoko metadata.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A ratings update report.</returns>
     [HttpGet("plex/ratings/apply")]
-    public Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null) =>
-        ValidatePlexFilterRequest(filter, out var seriesList, out var filterIds) is { } guard
-            ? Task.FromResult(guard)
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskPlexRatingsApply,
-                ReportHelper.BuildRatingsReport,
-                () => criticRatingService.ApplyRatingsAsync(filterIds.Count > 0 ? seriesList.WhereNotNull().Select(series => series.LocalID) : null, CancellationToken.None),
-                SyncHelper.SyncLock
-            );
+    public Task<IActionResult> ApplyAudienceRatings([FromQuery] string? filter = null, [FromQuery] bool queue = false)
+    {
+        if (ValidatePlexFilterRequest(filter, out _, out var filterIds) is { } guard)
+            return Task.FromResult(guard);
+
+        string normalizedFilter = string.Join(",", filterIds.Order());
+        string filterKey = RelayJobBase.ComputeFilterKey(normalizedFilter);
+        return ExecuteQueuedJobAsync<PlexRatingsJob>(ShokoRelayConstants.TaskPlexRatingsApply, queue, job =>
+        {
+            job.Filter = normalizedFilter;
+            job.FilterKey = filterKey;
+        });
+    }
 
     /// <summary>Synchronizes Plex-generated episode screenshots back to Shoko.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the image synchronization run.</returns>
     [HttpGet("plex/images/sync")]
-    public Task<IActionResult> SyncPlexImages([FromQuery] string? filter = null) =>
-        ValidatePlexFilterRequest(filter, out _, out var filterIds) is { } guard
-            ? Task.FromResult(guard)
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskPlexImagesSync,
-                ReportHelper.BuildImageSyncReport,
-                () => imageSyncService.SyncImagesAsync(filterIds.Count > 0 ? filterIds : null, CancellationToken.None),
-                SyncHelper.SyncLock
-            );
+    public Task<IActionResult> SyncPlexImages([FromQuery] string? filter = null, [FromQuery] bool queue = false)
+    {
+        if (ValidatePlexFilterRequest(filter, out _, out var filterIds) is { } guard)
+            return Task.FromResult(guard);
+
+        string normalizedFilter = string.Join(",", filterIds.Order());
+        string filterKey = RelayJobBase.ComputeFilterKey(normalizedFilter);
+        return ExecuteQueuedJobAsync<PlexImagesSyncJob>(ShokoRelayConstants.TaskPlexImagesSync, queue, job =>
+        {
+            job.Filter = normalizedFilter;
+            job.FilterKey = filterKey;
+        });
+    }
 
     /// <summary>Triggers collection, rating, and image sync automation back-to-back.</summary>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the automation run.</returns>
     [HttpGet("plex/automation/run")]
-    public Task<IActionResult> RunPlexAutomationNow() =>
+    public Task<IActionResult> RunPlexAutomationNow([FromQuery] bool queue = false) =>
         !PlexClient.IsEnabled
             ? Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Plex configuration missing.")))
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskPlexAutomationRun,
-                (builder, report) => ReportHelper.BuildPlexAutomationReport(builder, report, ApiBase),
-                () => plexAutomationService.RunAutomationAsync(null, CancellationToken.None),
-                SyncHelper.SyncLock
-            );
+            : ExecuteQueuedJobAsync<PlexAutomationJob>(ShokoRelayConstants.TaskPlexAutomationRun, queue);
 
     #endregion
 

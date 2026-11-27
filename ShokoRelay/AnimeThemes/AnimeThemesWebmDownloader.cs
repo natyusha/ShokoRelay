@@ -1,5 +1,6 @@
 using System.Net;
 using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.Utilities;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.AnimeThemes;
@@ -51,6 +52,9 @@ public class AnimeThemesWebmDownloader(
 
     private readonly AnimeThemesApi _apiClient = apiClient;
 
+    /// <summary>Semaphore preventing concurrent WebM download operations.</summary>
+    public readonly SemaphoreSlim DownloadLock = new(1, 1);
+
     /// <summary>Signals an unrecoverable rate-limit failure that should abort the download loop.</summary>
     /// <param name="message">The failure reason.</param>
     private sealed class RateLimitAbortException(string message) : InvalidOperationException(message);
@@ -62,9 +66,11 @@ public class AnimeThemesWebmDownloader(
     /// <summary>Downloads AnimeThemes WebM files based on specific filters or recent additions and organizes them by Year/Season.</summary>
     /// <param name="query">The search filters.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     /// <returns>A download result summary.</returns>
-    public async Task<WebmDownloadResult> DownloadAsync(AnimeThemesWebmQuery query, CancellationToken cancellationToken)
+    public async Task<WebmDownloadResult> DownloadAsync(AnimeThemesWebmQuery query, CancellationToken cancellationToken, IProgress<decimal>? progress = null)
     {
+        progress?.Report(0);
         var messages = new List<string>();
         var downloads = new List<string>();
         var downloadedItems = new List<(string RelativePath, string FileName)>();
@@ -223,6 +229,8 @@ public class AnimeThemesWebmDownloader(
             if (query.Recent is > 0)
             {
                 int targetCount = Math.Clamp(query.Recent.Value, 1, 100);
+                var recentProgress = progress.Throttle().ForItems(targetCount);
+                recentProgress.Report(0);
                 int remaining = targetCount;
                 int page = 1;
                 bool hasNext = true;
@@ -248,7 +256,14 @@ public class AnimeThemesWebmDownloader(
                             .ThenBy(anime => anime!.Season != null ? Array.IndexOf(seasonOrder, anime.Season) : 9999)
                             .FirstOrDefault();
 
-                        await DownloadSingleVideoAsync(video.Basename, video.Link, primaryAnime?.Year, primaryAnime?.Season, $"video {video.Basename ?? video.Id.ToString()}").ConfigureAwait(false);
+                        try
+                        {
+                            await DownloadSingleVideoAsync(video.Basename, video.Link, primaryAnime?.Year, primaryAnime?.Season, $"video {video.Basename ?? video.Id.ToString()}").ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            recentProgress.Increment();
+                        }
                     }
 
                     hasNext = response?.PaginatorInfo?.HasMorePages ?? false;
@@ -294,6 +309,9 @@ public class AnimeThemesWebmDownloader(
                                 messages.Add($"Failed to process theme ID {theme.Id}: {exception.Message}");
                                 logger.LogWarning(exception, "AnimeThemes WebM: Failed to process theme ID -> {ThemeId}", theme.Id);
                             }
+
+                            if (nameLimitActive)
+                                progress?.Report(Math.Min(95m, 100m * downloaded / NameFilterMaxDownloads));
                         }
                     }
 
@@ -314,6 +332,7 @@ public class AnimeThemesWebmDownloader(
         {
             if (await mappingService.AppendEntriesToMappingFileAsync(downloadedItems, CancellationToken.None).ConfigureAwait(false) is int mapped && mapped > 0)
                 messages.Add($"Auto-mapped {mapped} new entries into {ShokoRelayConstants.FileAtMapping}");
+            progress?.Report(100);
         }
 
         logger.LogInformation("AnimeThemes WebM: Download operation finished -> {Downloaded} downloaded, {Skipped} skipped, {Errors} errors", downloaded, skipped, errors);

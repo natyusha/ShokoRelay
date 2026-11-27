@@ -23,8 +23,9 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
     /// <summary>Scans all import roots for the specified mapping file and processes pending entries, or purges existing links.</summary>
     /// <param name="mapFile">The relative path to the mapping file.</param>
     /// <param name="purgeLinks">If true, removes all symlinks and generated _attach folders in the import roots.</param>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A result object detailing the operation's outcome.</returns>
-    public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false)
+    public async Task<SourceLinkResult> ProcessLinksAsync(string mapFile, bool purgeLinks = false, CancellationToken cancellationToken = default)
     {
         var managedFolders = videoService.GetAllManagedFolders() ?? [];
         var roots = VfsShared.GetManagedFolderPaths(videoService, requireExists: true, fileSystem: fileSystem);
@@ -36,7 +37,10 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
             // Use the centralized ignored folder set for purge safety
             var protectedFolders = VfsShared.GetIgnoredFolderNames(Settings);
             foreach (var root in roots)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
                 count += PurgeDirectoryLinks(root, protectedFolders, details);
+            }
 
             logger.LogInformation("SourceLinkService: Finished purge operation -> {Count} links removed.", count);
             return new SourceLinkResult(count, true, details);
@@ -51,6 +55,7 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
 
         foreach (var managedFolder in managedFolders)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string root = managedFolder.Path;
             if (string.IsNullOrWhiteSpace(root) || !fileSystem.DirectoryExists(root))
                 continue;
@@ -73,6 +78,7 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
 
             for (int lineIndex = 0; lineIndex < lines.Length; lineIndex++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 string line = lines[lineIndex].Trim();
                 if (string.IsNullOrWhiteSpace(line) || line[0] == '#')
                     continue;
@@ -170,6 +176,7 @@ public class SourceLinkService(IVideoService videoService, IFileSystem fileSyste
             foreach (var directory in dirsToScan)
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     await videoService.NotifyVideoFileChangeDetected(directory).ConfigureAwait(false);
                 }
                 catch (Exception exception)

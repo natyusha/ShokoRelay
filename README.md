@@ -205,12 +205,12 @@ The button in the top right of the Automation Controls panel will run all three 
 
 As a bonus this supports using the primary series images as the collection images (if configured under "Provider Settings"). Custom local posters can also be used by placing them in the configured `Collection Images Root Path` (default `!CollectionImages`) folder. These files are simply named after the Shoko group name (or ID) that you wish them to apply to. If the name of a file matches that of a smart collection the images will be applied to it too. Empty collections (excluding smart collections) will also be removed automatically during collection generation.
 
-Applying a hyphenated suffix to the image that matches Plex's naming conventions for logos or backdrops will allow them to be set as well. Examples will be provided below for applying various local collection images to a group named "Bleach" in Shoko:
+Applying a hyphenated suffix to the image that matches Plex's naming conventions for logos or backdrops will allow them to be set as well. Examples will be provided below for applying various local collection images to a group named "Zanarkand" in Shoko:
 
-- Bleach.jpg
-- Bleach-logo.png
-- Bleach-square.jpg
-- Bleach-background.jpg
+- Zanarkand.jpg
+- Zanarkand-logo.png
+- Zanarkand-square.jpg
+- Zanarkand-background.jpg
 
 ### Critic Rating Application
 
@@ -305,7 +305,7 @@ There is an included tree view which allows you to browse your themes by `Group 
 
 #### Favourites
 
-You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to `favs_animethemes.csv` in the plugin's configuration folder based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs gundam`) to find specific favourites.
+You can mark any theme as a favourite by clicking the heart icon `❤` next to its name in the tree view. Once marked as a favourite the icon for a given item will change to be red in colour and it will be persisted to `favs_animethemes.csv` in the plugin's configuration folder based on its AnimeThemes VideoID. To quickly view only your marked themes, type `favs` into the search bar. This keyword can be combined with other search terms as well as tags (e.g., `+nc favs zanarkand`) to find specific favourites.
 
 ## Additional Information
 
@@ -574,6 +574,8 @@ Most manual actions performed via the dashboard (as well as some direct API requ
 - These files are overwritten each time the corresponding task is run.
 - To save a specific report, you must download or copy the text before running that task again.
 - Links to the currently generated reports are available at the bottom of the dashboard in the "Task Reports" section
+- Long-running dashboard tasks execute through Shoko's Job Queue (`ShokoRelay_VFS`, `ShokoRelay_Plex`, and `AnimeThemes` queues)
+  - These can be monitored or cancelled directly from Shoko's WebUI Dashboard under "Queue Processor"
 
 ### Plugin API
 

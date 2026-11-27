@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Shoko.Abstractions.FileSystem;
 using Shoko.Abstractions.Video.Services;
 using ShokoRelay.AnimeThemes;
+using ShokoRelay.Jobs;
 using IoFile = System.IO.File;
 
 namespace ShokoRelay.Controllers;
@@ -13,7 +14,6 @@ namespace ShokoRelay.Controllers;
 /// <param name="plexClient">Plex client.</param>
 /// <param name="animeThemesMp3Generator">AnimeThemes MP3 generator.</param>
 /// <param name="animeThemesMapping">AnimeThemes mapping service.</param>
-/// <param name="webmDownloader">AnimeThemes WebM downloader.</param>
 /// <param name="videoService">Shoko video service.</param>
 /// <param name="fileSystem">Shoko file system service.</param>
 /// <param name="logger">Logger instance.</param>
@@ -27,19 +27,12 @@ public class AnimeThemesController(
     PlexClient plexClient,
     AnimeThemesMp3Generator animeThemesMp3Generator,
     AnimeThemesMapping animeThemesMapping,
-    AnimeThemesWebmDownloader webmDownloader,
     IVideoService videoService,
     IFileSystem fileSystem,
     ILogger<AnimeThemesController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
     #region Setup
-
-    /// <summary>Semaphore to prevent concurrent WebM download operations.</summary>
-    private static readonly SemaphoreSlim s_webmDownloadLock = new(1, 1);
-
-    /// <summary>Semaphore to prevent concurrent AnimeThemes mapping build runs without blocking VFS operations.</summary>
-    private static readonly SemaphoreSlim s_mapBuildLock = new(1, 1);
 
     /// <summary>Lock object synchronizing reads and writes to the AnimeThemes favourites file.</summary>
     private static readonly Lock s_favsLock = new();
@@ -50,25 +43,31 @@ public class AnimeThemesController(
 
     /// <summary>Applies the anime‑themes mapping file to the directory structure.</summary>
     /// <param name="filter">Optional comma-separated list of Shoko or AniDB series IDs to filter the operation.</param>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the build outcome.</returns>
     [HttpGet("animethemes/vfs/build")]
-    public Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null) =>
-        ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard
-            ? Task.FromResult(guard)
-            : ExecuteTrackedTaskAsync(
-                ShokoRelayConstants.TaskAtVfsBuild,
-                (builder, report) => ReportHelper.BuildAtVfsBuildReport(builder, report, filterIds ?? []),
-                () => animeThemesMapping.ApplyMappingAsync(filterIds, CancellationToken.None),
-                VfsShared.VfsLock
-            );
+    public Task<IActionResult> AnimeThemesVfsBuild([FromQuery] string? filter = null, [FromQuery] bool queue = false)
+    {
+        if (ValidateFilterOrBadRequest(filter, out var filterIds) is { } guard)
+            return Task.FromResult(guard);
+
+        string normalizedFilter = string.Join(",", filterIds.Order());
+        string filterKey = RelayJobBase.ComputeFilterKey(normalizedFilter);
+        return ExecuteQueuedJobAsync<AtVfsBuildJob>(ShokoRelayConstants.TaskAtVfsBuild, queue, job =>
+        {
+            job.Filter = normalizedFilter;
+            job.FilterKey = filterKey;
+        });
+    }
 
     /// <summary>Generates the anime‑themes mapping CSV, tests a single filename mapping, or updates/saves a mapping.</summary>
     /// <param name="path">Optional webm filename or relative path to test or update mapping against.</param>
     /// <param name="save">Whether to save or update the mapping in the CSV file.</param>
     /// <param name="anidbId">Optional manual AniDB ID override.</param>
+    /// <param name="queue">When <c>true</c>, enqueues the mapping build job in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the mapping, test, or update.</returns>
     [HttpGet("animethemes/vfs/map")]
-    public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? path = null, [FromQuery] bool save = false, [FromQuery] int? anidbId = null)
+    public async Task<IActionResult> AnimeThemesVfsMap([FromQuery] string? path = null, [FromQuery] bool save = false, [FromQuery] int? anidbId = null, [FromQuery] bool queue = false)
     {
         if (!string.IsNullOrWhiteSpace(path))
         {
@@ -90,8 +89,7 @@ public class AnimeThemesController(
                 );
         }
 
-        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMapBuild, ReportHelper.BuildAtVfsMapReport, () => animeThemesMapping.BuildMappingFileAsync(CancellationToken.None), s_mapBuildLock)
-            .ConfigureAwait(false);
+        return await ExecuteQueuedJobAsync<AtMapBuildJob>(ShokoRelayConstants.TaskAtMapBuild, queue).ConfigureAwait(false);
     }
 
     /// <summary>Downloads and imports the curated mapping CSV from GitHub.</summary>
@@ -112,9 +110,10 @@ public class AnimeThemesController(
 
     /// <summary>Generates Theme.mp3 files for anime series.</summary>
     /// <param name="query">Parameters for the MP3 generation request.</param>
+    /// <param name="queue">When <c>true</c>, enqueues batch MP3 generation in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the generation.</returns>
     [HttpGet("animethemes/mp3")]
-    public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query)
+    public async Task<IActionResult> AnimeThemesMp3([FromQuery] AnimeThemesMp3Query query, [FromQuery] bool queue = false)
     {
         if (string.IsNullOrWhiteSpace(query.Path))
             return BadRequest(new RelayResponse<object>(Status: "error", Message: "path is required"));
@@ -150,12 +149,14 @@ public class AnimeThemesController(
         query = query with { Path = fullFolderPath };
 
         if (query.Batch)
-            return await ExecuteTrackedTaskAsync(
-                    ShokoRelayConstants.TaskAtMp3Build,
-                    ReportHelper.BuildAtMp3Report,
-                    () => animeThemesMp3Generator.ProcessBatchAsync(query, CancellationToken.None),
-                    VfsShared.VfsLock
-                )
+            return await ExecuteQueuedJobAsync<AtMp3BatchJob>(ShokoRelayConstants.TaskAtMp3Build, queue, job =>
+                {
+                    job.FolderPath = fullFolderPath;
+                    job.Slug = query.Slug;
+                    job.Offset = query.Offset;
+                    job.Force = query.Force;
+                    job.Seasonal = query.Seasonal;
+                })
                 .ConfigureAwait(false);
 
         // Single generation does not require a persistent log file, but still uses the VfsLock for safety.
@@ -203,10 +204,10 @@ public class AnimeThemesController(
     public IActionResult GetAnimeThemesMp3Cache() => Ok(new RelayResponse<IReadOnlyDictionary<string, string>>(Data: animeThemesMp3Generator.GetCachedThemeMp3s()));
 
     /// <summary>Audits existing non-OP Theme.mp3 files to check if an OP upgrade is now available on AnimeThemes.</summary>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the audit.</returns>
     [HttpGet("animethemes/mp3/audit")]
-    public Task<IActionResult> AuditAnimeThemesMp3() =>
-        ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtMp3Audit, ReportHelper.BuildAtMp3AuditReport, () => animeThemesMp3Generator.AuditAsync(CancellationToken.None), VfsShared.VfsLock);
+    public Task<IActionResult> AuditAnimeThemesMp3([FromQuery] bool queue = false) => ExecuteQueuedJobAsync<AtMp3AuditJob>(ShokoRelayConstants.TaskAtMp3Audit, queue);
 
     /// <summary>Streams an existing Theme.mp3 with ID3 tags embedded in response headers.</summary>
     /// <param name="path">The folder path containing the Theme.mp3.</param>
@@ -428,16 +429,17 @@ public class AnimeThemesController(
 
     /// <summary>Downloads AnimeThemes WebM files directly based on filters or recent additions.</summary>
     /// <param name="query">Filter parameters for downloading.</param>
+    /// <param name="queue">When <c>true</c>, enqueues the job in Shoko's queue and returns immediately.</param>
     /// <returns>A task representing the result of the download operation.</returns>
     [HttpPost("animethemes/webm/download")]
-    public async Task<IActionResult> DownloadAnimeThemesWebm([FromQuery] AnimeThemesWebmQuery query)
+    public Task<IActionResult> DownloadAnimeThemesWebm([FromQuery] AnimeThemesWebmQuery query, [FromQuery] bool queue = false)
     {
         if (query.Recent.HasValue)
         {
             if (query.Recent.Value is < 1 or > 100)
-                return BadRequest(new RelayResponse<object>(Status: "error", Message: "Recent count must be between 1 and 100."));
+                return Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Recent count must be between 1 and 100.")));
             if (!string.IsNullOrWhiteSpace(query.Name) || query.Year.HasValue || !string.IsNullOrWhiteSpace(query.Season))
-                return BadRequest(new RelayResponse<object>(Status: "error", Message: "Cannot combine 'recent' with Name, Year, or Season filters."));
+                return Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "Cannot combine 'recent' with Name, Year, or Season filters.")));
         }
         else
         {
@@ -445,11 +447,18 @@ public class AnimeThemesController(
                 query = query with { Year = DateTime.Now.Year };
 
             if (string.IsNullOrWhiteSpace(query.Name) && !query.Year.HasValue && string.IsNullOrWhiteSpace(query.Season))
-                return BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name, Year, Season, or Recent) is required."));
+                return Task.FromResult<IActionResult>(BadRequest(new RelayResponse<object>(Status: "error", Message: "At least one filter (Name, Year, Season, or Recent) is required.")));
         }
 
-        return await ExecuteTrackedTaskAsync(ShokoRelayConstants.TaskAtWebmDownload, ReportHelper.BuildWebmDownloadReport, () => webmDownloader.DownloadAsync(query, CancellationToken.None), s_webmDownloadLock)
-            .ConfigureAwait(false);
+        return ExecuteQueuedJobAsync<AtWebmDownloadJob>(ShokoRelayConstants.TaskAtWebmDownload, queue, job =>
+        {
+            job.Name = query.Name;
+            job.Year = query.Year;
+            job.Season = query.Season;
+            job.Recent = query.Recent;
+            job.Force = query.Force;
+            job.Destination = query.Destination;
+        });
     }
 
     #endregion

@@ -51,8 +51,9 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
 
     /// <summary>Scan for video file entries whose physical file has disappeared or is now in an ignored location, and optionally remove those records.</summary>
     /// <param name="dryRun">When <c>true</c>, list missing files without deleting them.</param>
+    /// <param name="cancellationToken">Optional cancellation token checked before modifying Shoko records.</param>
     /// <returns>A read-only list of paths for files that were identified as missing or ignored.</returns>
-    public async Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false)
+    public async Task<IReadOnlyList<string>> PurgeMissingFilesAsync(bool dryRun = false, CancellationToken cancellationToken = default)
     {
         const string TaskName = ShokoRelayConstants.TaskShokoPurgeMissing;
         bool startedTask = !dryRun && TaskHelper.StartTask(TaskName);
@@ -99,9 +100,11 @@ public class ShokoImportService(IVideoService videoService, IVideoReleaseService
                 logger.LogInformation("ShokoImportService: Removing {Count} missing files from database...", toDelete.Count);
 
                 // Remove the file records from Shoko
+                cancellationToken.ThrowIfCancellationRequested();
                 await videoService.DeleteVideoFiles(toDelete, removeFiles: false, removeFolders: false).ConfigureAwait(false);
 
                 // Purge unused releases from DB and remove from AniDB MyList
+                cancellationToken.ThrowIfCancellationRequested();
                 await releaseService.PurgeUnusedReleases(providerNames: null).ConfigureAwait(false);
 
                 logger.LogInformation("ShokoImportService: Database and MyList cleanup complete");

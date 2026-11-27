@@ -13,6 +13,7 @@ using Shoko.Abstractions.Plugin;
 using Shoko.Abstractions.ScheduledActions.Services;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.Web.Services;
+using Shoko.QueueProcessor.Abstractions;
 using ShokoRelay.Actions;
 using IoFile = System.IO.File;
 
@@ -27,6 +28,7 @@ namespace ShokoRelay.Controllers;
 /// <param name="scheduledActionService">Shoko scheduled action service.</param>
 /// <param name="userService">Shoko user service.</param>
 /// <param name="throttleService">Shoko throttle service.</param>
+/// <param name="queueScheduler">Shoko queue scheduler.</param>
 /// <param name="logger">Logger instance.</param>
 [ApiController]
 [RelayAdminAuthorize]
@@ -41,6 +43,7 @@ public class DashboardController(
     IScheduledActionService scheduledActionService,
     IUserService userService,
     IAuthenticationThrottleService throttleService,
+    IQueueScheduler queueScheduler,
     ILogger<DashboardController> logger
 ) : ShokoRelayBaseController(configProvider, metadataService, plexClient, logger)
 {
@@ -378,10 +381,14 @@ public class DashboardController(
 
     #region Tasks
 
-    /// <summary>Returns a list of currently running tasks for the dashboard UI.</summary>
+    /// <summary>Returns a list of currently running or queued tasks for the dashboard UI.</summary>
     /// <returns>A collection of active task identifiers.</returns>
     [HttpGet("tasks/active")]
-    public IActionResult GetActiveTasks() => Ok(TaskHelper.ActiveTasks.Keys);
+    public IActionResult GetActiveTasks()
+    {
+        TaskHelper.ReconcileQueuedTasks(queueScheduler);
+        return Ok(TaskHelper.ActiveTasks.Keys);
+    }
 
     /// <summary>Returns results of tasks completed since the last check.</summary>
     /// <returns>A dictionary of completed task results keyed by task name.</returns>

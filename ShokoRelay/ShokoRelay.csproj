@@ -6,7 +6,8 @@
 
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" ExcludeAssets="runtime" />
-    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.143" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.Abstractions" Version="6.0.0-alpha.144" ExcludeAssets="runtime" />
+    <PackageReference Include="Shoko.QueueProcessor" Version="6.0.0-alpha.18" ExcludeAssets="runtime;native" />
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 

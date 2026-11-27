@@ -81,6 +81,9 @@ GET  /reports/{fileName}                                       -> GetReport
   - When set to `Allow Player Access`, the read-only AnimeThemes Player data endpoints (`/webm/tree`, `/webm/stream`, and `GET /animethemes/webm/favourites`) are also accessible without authentication.
     - Restricted-tag visibility filtering is not applied to player listings.
   - The following endpoint is also excluded: `POST /plex/webhook` (validated via server UUID and user rules).
+- All long-running automation endpoints execute through Shoko's Job Queue (`Shoko.QueueProcessor`), making them visible with live progress and cancellable directly from Shoko's WebUI.
+  - `queue=false` (default) awaits completion and returns the full `RelayResponse` with `reportUrl`.
+  - `queue=true` (used by Dashboard buttons) enqueues the job and returns immediately (`status: "queued"`), while `/tasks/active` and `/tasks/completed` deliver the completion result and `reportUrl` once finished.
 
 All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedTaskAsync`) to provide a direct `reportUrl` in the response. Reports include:
 
@@ -95,11 +98,11 @@ All automation endpoints utilize the `LogAndReturn` helper (via `ExecuteTrackedT
 /plex/ratings/apply                                            -> plex-ratings-apply.report
 /plex/images/sync                                              -> plex-images-sync.report
 /plex/automation/run                                           -> plex-automation-run.report
-/vfs                                                           -> shoko-vfs-build.report
-/vfs/audit                                                     -> shoko-vfs-audit.report
-/shoko/purge-missing                                           -> shoko-purge-missing.report
-/sync-watched                                                  -> shoko-sync-watched.report
-/map-symlinks                                                  -> shoko-map-symlinks.report
+/vfs?queue={true|false}                                        -> shoko-vfs-build.report
+/vfs/audit?queue={true|false}                                  -> shoko-vfs-audit.report
+/shoko/purge-missing?queue={true|false}                        -> shoko-purge-missing.report
+/sync-watched?queue={true|false}                               -> shoko-sync-watched.report
+/map-symlinks?queue={true|false}                               -> shoko-map-symlinks.report
 ```
 
 ---
@@ -178,9 +181,9 @@ Endpoints are managed by `PlexController`
 ### Plex: Authentication
 
 ```
-GET  /plex/auth                                                -> StartPlexAuth
+GET  /plex/auth?queue={true|false}                             -> StartPlexAuth
 GET  /plex/auth/status?pinId={id}                              -> GetPlexAuthStatus
-POST /plex/auth/refresh                                        -> RefreshPlexLibraries
+POST /plex/auth/refresh?queue={true|false}                     -> RefreshPlexLibraries
 POST /plex/auth/unlink                                         -> UnlinkPlex
 ```
 
@@ -198,13 +201,13 @@ GET  /plex/library/refresh?filter={csv}                        -> RefreshPlexSer
 GET  /plex/metadata/refresh?filter={csv}                       -> RefreshPlexMetadata
 
 GET  /plex/collections/build                                   -> BuildPlexCollections
-     [?filter={csv}&assignment={true|false}&clean={true|false}]
+     [?filter={csv}&assignment={true|false}&clean={true|false}&queue={true|false}]
 
-GET  /plex/ratings/apply?filter={csv}                          -> ApplyAudienceRatings
+GET  /plex/ratings/apply?filter={csv}&queue={true|false}       -> ApplyAudienceRatings
 
-GET  /plex/images/sync?filter={csv}                            -> SyncPlexImages
+GET  /plex/images/sync?filter={csv}&queue={true|false}         -> SyncPlexImages
 
-GET  /plex/automation/run                                      -> RunPlexAutomationNow
+GET  /plex/automation/run?queue={true|false}                   -> RunPlexAutomationNow
 ```
 
 - `RefreshPlexSeries` triggers a partial library scan in Plex for a comma-separated list of series IDs.
@@ -418,9 +421,9 @@ Endpoints managed by `AnimeThemesController`
 ### VFS & Mapping
 
 ```
-GET  /animethemes/vfs/build?filter={csv}                       -> AnimeThemesVfsBuild
+GET  /animethemes/vfs/build?filter={csv}&queue={true|false}    -> AnimeThemesVfsBuild
 GET  /animethemes/vfs/map                                      -> AnimeThemesVfsMap
-     [?path={filename}&save={true|false}&anidbId={int}]
+     [?path={filename}&save={true|false}&anidbId={int}&queue={true|false}]
 POST /animethemes/vfs/import                                   -> ImportAnimeThemesMapping
 ```
 
@@ -447,7 +450,7 @@ HEAD /animethemes/webm/stream?path={path}                      -> AnimeThemesWeb
 GET  /animethemes/webm/favourites                              -> GetAnimeThemesFavourites
 POST /animethemes/webm/favourites                              -> UpdateAnimeThemesFavourite
 POST /animethemes/webm/download                                -> DownloadAnimeThemesWebm
-     [?name={string}&year={int}&season={string}&recent={int}&force={true|false}&destination={path}]
+     [?name={string}&year={int}&season={string}&recent={int}&force={true|false}&destination={path}&queue={true|false}]
 ```
 
 - `AnimeThemesWebmTree` returns the hierarchical tree including bitmask flags, `videoId`, `relPath` (source folder path for folder view support), and the configured `playbackMode`.
@@ -474,9 +477,9 @@ POST /animethemes/webm/download                                -> DownloadAnimeT
 
 ```
 GET  /animethemes/mp3                                          -> AnimeThemesMp3
-     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}&seasonal={true|false}]
+     [?path={path}&slug={slug}&offset={int}&batch={true|false}&force={true|false}&seasonal={true|false}&queue={true|false}]
 GET  /animethemes/mp3/cache                                    -> GetAnimeThemesMp3Cache
-GET  /animethemes/mp3/audit                                    -> AuditAnimeThemesMp3
+GET  /animethemes/mp3/audit?queue={true|false}                 -> AuditAnimeThemesMp3
 GET  /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 HEAD /animethemes/mp3/stream?path={path}                       -> AnimeThemesMp3Stream
 GET  /animethemes/mp3/random?refresh={true|false}              -> AnimeThemesMp3Random

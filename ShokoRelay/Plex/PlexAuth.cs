@@ -279,6 +279,62 @@ public class PlexAuth(HttpClient httpClient, ConfigProvider configProvider, ILog
         return (tokenValid, servers, list);
     }
 
+    /// <summary>De-duplicates and converts discovered Plex library and server pairs into stored library entries.</summary>
+    /// <param name="pairs">Tuples of Library and Server information.</param>
+    /// <returns>A unique list of available libraries.</returns>
+    public static List<PlexAvailableLibrary> CollectDiscoveredLibraries(IEnumerable<(PlexLibraryInfo Library, PlexServerInfo Server)>? pairs)
+    {
+        var collected = new List<PlexAvailableLibrary>();
+        if (pairs == null)
+            return collected;
+        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (library, server) in pairs)
+        {
+            var key = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : $"{server.PreferredUri}::{library.Id}";
+            if (!seenKeys.Add(key))
+                continue;
+
+            collected.Add(
+                new PlexAvailableLibrary
+                {
+                    Id = library.Id,
+                    Title = library.Title,
+                    Type = library.Type,
+                    Agent = library.Agent,
+                    Uuid = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : key,
+                    ServerId = server.Id,
+                    ServerName = server.Name,
+                    ServerUrl = server.PreferredUri ?? string.Empty,
+                    Locations = library.Locations,
+                }
+            );
+        }
+        return collected;
+    }
+
+    /// <summary>Persists the results of a Plex discovery run into the plugin secrets file.</summary>
+    /// <param name="configProvider">Configuration provider.</param>
+    /// <param name="discovery">The discovery result payload containing servers and libraries.</param>
+    public static void PersistDiscoveryResults(ConfigProvider configProvider, (bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries) discovery)
+    {
+        if (discovery.TokenValid && discovery.Servers?.Count > 0)
+        {
+            var servers = discovery
+                .Servers.Select(server => new PlexAvailableServer
+                {
+                    Id = server.Id,
+                    Name = server.Name,
+                    PreferredUri = server.PreferredUri ?? string.Empty,
+                    HttpsRequired = server.HttpsRequired,
+                })
+                .ToList();
+            configProvider.UpdatePlexTokenInfo(servers: servers);
+        }
+
+        configProvider.UpdatePlexTokenInfo(libraries: CollectDiscoveredLibraries(discovery.ShokoLibraries));
+    }
+
     #endregion
 
     #region Home & User Mgmt.

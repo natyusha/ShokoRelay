@@ -314,6 +314,7 @@
       created: ["LinksCreated", "Created", "UpdatedShows"],
       marked: ["Marked", "MarkedWatched", "UpdatedEpisodes"],
       skipped: ["Skipped", "SkippedCount"],
+      votes: ["VotesFound"],
       errors: ["Errors", "ErrorsList", "Message"],
       uploaded: ["Uploaded"],
     };
@@ -325,7 +326,7 @@
       const value = responseData[match];
       const count = label === "errors" ? (Array.isArray(value) ? value.length : Number(value) || 0) : value;
       if (label === "errors") errorCount = count;
-      if (label !== "errors" || count > 0) parts.push(`${label}: ${count}`);
+      if ((label !== "errors" && label !== "votes") || count > 0) parts.push(`${label}: ${count}`);
     });
     const text = parts.length ? parts.join(", ") : typeof responseData === "string" ? (responseData.length > 200 ? responseData.substring(0, 200) + "..." : responseData) : "";
     return { text, errorCount };
@@ -377,11 +378,12 @@
     const { text, errorCount } = summarizeResult(response);
     const reportUrl = response.data?.reportUrl || response.data?.ReportUrl;
     const reportLink = reportUrl ? `[<a href="${esc(reportUrl)}" target="_blank" rel="noopener noreferrer" class="report-link">view report</a>]` : "";
+    const status = (response.data?.status || response.data?.Status || "").toLowerCase();
 
     if (response.isOk) {
-      const display = summary || response.data?.message || response.data?.Message || (response.data?.status !== "ok" ? response.data?.status : null) || text || "Complete";
-      const toastType = type || (errorCount > 0 ? "error" : "success");
-      const persistence = errorCount > 0 ? 0 : (hideOnSucceed ?? (reportUrl ? 0 : TOAST_MS)); // Always persist if there are errors. Otherwise, respect the hideOnSucceed override.
+      const display = summary || response.data?.message || response.data?.Message || (status !== "ok" ? status : null) || text || "Complete";
+      const toastType = type || (status === "queued" ? "info" : status === "cancelled" ? "warning" : errorCount > 0 ? "error" : "success");
+      const persistence = status === "queued" ? TOAST_MS : errorCount > 0 ? 0 : (hideOnSucceed ?? (reportUrl ? 0 : TOAST_MS));
       showToast(`${esc(label)}: ${esc(display)} ${reportLink}`, toastType, persistence);
     } else {
       const display = summary || response.data?.message || response.data?.Message || text || (typeof response.data === "string" ? response.data : JSON.stringify(response.data));

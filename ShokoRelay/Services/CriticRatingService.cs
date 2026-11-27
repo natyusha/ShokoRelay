@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.Services;
 
@@ -53,14 +54,16 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
     /// <summary>Compute and push ratings for shows and episodes, optionally restricted to a subset of series IDs.</summary>
     /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     /// <returns>An <see cref="ApplyRatingsResult"/> with counters and error details.</returns>
-    public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
+    public async Task<ApplyRatingsResult> ApplyRatingsAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default, IProgress<decimal>? progress = null)
     {
         const string TaskName = ShokoRelayConstants.TaskPlexRatingsApply;
         await _applyLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         bool startedTask = TaskHelper.StartTask(TaskName);
         logger.LogInformation("CriticRatingService: Starting task...");
         var stopwatch = Stopwatch.StartNew();
+        progress?.Report(0);
         try
         {
             var errorsList = new List<string>();
@@ -75,8 +78,13 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
             if (allowedSet is { Count: 0 })
                 return new ApplyRatingsResult(0, 0, 0, 0, 0, errorsList, appliedChanges, stopwatch.Elapsed);
 
-            foreach (var target in plexClient.GetConfiguredTargets())
+            var targets = plexClient.GetConfiguredTargets();
+            var targetStages = progress.InStages([.. Enumerable.Repeat(1m, Math.Max(1, targets.Count))]);
+            targetStages.Report(0);
+
+            for (int targetIndex = 0; targetIndex < targets.Count; targetIndex++)
             {
+                var target = targets[targetIndex];
                 if (allowedSet != null)
                 {
                     // Targeted fast-path: resolve rating keys once per series before fetching show and leaf items
@@ -84,57 +92,114 @@ public class CriticRatingService(PlexClient plexClient, IMetadataService metadat
                     foreach (int seriesId in allowedSet)
                         ratingKeys.AddRange(await plexClient.FindRatingKeysForShokoSeriesInSectionAsync(seriesId, target, metadataService, cancellationToken).ConfigureAwait(false));
 
+                    var itemProgress = targetStages.Throttle().ForItems(Math.Max(1, ratingKeys.Count));
+                    itemProgress.Report(0);
+
                     if (target.LibraryType == PlexLibraryType.Movie)
                     {
                         foreach (int ratingKey in ratingKeys)
-                        foreach (
-                            var movieItem in await plexClient
-                                .GetMetadataItemsAsync(target, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", cancellationToken)
-                                .ConfigureAwait(false)
-                        )
-                            await ProcessEpisodeOrMovieRatingAsync(movieItem, target, isMovie: true, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
-                                .ConfigureAwait(false);
+                        {
+                            try
+                            {
+                                foreach (
+                                    var movieItem in await plexClient
+                                        .GetMetadataItemsAsync(target, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", cancellationToken)
+                                        .ConfigureAwait(false)
+                                )
+                                    await ProcessEpisodeOrMovieRatingAsync(movieItem, target, isMovie: true, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
+                                        .ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                itemProgress.Increment();
+                            }
+                        }
                     }
                     else
                     {
                         foreach (int ratingKey in ratingKeys)
                         {
-                            foreach (
-                                var showItem in await plexClient
-                                    .GetMetadataItemsAsync(target, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", cancellationToken)
-                                    .ConfigureAwait(false)
-                            )
-                                await ProcessShowRatingAsync(showItem, target, allowedSet, counters, appliedChanges, errorsList, cancellationToken).ConfigureAwait(false);
+                            try
+                            {
+                                foreach (
+                                    var showItem in await plexClient
+                                        .GetMetadataItemsAsync(target, $"/library/metadata/{ratingKey}?X-Plex-Container-Start=0&X-Plex-Container-Size=1", cancellationToken)
+                                        .ConfigureAwait(false)
+                                )
+                                    await ProcessShowRatingAsync(showItem, target, allowedSet, counters, appliedChanges, errorsList, cancellationToken).ConfigureAwait(false);
 
-                            foreach (
-                                var episodeItem in await plexClient
-                                    .GetMetadataItemsAsync(target, $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000", cancellationToken)
-                                    .ConfigureAwait(false)
-                            )
-                                await ProcessEpisodeOrMovieRatingAsync(episodeItem, target, isMovie: false, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
-                                    .ConfigureAwait(false);
+                                foreach (
+                                    var episodeItem in await plexClient
+                                        .GetMetadataItemsAsync(target, $"/library/metadata/{ratingKey}/allLeaves?X-Plex-Container-Start=0&X-Plex-Container-Size=5000", cancellationToken)
+                                        .ConfigureAwait(false)
+                                )
+                                    await ProcessEpisodeOrMovieRatingAsync(episodeItem, target, isMovie: false, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
+                                        .ConfigureAwait(false);
+                            }
+                            finally
+                            {
+                                itemProgress.Increment();
+                            }
                         }
                     }
                 }
                 else if (target.LibraryType != PlexLibraryType.Movie)
                 {
-                    // Bulk path: query all items in library section
-                    foreach (var showItem in await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [])
-                        await ProcessShowRatingAsync(showItem, target, allowedSet, counters, appliedChanges, errorsList, cancellationToken).ConfigureAwait(false);
+                    var showItems = await plexClient.GetSectionShowsAsync(target, cancellationToken).ConfigureAwait(false) ?? [];
+                    var episodeItems = await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
+                    var itemProgress = targetStages.Throttle().ForItems(Math.Max(1, showItems.Count + episodeItems.Count));
+                    itemProgress.Report(0);
 
-                    foreach (var episodeItem in await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [])
-                        await ProcessEpisodeOrMovieRatingAsync(episodeItem, target, isMovie: false, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
-                            .ConfigureAwait(false);
+                    foreach (var showItem in showItems)
+                    {
+                        try
+                        {
+                            await ProcessShowRatingAsync(showItem, target, allowedSet, counters, appliedChanges, errorsList, cancellationToken).ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            itemProgress.Increment();
+                        }
+                    }
+
+                    foreach (var episodeItem in episodeItems)
+                    {
+                        try
+                        {
+                            await ProcessEpisodeOrMovieRatingAsync(episodeItem, target, isMovie: false, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            itemProgress.Increment();
+                        }
+                    }
                 }
                 else
                 {
-                    foreach (var movieItem in await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [])
-                        await ProcessEpisodeOrMovieRatingAsync(movieItem, target, isMovie: true, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
-                            .ConfigureAwait(false);
+                    var movieItems = await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? [];
+                    var itemProgress = targetStages.Throttle().ForItems(Math.Max(1, movieItems.Count));
+                    itemProgress.Report(0);
+
+                    foreach (var movieItem in movieItems)
+                    {
+                        try
+                        {
+                            await ProcessEpisodeOrMovieRatingAsync(movieItem, target, isMovie: true, allowedSet, preferredOrderingIdCache, counters, appliedChanges, errorsList, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+                        finally
+                        {
+                            itemProgress.Increment();
+                        }
+                    }
                 }
+
+                targetStages.NextStage();
             }
 
             stopwatch.Stop();
+            targetStages.Complete();
             logger.LogInformation(
                 "CriticRatingService: Task finished -> Updated {SeriesCount} series and {EpisodeCount} episodes in {Elapsed}ms",
                 counters.UpdatedShows,

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Services;
+using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.Sync;
 
@@ -32,6 +33,7 @@ public class SyncToPlex(
     /// <param name="userTypeOverride">Optional override for the sync users configuration.</param>
     /// <param name="libraryName">Optional filter to restrict sync to a specific Plex library.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     /// <returns>Execution result.</returns>
     public async Task<PlexWatchedSyncResult> SyncWatchedAsync(
         bool dryRun,
@@ -39,9 +41,11 @@ public class SyncToPlex(
         bool? includeVotes = null,
         SyncUserType? userTypeOverride = null,
         string? libraryName = null,
-        CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default,
+        IProgress<decimal>? progress = null
     )
     {
+        progress?.Report(0);
         var auto = Settings.Automation;
         var userType = userTypeOverride ?? auto.ShokoSyncWatchedUserType;
         var (syncContext, earlyResult) = await SyncHelper.InitializeSyncRunAsync("Plex<-Shoko", dryRun, userType, plexClient, userService, configProvider, plexAuth, cancellationToken).ConfigureAwait(false);
@@ -82,6 +86,8 @@ public class SyncToPlex(
         var matchedGlobal = new HashSet<(string PlexUser, int EpisodeId)>();
         var activeSourceEpisodes = new HashSet<(string PlexUser, int EpisodeId)>();
         var preferredOrderingIdCache = new Dictionary<int, string?>();
+        var targetStages = progress.InStages([.. Enumerable.Repeat(1m, Math.Max(1, targets.Count))]);
+        targetStages.Report(0);
 
         foreach (var target in targets)
         {
@@ -89,7 +95,10 @@ public class SyncToPlex(
 
             // Apply Library Name Filter
             if (!string.IsNullOrWhiteSpace(libraryName) && !string.Equals(target.Title, libraryName, StringComparison.OrdinalIgnoreCase))
+            {
+                targetStages.NextStage();
                 continue;
+            }
 
             // Keep onlyUnwatched=true when rating sync is disabled so Plex queries remain fast; only fetch already-watched items when ratings must be synced to them
             var (userBuckets, newResult) = await SyncHelper
@@ -112,6 +121,9 @@ public class SyncToPlex(
                 .ConfigureAwait(false);
             result = newResult;
 
+            var bucketStages = targetStages.InStages([.. Enumerable.Repeat(1m, Math.Max(1, userBuckets.Count))]);
+            bucketStages.Report(0);
+
             foreach (var bucket in userBuckets)
             {
                 string userName = bucket.Name;
@@ -119,7 +131,10 @@ public class SyncToPlex(
                 string? userToken = bucket.Token;
 
                 if (SyncHelper.ResolveTargetShokoUser(userService, defaultUser, bucket.ShokoUsername, userName, shokoUserLookup, ref result, logger) is not { } targetShokoUser)
+                {
+                    bucketStages.NextStage();
                     continue;
+                }
 
                 string? mappedLabel = string.IsNullOrWhiteSpace(bucket.ShokoUsername) ? null : targetShokoUser.Username;
                 var userWatched = GetShokoWatchedForUser(targetShokoUser);
@@ -143,156 +158,170 @@ public class SyncToPlex(
                     }
                 }
 
+                var itemProgress = bucketStages.Throttle().ForItems(Math.Max(1, userWatched.Count));
+                itemProgress.Report(0);
+
                 foreach (var (userData, episode) in userWatched)
                 {
-                    if (!plexMap.TryGetValue(episode.LocalID, out var plexItems))
-                        continue;
-
-                    matchedGlobal.Add((userName, episode.LocalID));
-
-                    foreach (var plexItem in plexItems.DistinctBy(item => item.RatingKey))
+                    try
                     {
-                        bool isWatchedInPlex = plexItem.ViewCount > 0;
-                        bool shouldScrobble = userData.IsWatched && !isWatchedInPlex;
-                        bool scrobbled = false;
+                        if (!plexMap.TryGetValue(episode.LocalID, out var plexItems))
+                            continue;
 
-                        if (shouldScrobble)
+                        matchedGlobal.Add((userName, episode.LocalID));
+
+                        foreach (var plexItem in plexItems.DistinctBy(item => item.RatingKey))
                         {
-                            if (!dryRun)
+                            bool isWatchedInPlex = plexItem.ViewCount > 0;
+                            bool shouldScrobble = userData.IsWatched && !isWatchedInPlex;
+                            bool scrobbled = false;
+
+                            if (shouldScrobble)
                             {
-                                using var request = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, userToken);
-                                using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
-                                if (!response.IsSuccessStatusCode)
-                                {
-                                    result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to scrobble RatingKey {plexItem.RatingKey} on {target.ServerName}");
-                                    continue;
-                                }
-                            }
-                            scrobbled = true;
-                        }
-
-                        string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
-
-                        var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
-                        string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
-
-                        if (scrobbled)
-                        {
-                            result = SyncHelper.IncMarkedWatched(result, result.PerUser, userName);
-                            logger.LogInformation(
-                                "WatchedSyncService: {Prefix}Plex <- Shoko: {User} marked {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey}) on {Server}",
-                                logPrefix,
-                                userName,
-                                typeLabel,
-                                episode.Series?.GetDisplayTitle(),
-                                episode.ShokoSeriesID,
-                                coords.Season,
-                                coords.Episode,
-                                plexItem.RatingKey,
-                                target.ServerName
-                            );
-                            SyncHelper.AddPerUserChange(
-                                result.PerUserChanges,
-                                userName,
-                                SyncHelper.MakeChange(
-                                    userName,
-                                    shokoUser: mappedLabel,
-                                    libraryName: target.Title,
-                                    episode.LocalID,
-                                    $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
-                                    plexItem.ParentIndex ?? episode.SeasonNumber,
-                                    plexItem.Index ?? episode.EpisodeNumber,
-                                    plexItem.RatingKey,
-                                    plexItem.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
-                                    null,
-                                    userData.LastPlayedAt,
-                                    true,
-                                    true,
-                                    plexUserRating: userData.UserRating
-                                )
-                            );
-                        }
-
-                        bool rated = false;
-                        if (actualVotes && userData.HasUserRating)
-                        {
-                            result = SyncHelper.IncVotesFound(result);
-                            bool ratingMatches = plexItem.UserRating.HasValue && Math.Abs(plexItem.UserRating.Value - userData.UserRating.Value) <= 0.05;
-                            if (ratingMatches)
-                                result = SyncHelper.IncVotesSkipped(result);
-                            else
-                            {
-                                bool rateFailed = false;
                                 if (!dryRun)
                                 {
-                                    using var rateRequest = plexClient.CreateRequest(
-                                        HttpMethod.Get,
-                                        $"/:/rate?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}&rating={userData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
-                                        target.ServerUrl,
-                                        userToken
-                                    );
-                                    using var rateResponse = await plexClient.SendAsync(rateRequest, cancellationToken).ConfigureAwait(false);
-                                    if (!rateResponse.IsSuccessStatusCode)
+                                    using var request = plexClient.CreateRequest(HttpMethod.Get, $"/:/scrobble?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}", target.ServerUrl, userToken);
+                                    using var response = await plexClient.SendAsync(request, cancellationToken).ConfigureAwait(false);
+                                    if (!response.IsSuccessStatusCode)
                                     {
-                                        rateFailed = true;
-                                        if (bucket.IsSharedFriend && rateResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                                            logger.LogDebug("WatchedSyncService: Plex shared server token for '{User}' cannot apply personal ratings (HTTP {Status})", userName, rateResponse.StatusCode);
-                                        else
-                                            result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to rate RatingKey {plexItem.RatingKey} on {target.ServerName}");
+                                        result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to scrobble RatingKey {plexItem.RatingKey} on {target.ServerName}");
+                                        continue;
                                     }
                                 }
+                                scrobbled = true;
+                            }
 
-                                if (!rateFailed)
+                            string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
+
+                            var coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId, metadataService: metadataService);
+                            string typeLabel = target.LibraryType == PlexLibraryType.Movie ? "movie" : "episode";
+
+                            if (scrobbled)
+                            {
+                                result = SyncHelper.IncMarkedWatched(result, result.PerUser, userName);
+                                logger.LogInformation(
+                                    "WatchedSyncService: {Prefix}Plex <- Shoko: {User} marked {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} (RatingKey: {RatingKey}) on {Server}",
+                                    logPrefix,
+                                    userName,
+                                    typeLabel,
+                                    episode.Series?.GetDisplayTitle(),
+                                    episode.ShokoSeriesID,
+                                    coords.Season,
+                                    coords.Episode,
+                                    plexItem.RatingKey,
+                                    target.ServerName
+                                );
+                                SyncHelper.AddPerUserChange(
+                                    result.PerUserChanges,
+                                    userName,
+                                    SyncHelper.MakeChange(
+                                        userName,
+                                        shokoUser: mappedLabel,
+                                        libraryName: target.Title,
+                                        episode.LocalID,
+                                        $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
+                                        plexItem.ParentIndex ?? episode.SeasonNumber,
+                                        plexItem.Index ?? episode.EpisodeNumber,
+                                        plexItem.RatingKey,
+                                        plexItem.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
+                                        null,
+                                        userData.LastPlayedAt,
+                                        true,
+                                        true,
+                                        plexUserRating: userData.UserRating
+                                    )
+                                );
+                            }
+
+                            bool rated = false;
+                            if (actualVotes && userData.HasUserRating)
+                            {
+                                result = SyncHelper.IncVotesFound(result);
+                                bool ratingMatches = plexItem.UserRating.HasValue && Math.Abs(plexItem.UserRating.Value - userData.UserRating.Value) <= 0.05;
+                                if (ratingMatches)
+                                    result = SyncHelper.IncVotesSkipped(result);
+                                else
                                 {
-                                    rated = true;
-                                    result = SyncHelper.IncVotesUpdated(result);
-                                    if (!scrobbled)
+                                    bool rateFailed = false;
+                                    if (!dryRun)
                                     {
-                                        logger.LogInformation(
-                                            "WatchedSyncService: {Prefix}Plex <- Shoko: {User} rated {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} ({Rating:F1}) (RatingKey: {RatingKey}) on {Server}",
-                                            logPrefix,
-                                            userName,
-                                            typeLabel,
-                                            episode.Series?.GetDisplayTitle(),
-                                            episode.ShokoSeriesID,
-                                            coords.Season,
-                                            coords.Episode,
-                                            userData.UserRating.Value,
-                                            plexItem.RatingKey,
-                                            target.ServerName
+                                        using var rateRequest = plexClient.CreateRequest(
+                                            HttpMethod.Get,
+                                            $"/:/rate?identifier=com.plexapp.plugins.library&key={plexItem.RatingKey}&rating={userData.UserRating.Value.ToString(CultureInfo.InvariantCulture)}",
+                                            target.ServerUrl,
+                                            userToken
                                         );
-                                        SyncHelper.AddPerUserChange(
-                                            result.PerUserChanges,
-                                            userName,
-                                            SyncHelper.MakeChange(
+                                        using var rateResponse = await plexClient.SendAsync(rateRequest, cancellationToken).ConfigureAwait(false);
+                                        if (!rateResponse.IsSuccessStatusCode)
+                                        {
+                                            rateFailed = true;
+                                            if (bucket.IsSharedFriend && rateResponse.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                                                logger.LogDebug("WatchedSyncService: Plex shared server token for '{User}' cannot apply personal ratings (HTTP {Status})", userName, rateResponse.StatusCode);
+                                            else
+                                                result = SyncHelper.RecordError(result, result.PerUser, userName, $"Failed to rate RatingKey {plexItem.RatingKey} on {target.ServerName}");
+                                        }
+                                    }
+
+                                    if (!rateFailed)
+                                    {
+                                        rated = true;
+                                        result = SyncHelper.IncVotesUpdated(result);
+                                        if (!scrobbled)
+                                        {
+                                            logger.LogInformation(
+                                                "WatchedSyncService: {Prefix}Plex <- Shoko: {User} rated {Type} -> {Title} [{SeriesId}] - S{Season:D2}E{Episode:D2} ({Rating:F1}) (RatingKey: {RatingKey}) on {Server}",
+                                                logPrefix,
                                                 userName,
-                                                shokoUser: mappedLabel,
-                                                libraryName: target.Title,
-                                                episode.LocalID,
-                                                $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
-                                                plexItem.ParentIndex ?? episode.SeasonNumber,
-                                                plexItem.Index ?? episode.EpisodeNumber,
+                                                typeLabel,
+                                                episode.Series?.GetDisplayTitle(),
+                                                episode.ShokoSeriesID,
+                                                coords.Season,
+                                                coords.Episode,
+                                                userData.UserRating.Value,
                                                 plexItem.RatingKey,
-                                                plexItem.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
-                                                null,
-                                                userData.LastPlayedAt,
-                                                true,
-                                                userData.IsWatched,
-                                                reason: "rating_updated",
-                                                plexUserRating: userData.UserRating
-                                            )
-                                        );
+                                                target.ServerName
+                                            );
+                                            SyncHelper.AddPerUserChange(
+                                                result.PerUserChanges,
+                                                userName,
+                                                SyncHelper.MakeChange(
+                                                    userName,
+                                                    shokoUser: mappedLabel,
+                                                    libraryName: target.Title,
+                                                    episode.LocalID,
+                                                    $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}]",
+                                                    plexItem.ParentIndex ?? episode.SeasonNumber,
+                                                    plexItem.Index ?? episode.EpisodeNumber,
+                                                    plexItem.RatingKey,
+                                                    plexItem.Guid ?? (target.LibraryType == PlexLibraryType.Movie ? episode.GetPlexMovieGuid() : episode.GetPlexGuid()),
+                                                    null,
+                                                    userData.LastPlayedAt,
+                                                    true,
+                                                    userData.IsWatched,
+                                                    reason: "rating_updated",
+                                                    plexUserRating: userData.UserRating
+                                                )
+                                            );
+                                        }
                                     }
                                 }
                             }
-                        }
 
-                        if (!scrobbled && !rated)
-                            result = SyncHelper.IncSkipped(result, result.PerUser, userName);
+                            if (!scrobbled && !rated)
+                                result = SyncHelper.IncSkipped(result, result.PerUser, userName);
+                        }
+                    }
+                    finally
+                    {
+                        itemProgress.Increment();
                     }
                 }
+                bucketStages.NextStage();
             }
+            bucketStages.Complete();
+            targetStages.NextStage();
         }
+        targetStages.Complete();
         foreach (var (plexUser, _) in activeSourceEpisodes.Where(key => !matchedGlobal.Contains(key)))
             result = SyncHelper.IncSkipped(result, result.PerUser, plexUser);
 

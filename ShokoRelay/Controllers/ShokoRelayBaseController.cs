@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
 using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Services;
+using Shoko.QueueProcessor.Abstractions;
+using Shoko.QueueProcessor.Builder;
+using ShokoRelay.Jobs;
 
 namespace ShokoRelay.Controllers;
 
@@ -206,38 +209,58 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #endregion
 
-    #region Report Helper
+    #region Report & Queue Helpers
 
-    /// <summary>Executes a background task with full lifecycle tracking, logging, and standardized response formatting. Supports optional concurrency locking.</summary>
-    /// <typeparam name="T">The type of the result data.</typeparam>
-    /// <param name="taskName">Unique identifier for UI tracking.</param>
-    /// <param name="reportBuilder">Logic to generate the text report.</param>
-    /// <param name="action">The asynchronous operation to perform.</param>
-    /// <param name="semaphore">Optional semaphore to prevent concurrent execution of related tasks.</param>
-    /// <returns>A task representing the IActionResult containing the standardized RelayResponse.</returns>
-    protected async Task<IActionResult> ExecuteTrackedTaskAsync<T>(string taskName, Action<StringBuilder, T> reportBuilder, Func<Task<T>> action, SemaphoreSlim? semaphore = null)
+    /// <summary>Executes or enqueues a tracked Relay queue job so it appears in Shoko's WebUI Queue with progress and cancellation support.</summary>
+    /// <typeparam name="TJob">The concrete <see cref="RelayJobBase"/> queue job type.</typeparam>
+    /// <param name="taskName">Unique identifier for dashboard UI tracking.</param>
+    /// <param name="queue">When <c>true</c>, enqueues asynchronously and returns immediately; when <c>false</c>, awaits immediate completion.</param>
+    /// <param name="configure">Optional delegate configuring job parameters.</param>
+    /// <returns>An <see cref="IActionResult"/> indicating queued status or returning the completed job payload.</returns>
+    protected async Task<IActionResult> ExecuteQueuedJobAsync<TJob>(string taskName, bool queue, Action<TJob>? configure = null)
+        where TJob : RelayJobBase
     {
-        if (semaphore != null && !await semaphore.WaitAsync(0).ConfigureAwait(false))
-            return Conflict(new RelayResponse<object>(Status: "busy", Message: "A conflicting operation is already in progress. Please wait for it to complete."));
+        var scheduler = HttpContext.RequestServices.GetRequiredService<IQueueScheduler>();
+        string apiBase = ApiBase;
 
-        TaskHelper.StartTask(taskName);
+        void ConfigureJob(TJob job)
+        {
+            configure?.Invoke(job);
+            job.ApiBase = apiBase;
+            job.TrackInDashboard = queue;
+        }
+
+        string jobKey = JobKeyBuilder<TJob>.Create().UsingJobData(ConfigureJob).Build();
+        void ConfigureWithKey(TJob job)
+        {
+            ConfigureJob(job);
+            job.TrackedJobKey = jobKey;
+        }
+
         try
         {
-            T result = await action().ConfigureAwait(false);
-            ReportHelper.WriteReport($"{taskName}.report", result, reportBuilder, Logger);
-            IActionResult actionResult = Ok(new RelayResponse<T>(Data: result, ReportUrl: $"{ApiBase}/reports/{taskName}.report"));
-            TaskHelper.CompleteTask(taskName, (actionResult as OkObjectResult)?.Value!);
-            return actionResult;
+            if (queue)
+            {
+                await scheduler.Enqueue<TJob>(ConfigureWithKey, prioritize: true, ct: HttpContext.RequestAborted).ConfigureAwait(false);
+                TaskHelper.TrackQueuedJob(taskName, jobKey, storeForDashboard: true, scheduler);
+                return Ok(new RelayResponse<object>(Status: "queued", Message: "Queued in Shoko Job Queue.", Data: new { jobKey, queued = true }));
+            }
+
+            TaskHelper.TrackQueuedJob(taskName, jobKey, storeForDashboard: false, scheduler);
+            await scheduler.EnqueueImmediate<TJob>(ConfigureWithKey, ct: CancellationToken.None).ConfigureAwait(false);
+            return TaskHelper.TakeJobResult(jobKey) is { } jobResult ? Ok(jobResult) : Ok(new RelayResponse<object>());
+        }
+        catch (JobBlockedException exception)
+        {
+            return Conflict(new RelayResponse<object>(Status: "blocked", Message: exception.Message));
+        }
+        catch (OperationCanceledException)
+        {
+            return TaskHelper.TakeJobResult(jobKey) is { } cancelledResult ? Ok(cancelledResult) : Ok(new RelayResponse<object>(Status: "cancelled", Message: "Task was cancelled."));
         }
         catch (Exception exception)
         {
-            var error = new { status = "error", message = exception.Message };
-            TaskHelper.CompleteTask(taskName, error);
             return BadRequest(new RelayResponse<object>(Status: "error", Message: exception.Message));
-        }
-        finally
-        {
-            semaphore?.Release();
         }
     }
 
@@ -418,61 +441,10 @@ public abstract class ShokoRelayBaseController(ConfigProvider configProvider, IM
 
     #region Plex Helper Logic
 
-    /// <summary>De-duplicates and cleans discovered Plex library entries obtained from multiple servers.</summary>
-    /// <param name="pairs">Tuples of Library and Server information.</param>
-    /// <returns>A unique list of available libraries.</returns>
-    protected static List<PlexAvailableLibrary> CollectDiscoveredLibraries(IEnumerable<(PlexLibraryInfo Library, PlexServerInfo Server)>? pairs)
-    {
-        var collected = new List<PlexAvailableLibrary>();
-        if (pairs == null)
-            return collected;
-        var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var (library, server) in pairs)
-        {
-            var key = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : $"{server.PreferredUri}::{library.Id}";
-            if (!seenKeys.Add(key))
-                continue;
-
-            collected.Add(
-                new PlexAvailableLibrary
-                {
-                    Id = library.Id,
-                    Title = library.Title,
-                    Type = library.Type,
-                    Agent = library.Agent,
-                    Uuid = !string.IsNullOrWhiteSpace(library.Uuid) ? library.Uuid : key,
-                    ServerId = server.Id,
-                    ServerName = server.Name,
-                    ServerUrl = server.PreferredUri ?? string.Empty,
-                    Locations = library.Locations,
-                }
-            );
-        }
-        return collected;
-    }
-
     /// <summary>Persists the results of a Plex discovery run into the plugin secrets file.</summary>
     /// <param name="discovery">The discovery result payload containing servers and libraries.</param>
-    protected void PersistDiscoveryResults((bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries) discovery)
-    {
-        if (discovery.TokenValid && discovery.Servers?.Count > 0)
-        {
-            var servers = discovery
-                .Servers.Select(server => new PlexAvailableServer
-                {
-                    Id = server.Id,
-                    Name = server.Name,
-                    PreferredUri = server.PreferredUri ?? string.Empty,
-                    HttpsRequired = server.HttpsRequired,
-                })
-                .ToList();
-            ConfigProvider.UpdatePlexTokenInfo(servers: servers);
-        }
-
-        var libraries = CollectDiscoveredLibraries(discovery.ShokoLibraries);
-        ConfigProvider.UpdatePlexTokenInfo(libraries: libraries);
-    }
+    protected void PersistDiscoveryResults((bool TokenValid, List<PlexServerInfo> Servers, List<(PlexLibraryInfo Library, PlexServerInfo Server)> ShokoLibraries) discovery) =>
+        PlexAuth.PersistDiscoveryResults(ConfigProvider, discovery);
 
     #endregion
 }

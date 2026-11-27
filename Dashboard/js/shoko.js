@@ -99,16 +99,14 @@
        * @returns {Promise<void>}
        */
       const performSync = async (isDryRun) => {
-        const targetBtn = isDryRun ? dryBtn : startBtn;
-        setButtonLoading(targetBtn, true);
         if (document.activeElement && ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) document.activeElement.blur();
         await window._sr.flushSaves?.();
-        const startToast = showToast(`Sync: Plex ${dirImport ? "←" : "→"} Shoko${isDryRun ? " (Dry Run)" : ""}...`, "info", 0);
 
         const queryParams = new URLSearchParams({
           dryRun: isDryRun,
           ratings: element("sync-ratings").checked,
           progress: element("sync-progress").checked,
+          queue: "true",
         });
 
         const usersValue = element("sync-users").value;
@@ -119,21 +117,12 @@
         if (libraryName) queryParams.set("libraryName", libraryName);
         if (dirImport) queryParams.set("import", "true");
 
-        const response = await fetchJson(`${base}/sync-watched?${queryParams}`);
-        startToast?.remove();
-        setButtonLoading(targetBtn, false);
-
-        if (window._sr.tasks.shokoSyncWatched) await fetchJson(`${base}/tasks/clear/${window._sr.tasks.shokoSyncWatched}`, { method: "POST" }, false); // Clear the task immediately on the server to prevent the background poller from firing a duplicate toast
-        if (response.isOk) {
-          const syncData = getData(response);
-
-          // Generate a robust summary combining standard counts and custom "Votes" data
-          const summary = (summarizeResult(response).text || `processed ${syncData.Processed ?? 0}`) + (syncData.VotesFound ? `, votes: ${syncData.VotesFound}` : "");
-
-          toastOperation(response, "Sync", { summary, hideOnSucceed: 0 });
-        } else {
-          toastOperation(response, "Sync", { hideOnSucceed: 0 });
-        }
+        close();
+        window._sr.runAction(triggerButton, async () => {
+          const response = await fetchJson(`${base}/sync-watched?${queryParams}`);
+          toastOperation(response, "Sync");
+          return response.data?.status;
+        });
       };
 
       startBtn.onclick = () => performSync(false);

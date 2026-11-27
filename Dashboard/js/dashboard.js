@@ -65,13 +65,15 @@
         for (const [taskName, result] of Object.entries(completeData)) {
           const button = element(taskName);
           if (button?.classList.contains("clicking")) continue;
-          const isOk = (result.status || result.Status || "").toLowerCase() === "ok";
+          const status = (result.status || result.Status || "").toLowerCase();
+          const isOk = status === "ok" || status === "cancelled";
           const filterInput = button?.dataset.relayPersistIfEmpty ? document.querySelector(button.dataset.relayPersistIfEmpty) : null;
 
-          toastOperation({ isOk: isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
+          toastOperation({ isOk, data: result }, taskName.replace(/-/g, " "), { hideOnSucceed: filterInput?.value?.trim() ? TOAST_MS : 0 });
           await fetchJson(base + `/tasks/clear/${taskName}`, { method: "POST" }, false);
           hasNewReports = true;
           if (taskName === window._sr.tasks.plexAuthRefresh) window._sr.refreshPlexState?.();
+          if (taskName === window._sr.tasks.atMp3Build && status === "ok") window._sr.playBatchMp3Result?.(result);
         }
         if (hasNewReports) loadReports();
       }
@@ -129,14 +131,15 @@
     button.classList.add("clicking");
     setButtonLoading(button, true);
     const taskId = button.id;
+    let wasQueued = false;
     try {
-      await handler(button);
-      if (taskId && MANAGED_TASK_IDS.includes(taskId)) await fetchJson(base + `/tasks/clear/${taskId}`, { method: "POST" }, false);
+      wasQueued = (await handler(button)) === "queued";
+      if (!wasQueued && taskId && MANAGED_TASK_IDS.includes(taskId)) await fetchJson(base + `/tasks/clear/${taskId}`, { method: "POST" }, false);
     } finally {
       button.classList.remove("clicking");
-      if (taskId && !MANAGED_TASK_IDS.includes(taskId)) setTimeout(() => setButtonLoading(button, false), TOAST_MS);
-      else syncActiveTasks();
-      loadReports();
+      if (wasQueued || (taskId && MANAGED_TASK_IDS.includes(taskId))) syncActiveTasks();
+      else setTimeout(() => setButtonLoading(button, false), TOAST_MS);
+      if (!wasQueued) loadReports();
     }
   }
 
@@ -200,18 +203,19 @@
           const paramString = window._sr[paramFnName]().toString();
           if (paramString) url += (url.includes("?") ? "&" : "?") + paramString;
         }
+        if (MANAGED_TASK_IDS.includes(button.id)) url += (url.includes("?") ? "&" : "?") + "queue=true";
         let hideOnSucceed = persistAttr || forceDryRun ? 0 : TOAST_MS;
         if (persistIfEmptySelector) {
           const input = document.querySelector(persistIfEmptySelector);
           if (input && !input.value.trim()) hideOnSucceed = 0;
         }
-        showToast(`${label}${forceDryRun ? " (Dry Run)" : ""}: Processing...`, "info", TOAST_MS);
         const response = await fetchJson(url, { method });
         toastOperation(response, label, { hideOnSucceed });
-        if (button.id === window._sr.tasks.plexAuthRefresh && response.isOk) window._sr.refreshPlexState?.();
+        if (button.id === window._sr.tasks.plexAuthRefresh && response.isOk && response.data?.status !== "queued") window._sr.refreshPlexState?.();
+        return response.data?.status;
       } else if (actionKey) {
         const handler = window._sr.actions[actionKey];
-        if (handler) await handler(button);
+        if (handler) return await handler(button);
       }
     };
 

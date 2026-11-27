@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.Vfs;
 
@@ -10,8 +11,9 @@ public partial class VfsBuilder
 
     /// <summary>Audits the VFS to find and remove orphaned series folders and broken symlinks.</summary>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     /// <returns>A result object containing audit statistics.</returns>
-    public VfsAuditResult Audit(CancellationToken cancellationToken = default)
+    public VfsAuditResult Audit(CancellationToken cancellationToken = default, IProgress<decimal>? progress = null)
     {
         if (Settings.Advanced.DisableVfsGeneration)
         {
@@ -51,17 +53,26 @@ public partial class VfsBuilder
 
         var blueprint = VfsShared.LoadBlueprint();
         var recursiveOptions = new FileSystemListingOptions { Recursive = true };
+        var stagedProgress = progress.InStages(1m, 1m);
+        stagedProgress.Report(0);
 
         void AuditRoot(string rootFolderName, HashSet<int> validIds)
         {
-            foreach (var root in allRoots)
+            var rootFolders = allRoots
+                .Select(root => Path.Combine(root, rootFolderName))
+                .Where(fileSystem.DirectoryExists)
+                .SelectMany(vfsRoot => fileSystem.GetDirectoryPaths(vfsRoot, cancellationToken: cancellationToken))
+                .ToList();
+            var rootProgress = stagedProgress.Throttle().ForItems(rootFolders.Count);
+            if (rootFolders.Count == 0)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                string vfsRoot = Path.Combine(root, rootFolderName);
-                if (!fileSystem.DirectoryExists(vfsRoot))
-                    continue;
+                rootProgress.Report(0);
+                return;
+            }
 
-                Parallel.ForEach(fileSystem.GetDirectoryPaths(vfsRoot, cancellationToken: cancellationToken), DefaultParallelOptions(cancellationToken), seriesFolder =>
+            Parallel.ForEach(rootFolders, DefaultParallelOptions(cancellationToken), seriesFolder =>
+            {
+                try
                 {
                     string folderName = Path.GetFileName(seriesFolder);
 
@@ -128,12 +139,18 @@ public partial class VfsBuilder
                             }
                         }
                         catch { }
-                });
-            }
+                }
+                finally
+                {
+                    rootProgress.Increment();
+                }
+            });
         }
 
         AuditRoot(rootName, validFolderIds);
+        stagedProgress.NextStage();
         AuditRoot(movieRootName, validMovieFolders);
+        stagedProgress.Complete();
 
         if (blueprintUpdated > 0)
             VfsShared.SaveBlueprint(blueprint);

@@ -40,19 +40,41 @@
   // #endregion
 
   // #region Actions Registry
+  /**
+   * Plays the first available Theme.mp3 from a completed batch MP3 result when the miniplayer is enabled.
+   * @param {Object} payload - The batch response envelope or inner data object.
+   * @returns {void}
+   */
+  window._sr.playBatchMp3Result = (payload) => {
+    const data = payload?.Data ?? payload?.data ?? payload;
+    const items = data?.Items || data?.items || [];
+    const playItem =
+      items.find((item) => (item.Status || item.status) === "ok") ||
+      (items.length === 1 && (items[0].Status || items[0].status) === "skipped" && (items[0].Message || items[0].message) === "Theme.mp3 already exists." ? items[0] : null);
+    const playPath = playItem?.Folder || playItem?.folder;
+    if (playPath) playThemeMp3(playPath);
+  };
+
   Object.assign(window._sr.actions, {
     /**
      * Action for generating series Theme.mp3 files and triggering playback.
-     * @returns {Promise<void>}
+     * @returns {Promise<string|void>} Returns "queued" when enqueued as a batch job; otherwise undefined.
      */
     atMp3Build: async () => {
       const queryParams = window._sr.getAtParams();
       const isBatch = queryParams.get("batch") === "true";
       const label = "AnimeThemes MP3";
 
-      showToast(`${label}: Generating...`, "info", TOAST_MS);
+      if (isBatch) queryParams.set("queue", "true");
+      else showToast(`${label}: Generating...`, "info", TOAST_MS);
+
       const response = await fetchJson(`${base}/animethemes/mp3?${queryParams}`);
       const responseData = getData(response);
+      const responseStatus = (response.data?.status || response.data?.Status || "").toLowerCase();
+      if (responseStatus === "queued") {
+        toastOperation(response, label);
+        return "queued";
+      }
 
       const status = responseData?.Status || responseData?.status;
       const message = responseData?.Message || responseData?.message;
@@ -87,12 +109,7 @@
           const playPath = responseData?.Folder || responseData?.folder || queryParams.get("path");
           if (playPath) playThemeMp3(playPath);
         } else if (isBatch) {
-          const items = responseData?.Items || responseData?.items || [];
-          const playItem =
-            items.find((item) => (item.Status || item.status) === "ok") ||
-            (items.length === 1 && (items[0].Status || items[0].status) === "skipped" && (items[0].Message || items[0].message) === "Theme.mp3 already exists." ? items[0] : null);
-          const playPath = playItem?.Folder || playItem?.folder;
-          if (playPath) playThemeMp3(playPath);
+          window._sr.playBatchMp3Result(responseData);
         }
       } else {
         toastOperation(response, label, { summary, hideOnSucceed: 0 });
@@ -137,9 +154,10 @@
     const startDownload = (queryParams) => {
       closeModal();
       window._sr.runAction(triggerButton, async () => {
-        showToast("WebM Download: Processing...", "info", TOAST_MS);
+        queryParams.set("queue", "true");
         const response = await fetchJson(`${base}/animethemes/webm/download?${queryParams}`, { method: "POST" });
-        toastOperation(response, "WebM Download", { hideOnSucceed: 0 });
+        toastOperation(response, "WebM Download");
+        return response.data?.status;
       });
     };
 

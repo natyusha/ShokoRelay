@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.FileSystem;
+using Shoko.Abstractions.Utilities;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.AnimeThemes;
@@ -25,6 +26,9 @@ public partial class AnimeThemesMapping(
     #region Setup
 
     private readonly AnimeThemesApi _apiClient = apiClient;
+
+    /// <summary>Semaphore preventing concurrent AnimeThemes mapping build runs without blocking VFS operations.</summary>
+    public readonly SemaphoreSlim MapBuildLock = new(1, 1);
 
     #endregion
 
@@ -83,8 +87,9 @@ public partial class AnimeThemesMapping(
 
     /// <summary>Scan configured import roots for AnimeThemes files and write a mapping CSV without holding the VFS lock during API queries.</summary>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     /// <returns>A build result with statistics.</returns>
-    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken cancellationToken = default)
+    public async Task<AnimeThemesMappingBuildResult> BuildMappingFileAsync(CancellationToken cancellationToken = default, IProgress<decimal>? progress = null)
     {
         logger.LogInformation("AnimeThemes Map: Starting mapping task...");
 
@@ -153,54 +158,74 @@ public partial class AnimeThemesMapping(
             var errorsBag = new ConcurrentBag<(int Year, string FilePath, string Message)>();
             var newMappingsBag = new ConcurrentBag<(int Year, string FilePath, string Message)>();
             int errors = 0;
-            await Parallel
-                .ForEachAsync(toProcess, DefaultParallelOptions(cancellationToken), async (item, token) =>
-                {
-                    try
+            bool wasCancelled = false;
+            var itemProgress = progress.Throttle().ForItems(toProcess.Count);
+            itemProgress.Report(0);
+
+            try
+            {
+                await Parallel
+                    .ForEachAsync(toProcess, DefaultParallelOptions(cancellationToken), async (item, token) =>
                     {
-                        int year = AnimeThemesHelper.GetYearForSort(item.RelativePath);
-                        var (lookup, idMissing) = await FetchMetadataAsync(Path.GetFileName(item.File), null, token).ConfigureAwait(false);
-                        if (lookup == null)
+                        try
                         {
-                            string errorMessage = $"Missing metadata for {item.RelativePath}";
+                            int year = AnimeThemesHelper.GetYearForSort(item.RelativePath);
+                            var (lookup, idMissing) = await FetchMetadataAsync(Path.GetFileName(item.File), null, token).ConfigureAwait(false);
+                            if (lookup == null)
+                            {
+                                string errorMessage = $"Missing metadata for {item.RelativePath}";
+                                errorsBag.Add((year, item.RelativePath, errorMessage));
+                                logger.LogWarning("AnimeThemes Map: Failed to map '{Path}' -> Metadata missing", item.RelativePath);
+                                Interlocked.Increment(ref errors);
+                                return;
+                            }
+
+                            lock (entries)
+                                entries.Add(new AnimeThemesMappingEntry(item.RelativePath, lookup));
+
+                            if (idMissing)
+                            {
+                                errorsBag.Add((year, item.RelativePath, $"AniDB ID still missing on AnimeThemes for {item.RelativePath}"));
+                                logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", item.RelativePath);
+                            }
+                            else
+                            {
+                                string mapMessage = $"Mapped: {item.RelativePath} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
+                                newMappingsBag.Add((year, item.RelativePath, mapMessage));
+                                logger.LogDebug("AnimeThemes Map: Mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", item.RelativePath, lookup.VideoId, lookup.AniDbId);
+                            }
+                        }
+                        catch (OperationCanceledException) when (token.IsCancellationRequested)
+                        {
+                            throw;
+                        }
+                        catch (Exception exception)
+                        {
+                            int year = AnimeThemesHelper.GetYearForSort(item.RelativePath);
+                            string errorMessage = $"{item.RelativePath}: {exception.Message}";
                             errorsBag.Add((year, item.RelativePath, errorMessage));
-                            logger.LogWarning("AnimeThemes Map: Failed to map '{Path}' -> Metadata missing", item.RelativePath);
+                            logger.LogWarning(exception, "AnimeThemes Map: Exception mapping '{Path}' -> {Error}", item.RelativePath, exception.Message);
                             Interlocked.Increment(ref errors);
-                            return;
                         }
-
-                        lock (entries)
-                            entries.Add(new AnimeThemesMappingEntry(item.RelativePath, lookup));
-
-                        if (idMissing)
+                        finally
                         {
-                            errorsBag.Add((year, item.RelativePath, $"AniDB ID still missing on AnimeThemes for {item.RelativePath}"));
-                            logger.LogWarning("AnimeThemes Map: Recorded '{Path}' with missing AniDB ID", item.RelativePath);
+                            itemProgress.Increment();
                         }
-                        else
-                        {
-                            string mapMessage = $"Mapped: {item.RelativePath} -> VideoID: {lookup.VideoId}, AniDB ID: {lookup.AniDbId}";
-                            newMappingsBag.Add((year, item.RelativePath, mapMessage));
-                            logger.LogDebug("AnimeThemes Map: Mapped '{Path}' -> VideoID: {VideoId}, AniDB ID: {AnidbId}", item.RelativePath, lookup.VideoId, lookup.AniDbId);
-                        }
-                    }
-                    catch (Exception exception)
-                    {
-                        int year = AnimeThemesHelper.GetYearForSort(item.RelativePath);
-                        string errorMessage = $"{item.RelativePath}: {exception.Message}";
-                        errorsBag.Add((year, item.RelativePath, errorMessage));
-                        logger.LogWarning(exception, "AnimeThemes Map: Exception mapping '{Path}' -> {Error}", item.RelativePath, exception.Message);
-                        Interlocked.Increment(ref errors);
-                    }
-                })
-                .ConfigureAwait(false);
+                    })
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                wasCancelled = true;
+                logger.LogInformation("AnimeThemes Map: Cancelled -> flushing {Count} resolved mapping entries to disk...", entries.Count);
+            }
 
             List<AnimeThemesMappingEntry> finalEntries;
-            await VfsShared.VfsLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await VfsShared.VfsLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
             try
             {
                 // Re-read the mapping CSV before writing so entries added or updated during the crawl are preserved
-                var (latestComments, latestEntries) = await ReadMappingFileAsync(mapPath, cancellationToken).ConfigureAwait(false);
+                var (latestComments, latestEntries) = await ReadMappingFileAsync(mapPath, CancellationToken.None).ConfigureAwait(false);
                 var mergedByPath = new Dictionary<string, AnimeThemesMappingEntry>(StringComparer.OrdinalIgnoreCase);
 
                 foreach (var entry in entries)
@@ -210,12 +235,15 @@ public partial class AnimeThemesMapping(
                     if (!mergedByPath.TryGetValue(latestEntry.FilePath, out var currentEntry) || (latestEntry.AniDbId > 0 && currentEntry.AniDbId <= 0))
                         mergedByPath[latestEntry.FilePath] = latestEntry;
 
-                finalEntries = await SaveMappingFileAsync(mapPath, latestComments.Count > 0 ? latestComments : existingComments, mergedByPath.Values, cancellationToken).ConfigureAwait(false);
+                finalEntries = await SaveMappingFileAsync(mapPath, latestComments.Count > 0 ? latestComments : existingComments, mergedByPath.Values, CancellationToken.None).ConfigureAwait(false);
             }
             finally
             {
                 VfsShared.VfsLock.Release();
             }
+
+            if (wasCancelled)
+                throw new OperationCanceledException(cancellationToken);
 
             logger.LogInformation("AnimeThemes Map: Finished mapping task -> {Count} entries written.", finalEntries.Count);
             List<string> finalMessages =

@@ -5,6 +5,7 @@ using Shoko.Abstractions.FileSystem;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using Shoko.Abstractions.Metadata.Image.Options;
+using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.Services;
 
@@ -55,8 +56,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <summary>Scans all configured Plex libraries and local VFS paths to upload missing or updated screenshots, posters, backdrops, and logos back to Shoko.</summary>
     /// <param name="allowedSeriesIds">Optional collection of series IDs to limit processing to.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     /// <returns>A summary result containing statistics on the synchronization run.</returns>
-    public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default)
+    public async Task<ImageSyncResult> SyncImagesAsync(IEnumerable<int>? allowedSeriesIds = null, CancellationToken cancellationToken = default, IProgress<decimal>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
         await _syncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -69,6 +71,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             HashSet<int>? allowedSet = allowedPrimaryIds != null ? [.. allowedPrimaryIds] : null;
             if (allowedSet != null && allSeries.Count == 0)
                 return new ImageSyncResult(0, 0, 0, 0, [], [], stopwatch.Elapsed);
+
+            var stages = progress.InStages(7m, 1m, 2m);
+            stages.Report(0);
 
             var syncDetails = Settings.TmdbThumbnails ? "" : " + Plex episode thumbnails";
             logger.LogInformation("ImageSyncService: Starting image synchronization (local collection/series artwork{Details})...", syncDetails);
@@ -92,14 +97,19 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
 
             // Sync Episode Thumbnails (Local & Plex)
             if (targets.Count > 0)
-                await SyncEpisodeThumbnailsAsync(targets, allowedSet, preferredOrderingIdCache, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
+                await SyncEpisodeThumbnailsAsync(targets, allowedSet, preferredOrderingIdCache, errorsBag, uploadedBag, AddStats, cancellationToken, stages).ConfigureAwait(false);
+
+            stages.NextStage();
 
             // Sync Collection Posters
-            await SyncCollectionPostersAsync(allSeries, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
+            await SyncCollectionPostersAsync(allSeries, errorsBag, uploadedBag, AddStats, cancellationToken, stages).ConfigureAwait(false);
+
+            stages.NextStage();
 
             // Sync Local Series Images (Posters, Backdrops, Logos)
-            await SyncLocalSeriesImagesAsync(allSeries, errorsBag, uploadedBag, AddStats, cancellationToken).ConfigureAwait(false);
+            await SyncLocalSeriesImagesAsync(allSeries, errorsBag, uploadedBag, AddStats, cancellationToken, stages).ConfigureAwait(false);
 
+            stages.Complete();
             stopwatch.Stop();
             logger.LogInformation("ImageSyncService: Finished synchronization -> uploaded {UploadedCount} new images to Shoko in {Elapsed}ms", uploaded, stopwatch.ElapsedMilliseconds);
             return new ImageSyncResult(processed, uploaded, skipped, errors, [.. uploadedBag.OrderBy(item => item)], [.. errorsBag.OrderBy(item => item)], stopwatch.Elapsed);
@@ -158,6 +168,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     private async Task SyncEpisodeThumbnailsAsync(
         IReadOnlyList<PlexLibraryTarget> targets,
         HashSet<int>? allowedSet,
@@ -165,13 +176,16 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
         ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IProgress<decimal>? progress = null
     )
     {
         var processedInRun = new ConcurrentDictionary<int, byte>();
         var fileDataCache = new ConcurrentDictionary<int, MapHelper.SeriesFileData?>();
         var dirArtCache = new ConcurrentDictionary<string, Lazy<string[]>>(VfsShared.PathComparer);
         var orderedTargets = targets.OrderBy(target => target.LibraryType == PlexLibraryType.Movie ? 1 : 0).ToList();
+        var targetStages = progress.InStages([.. Enumerable.Repeat(1m, Math.Max(1, orderedTargets.Count))]);
+        targetStages.Report(0);
         bool sectionScanFailed = false;
 
         foreach (var target in orderedTargets)
@@ -179,159 +193,6 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
             cancellationToken.ThrowIfCancellationRequested();
             try
             {
-                async ValueTask ProcessThumbnailItem(PlexMetadataItem item, CancellationToken itemToken)
-                {
-                    itemToken.ThrowIfCancellationRequested();
-                    if (string.IsNullOrWhiteSpace(item.Guid))
-                        return;
-
-                    var episodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
-
-                    // Ensure each Shoko Episode (including specials and movies) is only processed once globally per run
-                    // Ordering TV targets first ensures Movie libraries skip episodes/specials already synced from TV libraries
-                    if (!episodeId.HasValue || !processedInRun.TryAdd(episodeId.Value, 0))
-                        return;
-
-                    var episode = metadataService.GetShokoEpisodeByID(episodeId.Value);
-                    if (episode == null)
-                        return;
-
-                    int primarySeriesId = OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService);
-                    if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
-                        return;
-
-                    var fileData = fileDataCache.GetOrAdd(primarySeriesId, seriesId =>
-                        metadataService.GetShokoSeriesByID(seriesId) is { } primarySeries ? MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService) : null
-                    );
-                    var matchingMappings = fileData?.Mappings.Where(mapping => mapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID)).ToList() ?? [];
-                    var mappedCoords = matchingMappings.FirstOrDefault()?.Coords;
-
-                    PlexMapping.PlexCoords coords;
-                    if (mappedCoords.HasValue)
-                        coords = mappedCoords.Value;
-                    else
-                    {
-                        string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
-                        coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId);
-                    }
-
-                    bool isMovie = target.LibraryType == PlexLibraryType.Movie;
-                    string labelType = isMovie ? "Movie" : "Episode";
-                    string coordsText = $"S{coords.Season:D2}E{coords.Episode:D2}";
-                    var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsText)}";
-
-                    // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
-                    var hasPhysicalFiles = (episode.Videos ?? []).Any(video => video.Files?.Any(file => !string.IsNullOrWhiteSpace(file.Path) && fileSystem.FileExists(file.Path)) == true);
-                    if (!hasPhysicalFiles)
-                    {
-                        if (
-                            episode
-                                .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
-                                .Any(xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource)
-                        )
-                        {
-                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource)
-                                .ConfigureAwait(false);
-                            addStats(false, false, false, false);
-                        }
-                        return;
-                    }
-
-                    // Coordinate Alignment Guard: Detect when Plex's metadata is in a transient or mismatched state
-                    if (!isMovie && item.ParentIndex.HasValue && item.Index.HasValue)
-                    {
-                        bool MatchesCoords(PlexMapping.PlexCoords candidateCoords) =>
-                            item.ParentIndex.Value == candidateCoords.Season
-                            && (
-                                item.Index.Value == candidateCoords.Episode
-                                || (candidateCoords.EndEpisode.HasValue && item.Index.Value >= candidateCoords.Episode && item.Index.Value <= candidateCoords.EndEpisode.Value)
-                            );
-
-                        bool isMismatch = matchingMappings.Count > 0 ? !matchingMappings.Any(mapping => MatchesCoords(mapping.Coords)) : !MatchesCoords(coords);
-
-                        // Compensate for virtual TMDB episode group splits where individual TMDB episodes sit in different seasons or indices
-                        if (
-                            isMismatch
-                            && EnforceTmdbNumbering
-                            && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEpisodes
-                            && episode.Series != null
-                            && MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) is var preferredOrderingId
-                            && tmdbEpisodes.Any(tmdbEpisode =>
-                                PlexMapping.GetOrderingCoords(tmdbEpisode, preferredOrderingId) is var (tmdbSeason, tmdbEpisodeNumber)
-                                && tmdbSeason == item.ParentIndex.Value
-                                && tmdbEpisodeNumber == item.Index.Value
-                            )
-                        )
-                            isMismatch = false;
-
-                        if (isMismatch)
-                        {
-                            addStats(true, false, false, true);
-                            errorsBag.Add($"[Coordinate Mismatch] {episodeLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: {coordsText})");
-                            return;
-                        }
-                    }
-
-                    // Find a local episode thumbnail alongside the physical video files
-                    var localThumb = (episode.Videos ?? [])
-                        .SelectMany(video => video.Files ?? [])
-                        .Select(file => file.Path)
-                        .Where(path => !string.IsNullOrWhiteSpace(path))
-                        .Select(path => (Dir: Path.GetDirectoryName(path), Base: Path.GetFileNameWithoutExtension(path)))
-                        .Where(entry => !string.IsNullOrEmpty(entry.Dir))
-                        .SelectMany(entry =>
-                            dirArtCache
-                                .GetOrAdd(entry.Dir!, dir => new Lazy<string[]>(() => fileSystem.GetFilePaths(dir, s_artworkListingOptions, cancellationToken)))
-                                .Value.Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase))
-                        )
-                        .FirstOrDefault();
-
-                    var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
-                            localThumb,
-                            episode,
-                            ImageEntityType.Backdrop,
-                            "local thumbnail",
-                            episodeLogName,
-                            $"[Local {labelType} Thumb] {episodeLogName}",
-                            uploadedBag,
-                            errorsBag
-                        )
-                        .ConfigureAwait(false);
-                    addStats(fileExists, wasUploaded, wasSkipped, hasError);
-
-                    bool purgePlexThumb = fileExists || Settings.TmdbThumbnails;
-                    var plexBackdropFilter = new ImageCrossReferenceFilteringOptions
-                    {
-                        ImageType = ImageEntityType.Backdrop,
-                        XrefSource = ServiceRegistration.RelayPlexSource,
-                        LinkedEntityImages = false,
-                    };
-                    if (purgePlexThumb)
-                    {
-                        if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
-                        {
-                            logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", episodeLogName);
-                            await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
-                        }
-                    }
-                    else
-                    {
-                        if (string.IsNullOrWhiteSpace(item.Thumb))
-                        {
-                            addStats(true, false, false, true);
-                            errorsBag.Add($"[Missing Plex Thumbnail] {episodeLogName} (No thumbnail generated or available in Plex)");
-                            if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
-                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
-                        }
-                        else
-                        {
-                            var (plexHandled, plexUploaded, plexSkipped, plexError) = await ProcessPlexThumbnailAsync(item.Thumb, episode, episodeLogName, target, errorsBag, uploadedBag, itemToken)
-                                .ConfigureAwait(false);
-                            addStats(plexHandled, plexUploaded, plexSkipped, plexError);
-                        }
-                    }
-                }
-
                 var items =
                     allowedSet != null
                         ? await plexClient.GetSectionItemsForSeriesAsync(target, allowedSet, metadataService, includeLeaves: target.LibraryType != PlexLibraryType.Movie, cancellationToken).ConfigureAwait(false)
@@ -340,6 +201,169 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 ? await plexClient.GetSectionMoviesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
                                 : await plexClient.GetSectionEpisodesAsync(target, null, cancellationToken).ConfigureAwait(false) ?? []
                         );
+
+                var itemProgress = targetStages.Throttle().ForItems(Math.Max(1, items.Count));
+                itemProgress.Report(0);
+
+                async ValueTask ProcessThumbnailItem(PlexMetadataItem item, CancellationToken itemToken)
+                {
+                    try
+                    {
+                        itemToken.ThrowIfCancellationRequested();
+                        if (string.IsNullOrWhiteSpace(item.Guid))
+                            return;
+
+                        var episodeId = PlexHelper.ExtractShokoEpisodeIdFromGuid(item.Guid);
+
+                        // Ensure each Shoko Episode (including specials and movies) is only processed once globally per run
+                        // Ordering TV targets first ensures Movie libraries skip episodes/specials already synced from TV libraries
+                        if (!episodeId.HasValue || !processedInRun.TryAdd(episodeId.Value, 0))
+                            return;
+
+                        var episode = metadataService.GetShokoEpisodeByID(episodeId.Value);
+                        if (episode == null)
+                            return;
+
+                        int primarySeriesId = OverrideHelper.GetPrimary(episode.ShokoSeriesID, metadataService);
+                        if (allowedSet != null && !allowedSet.Contains(primarySeriesId))
+                            return;
+
+                        var fileData = fileDataCache.GetOrAdd(primarySeriesId, seriesId =>
+                            metadataService.GetShokoSeriesByID(seriesId) is { } primarySeries ? MapHelper.GetConsolidatedSeriesFileData(primarySeries, metadataService) : null
+                        );
+                        var matchingMappings = fileData?.Mappings.Where(mapping => mapping.Episodes.Any(mappedEpisode => mappedEpisode.ID == episode.ID)).ToList() ?? [];
+                        var mappedCoords = matchingMappings.FirstOrDefault()?.Coords;
+
+                        PlexMapping.PlexCoords coords;
+                        if (mappedCoords.HasValue)
+                            coords = mappedCoords.Value;
+                        else
+                        {
+                            string? preferredOrderingId = episode.Series != null ? MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) : null;
+                            coords = PlexMapping.GetPlexCoordinates(episode, preferredOrderingId);
+                        }
+
+                        bool isMovie = target.LibraryType == PlexLibraryType.Movie;
+                        string labelType = isMovie ? "Movie" : "Episode";
+                        string coordsText = $"S{coords.Season:D2}E{coords.Episode:D2}";
+                        var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {(isMovie ? $"Movie [{episode.LocalID}]" : coordsText)}";
+
+                        // File-Anchor Verification: An episode cannot receive a Plex video thumbnail if it possesses no active physical video files
+                        var hasPhysicalFiles = (episode.Videos ?? []).Any(video => video.Files?.Any(file => !string.IsNullOrWhiteSpace(file.Path) && fileSystem.FileExists(file.Path)) == true);
+                        if (!hasPhysicalFiles)
+                        {
+                            if (
+                                episode
+                                    .GetImageCrossReferences(new ImageCrossReferenceFilteringOptions { ImageType = ImageEntityType.Backdrop, LinkedEntityImages = false })
+                                    .Any(xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource)
+                            )
+                            {
+                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource)
+                                    .ConfigureAwait(false);
+                                addStats(false, false, false, false);
+                            }
+                            return;
+                        }
+
+                        // Coordinate Alignment Guard: Detect when Plex's metadata is in a transient or mismatched state
+                        if (!isMovie && item.ParentIndex.HasValue && item.Index.HasValue)
+                        {
+                            bool MatchesCoords(PlexMapping.PlexCoords candidateCoords) =>
+                                item.ParentIndex.Value == candidateCoords.Season
+                                && (
+                                    item.Index.Value == candidateCoords.Episode
+                                    || (candidateCoords.EndEpisode.HasValue && item.Index.Value >= candidateCoords.Episode && item.Index.Value <= candidateCoords.EndEpisode.Value)
+                                );
+
+                            bool isMismatch = matchingMappings.Count > 0 ? !matchingMappings.Any(mapping => MatchesCoords(mapping.Coords)) : !MatchesCoords(coords);
+
+                            // Compensate for virtual TMDB episode group splits where individual TMDB episodes sit in different seasons or indices
+                            if (
+                                isMismatch
+                                && EnforceTmdbNumbering
+                                && episode.GetLinkedEpisodes(MetadataSource.TMDB) is { Count: > 1 } tmdbEpisodes
+                                && episode.Series != null
+                                && MapHelper.GetPreferredTmdbOrderingId(episode.Series, preferredOrderingIdCache) is var preferredOrderingId
+                                && tmdbEpisodes.Any(tmdbEpisode =>
+                                    PlexMapping.GetOrderingCoords(tmdbEpisode, preferredOrderingId) is var (tmdbSeason, tmdbEpisodeNumber)
+                                    && tmdbSeason == item.ParentIndex.Value
+                                    && tmdbEpisodeNumber == item.Index.Value
+                                )
+                            )
+                                isMismatch = false;
+
+                            if (isMismatch)
+                            {
+                                addStats(true, false, false, true);
+                                errorsBag.Add($"[Coordinate Mismatch] {episodeLogName} (Plex: S{item.ParentIndex.Value:D2}E{item.Index.Value:D2}, Shoko: {coordsText})");
+                                return;
+                            }
+                        }
+
+                        // Find a local episode thumbnail alongside the physical video files
+                        var localThumb = (episode.Videos ?? [])
+                            .SelectMany(video => video.Files ?? [])
+                            .Select(file => file.Path)
+                            .Where(path => !string.IsNullOrWhiteSpace(path))
+                            .Select(path => (Dir: Path.GetDirectoryName(path), Base: Path.GetFileNameWithoutExtension(path)))
+                            .Where(entry => !string.IsNullOrEmpty(entry.Dir))
+                            .SelectMany(entry =>
+                                dirArtCache
+                                    .GetOrAdd(entry.Dir!, dir => new Lazy<string[]>(() => fileSystem.GetFilePaths(dir, s_artworkListingOptions, cancellationToken)))
+                                    .Value.Where(file => string.Equals(Path.GetFileNameWithoutExtension(file), entry.Base, StringComparison.OrdinalIgnoreCase))
+                            )
+                            .FirstOrDefault();
+
+                        var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
+                                localThumb,
+                                episode,
+                                ImageEntityType.Backdrop,
+                                "local thumbnail",
+                                episodeLogName,
+                                $"[Local {labelType} Thumb] {episodeLogName}",
+                                uploadedBag,
+                                errorsBag
+                            )
+                            .ConfigureAwait(false);
+                        addStats(fileExists, wasUploaded, wasSkipped, hasError);
+
+                        bool purgePlexThumb = fileExists || Settings.TmdbThumbnails;
+                        var plexBackdropFilter = new ImageCrossReferenceFilteringOptions
+                        {
+                            ImageType = ImageEntityType.Backdrop,
+                            XrefSource = ServiceRegistration.RelayPlexSource,
+                            LinkedEntityImages = false,
+                        };
+                        if (purgePlexThumb)
+                        {
+                            if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
+                            {
+                                logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", episodeLogName);
+                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                            }
+                        }
+                        else
+                        {
+                            if (string.IsNullOrWhiteSpace(item.Thumb))
+                            {
+                                addStats(true, false, false, true);
+                                errorsBag.Add($"[Missing Plex Thumbnail] {episodeLogName} (No thumbnail generated or available in Plex)");
+                                if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
+                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                            }
+                            else
+                            {
+                                var (plexHandled, plexUploaded, plexSkipped, plexError) = await ProcessPlexThumbnailAsync(item.Thumb, episode, episodeLogName, target, errorsBag, uploadedBag, itemToken)
+                                    .ConfigureAwait(false);
+                                addStats(plexHandled, plexUploaded, plexSkipped, plexError);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        itemProgress.Increment();
+                    }
+                }
 
                 await Parallel.ForEachAsync(items, DefaultParallelOptions(cancellationToken), ProcessThumbnailItem).ConfigureAwait(false);
             }
@@ -350,7 +374,9 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 errorsBag.Add($"Failed to scan Plex section {target.SectionId}: {exception.Message}");
                 logger.LogWarning(exception, "ImageSyncService: Failed to scan library section {SectionId}", target.SectionId);
             }
+            targetStages.NextStage();
         }
+        targetStages.Complete();
 
         // Safely purge orphaned Plex thumbnails for episodes completely removed from Plex
         if (allowedSet == null && !sectionScanFailed)
@@ -392,38 +418,50 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     private async Task SyncCollectionPostersAsync(
         List<IShokoSeries> allSeries,
         ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        IProgress<decimal>? progress = null
     )
     {
         var groups = allSeries.Where(series => series.TopLevelGroupID > 0).Select(series => series.TopLevelGroup).OfType<IShokoGroup>().DistinctBy(group => group.LocalID).ToList();
+        var itemProgress = progress.Throttle().ForItems(groups.Count);
+        itemProgress.Report(0);
+
         foreach (var group in groups)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var groupSeries = group.AllSeries?.ToList() is { Count: > 0 } allGroupSeries ? allGroupSeries : [.. allSeries.Where(series => series.TopLevelGroupID == group.LocalID)];
-            if (groupSeries.Count == 0)
-                continue;
+            try
+            {
+                var groupSeries = group.AllSeries?.ToList() is { Count: > 0 } allGroupSeries ? allGroupSeries : [.. allSeries.Where(series => series.TopLevelGroupID == group.LocalID)];
+                if (groupSeries.Count == 0)
+                    continue;
 
-            string? groupPosterFile = groupSeries
-                .Select(series => PlexHelper.FindCollectionImagePathByGroup(series, group.LocalID, "", metadataService, fileSystem))
-                .FirstOrDefault(path => !string.IsNullOrEmpty(path));
-            var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
-                    groupPosterFile,
-                    group,
-                    ImageEntityType.Primary,
-                    "collection poster",
-                    $"group {group.PreferredTitle?.Value} [{group.LocalID}]",
-                    $"[Collection Poster] {group.PreferredTitle?.Value}",
-                    uploadedBag,
-                    errorsBag
-                )
-                .ConfigureAwait(false);
+                string? groupPosterFile = groupSeries
+                    .Select(series => PlexHelper.FindCollectionImagePathByGroup(series, group.LocalID, "", metadataService, fileSystem))
+                    .FirstOrDefault(path => !string.IsNullOrEmpty(path));
+                var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
+                        groupPosterFile,
+                        group,
+                        ImageEntityType.Primary,
+                        "collection poster",
+                        $"group {group.PreferredTitle?.Value} [{group.LocalID}]",
+                        $"[Collection Poster] {group.PreferredTitle?.Value}",
+                        uploadedBag,
+                        errorsBag
+                    )
+                    .ConfigureAwait(false);
 
-            addStats(fileExists, wasUploaded, wasSkipped, hasError);
+                addStats(fileExists, wasUploaded, wasSkipped, hasError);
+            }
+            finally
+            {
+                itemProgress.Increment();
+            }
         }
     }
 
@@ -433,66 +471,80 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
     /// <param name="uploadedBag">Bag to collect uploaded item names.</param>
     /// <param name="addStats">Action callback to record execution metrics.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="progress">Optional progress reporter (0 to 100).</param>
     private async Task SyncLocalSeriesImagesAsync(
         List<IShokoSeries> allSeries,
         ConcurrentBag<string> errorsBag,
         ConcurrentBag<string> uploadedBag,
         Action<bool, bool, bool, bool> addStats,
-        CancellationToken cancellationToken
-    ) =>
+        CancellationToken cancellationToken,
+        IProgress<decimal>? progress = null
+    )
+    {
+        var itemProgress = progress.Throttle().ForItems(allSeries.Count);
+        itemProgress.Report(0);
+
         await Parallel
             .ForEachAsync(allSeries, DefaultParallelOptions(cancellationToken), async (series, token) =>
             {
-                if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
+                try
                 {
+                    if (OverrideHelper.GetPrimary(series.LocalID, metadataService) != series.LocalID)
+                    {
+                        foreach (var config in s_seriesImageConfigs)
+                            if (
+                                series
+                                    .GetImageCrossReferences(
+                                        new ImageCrossReferenceFilteringOptions
+                                        {
+                                            ImageType = config.Type,
+                                            XrefSource = ServiceRegistration.RelaySource,
+                                            LinkedEntityImages = false,
+                                        }
+                                    )
+                                    .Count > 0
+                            )
+                            {
+                                await PurgeEntityImagesAsync(series, config.Type, ServiceRegistration.RelaySource).ConfigureAwait(false);
+                                addStats(false, false, false, false);
+                            }
+                        return;
+                    }
+
+                    var candidateFiles = VfsShared.ResolveSeriesVfsPaths(series, metadataService).SelectMany(path => fileSystem.GetFilePaths(path, s_artworkListingOptions, token)).ToList();
+
                     foreach (var config in s_seriesImageConfigs)
-                        if (
-                            series
-                                .GetImageCrossReferences(
-                                    new ImageCrossReferenceFilteringOptions
-                                    {
-                                        ImageType = config.Type,
-                                        XrefSource = ServiceRegistration.RelaySource,
-                                        LinkedEntityImages = false,
-                                    }
-                                )
-                                .Count > 0
-                        )
-                        {
-                            await PurgeEntityImagesAsync(series, config.Type, ServiceRegistration.RelaySource).ConfigureAwait(false);
-                            addStats(false, false, false, false);
-                        }
-                    return;
+                    {
+                        // Find a local artwork file for a series based on a prioritized list of allowed filenames
+                        string? foundFile = candidateFiles
+                            .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
+                            .Where(item => item.Index >= 0)
+                            .OrderBy(item => item.Index)
+                            .FirstOrDefault()
+                            ?.File;
+
+                        var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
+                                foundFile,
+                                series,
+                                config.Type,
+                                config.Label,
+                                $"series {series.GetDisplayTitle()} [{series.LocalID}]",
+                                $"[Local {config.Label}] {series.GetDisplayTitle()}",
+                                uploadedBag,
+                                errorsBag
+                            )
+                            .ConfigureAwait(false);
+
+                        addStats(fileExists, wasUploaded, wasSkipped, hasError);
+                    }
                 }
-
-                var candidateFiles = VfsShared.ResolveSeriesVfsPaths(series, metadataService).SelectMany(path => fileSystem.GetFilePaths(path, s_artworkListingOptions, token)).ToList();
-
-                foreach (var config in s_seriesImageConfigs)
+                finally
                 {
-                    // Find a local artwork file for a series based on a prioritized list of allowed filenames
-                    string? foundFile = candidateFiles
-                        .Select(file => new { File = file, Index = Array.FindIndex(config.Names, name => string.Equals(Path.GetFileNameWithoutExtension(file), name, StringComparison.OrdinalIgnoreCase)) })
-                        .Where(item => item.Index >= 0)
-                        .OrderBy(item => item.Index)
-                        .FirstOrDefault()
-                        ?.File;
-
-                    var (fileExists, wasUploaded, wasSkipped, hasError) = await ProcessLocalAssetAsync(
-                            foundFile,
-                            series,
-                            config.Type,
-                            config.Label,
-                            $"series {series.GetDisplayTitle()} [{series.LocalID}]",
-                            $"[Local {config.Label}] {series.GetDisplayTitle()}",
-                            uploadedBag,
-                            errorsBag
-                        )
-                        .ConfigureAwait(false);
-
-                    addStats(fileExists, wasUploaded, wasSkipped, hasError);
+                    itemProgress.Increment();
                 }
             })
             .ConfigureAwait(false);
+    }
 
     #endregion
 
