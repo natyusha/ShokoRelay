@@ -594,6 +594,7 @@
     document.body.appendChild(tooltipElement);
     const content = tooltipElement.querySelector(".rt-content");
     let showTimer;
+    let hideTimer;
 
     /**
      * Displays the hover tooltip positioned relative to the target element.
@@ -601,17 +602,24 @@
      * @returns {void}
      */
     const show = (target) => {
+      clearTimeout(hideTimer);
       const text = target.dataset.tooltipText || target.getAttribute("data-tooltip") || target.getAttribute("title");
       if (target.disabled || !text) return;
       if (target.dataset.tooltipOverflowOnly === "true" && target.scrollWidth <= target.clientWidth) return;
-      content.textContent = text;
-      tooltipElement.className = "tooltip-core tooltip-box tooltip-dark tooltip-show";
-      tooltipElement.setAttribute("aria-hidden", "false");
-      const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
-      const bounds = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
+      const isTruncated = target.dataset.tooltipTruncate === "true";
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = document.documentElement.clientHeight;
       const margin = 10;
+      const maxTooltipWidth = Math.max(120, viewportWidth - margin * 2);
+
+      content.textContent = text;
+      tooltipElement.style.left = "0px";
+      tooltipElement.style.top = "0px";
+      tooltipElement.style.maxWidth = `${isTruncated ? Math.min(480, maxTooltipWidth) : maxTooltipWidth}px`;
+      tooltipElement.className = `tooltip-core tooltip-box tooltip-dark tooltip-show${isTruncated ? " tooltip-truncate" : ""}`;
+      tooltipElement.setAttribute("aria-hidden", "false");
+      const disabledChild = target.tagName !== "LABEL" ? target.querySelector(":disabled, [disabled]") : null;
+      const bounds = disabledChild ? disabledChild.getBoundingClientRect() : target.getBoundingClientRect();
       let place = "top";
       let top = bounds.top - tooltipElement.offsetHeight - margin;
       let left = bounds.left + bounds.width / 2 - tooltipElement.offsetWidth / 2;
@@ -639,10 +647,16 @@
      */
     const hide = () => {
       clearTimeout(showTimer);
+      clearTimeout(hideTimer);
       tooltipElement.classList.remove("tooltip-show");
       tooltipElement.classList.add("tooltip-closing");
       tooltipElement.setAttribute("aria-hidden", "true");
-      setTimeout(() => tooltipElement.classList.remove("tooltip-closing"), 150);
+      hideTimer = setTimeout(() => {
+        tooltipElement.classList.remove("tooltip-closing", "tooltip-truncate");
+        tooltipElement.style.left = "0px";
+        tooltipElement.style.top = "0px";
+        content.textContent = "";
+      }, 150);
     };
 
     window.addEventListener("blur", hide);

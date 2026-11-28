@@ -286,12 +286,21 @@ label.shoko-checkbox input[type="checkbox"]:checked + .shoko-checkbox-icon .chec
   transition: opacity 0.15s ease-in;
 }
 .tooltip-box {
+  box-sizing: border-box;
   border-radius: 3px;
   padding: 8px 16px;
   width: max-content;
   max-width: calc(100vw - 32px);
   font-size: 0.9em;
   word-wrap: break-word;
+}
+.tooltip-box.tooltip-truncate {
+  max-width: min(480px, calc(100vw - 32px));
+}
+.tooltip-truncate .rt-content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tooltip-arrow {
   position: absolute;
