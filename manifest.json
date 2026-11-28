@@ -16,6 +16,34 @@
   "icon_url": "https://raw.githubusercontent.com/natyusha/ShokoRelay/master/Assets/shoko-relay-icon.png",
   "releases": [
     {
+      "version": "0.24.1",
+      "tag": "v0.24.1",
+      "source_revision": "f5a45ec9252a7c62ec506b5e9dec9900294c99d7",
+      "released_at": "2026-11-28T04:09:33Z",
+      "channel": "Dev",
+      "release_notes": "This release adds integration with Shoko's queue processor and marks the first version intended for full release. If no bugs are found this will be marked as v1.0.0.\r\n\r\n**Note:**\r\n- Force refreshing the dashboard (`Ctrl-F5`) may be required for all of the front end changes to take effect (depending on the previous version)\r\n\r\n**Changes:**\r\n- Integrated VFS, AnimeThemes, Plex, and sync tasks into Shoko's Job Queue with live progress and cancellation\r\n- Preserved partial results and mappings when cancelling queued jobs\r\n- Added Shoko-to-Plex playback progress syncing via `/:/timeline`\r\n- Aligned Plex Metadata Provider responses, HTTP methods, and pagination headers with the Plex OpenAPI spec\r\n- Fixed show duration averaging, episode `parentTitle` parity, and `guid`/`m`-prefixed movie match fallbacks\r\n- Added non-US TMDB content rating prefixes and exact `title==` collection query matching\r\n- Added creator thumbnails to Director, Producer, and Writer metadata entries\r\n- Added `includeHttps`, `includeRelay`, and `includeIPv6` flags to Plex.tv resource discovery\r\n- Offloaded AnimeThemes player sorting, indexing, tag filtering, and favourites to the backend\r\n- Fixed player Folder View Next/Prev ordering, hotkey modifier guards, and session-close UI resets\r\n- Enabled one-click `Theme.mp3` generation for standalone movies in the VFS Browser\r\n- Released `VfsLock` during AnimeThemes crawls and fixed case-sensitive cross-root `Move` checks\r\n- Cleaned up stale symlinks on AniDB ID changes and synchronized parallel `Theme.mp3` linking\r\n- Added runtime `FFmpegPath` change detection and atomic `IFileSystem` handling for `Theme.mp3` writes\r\n- Fixed VFS primary deletion recovery, deferred WebM cache pruning, and Movie VFS extra versioning\r\n- Prevented clean builds from recreating VFS roots in excluded or source-only folders\r\n- Guarded collection artwork caches against transient Plex errors and skipped smart collections on filtered runs\r\n- Disabled shared `HttpClient` cookies to prevent cross-user Plex token leakage\r\n- Fixed watch sync rating clamping, multi-library votes, per-user skip counts, and `StartWatchedSyncNow`\r\n- Added versioned asset cache busting (`?v=`) and backend schema-driven settings validation\r\n- Preserved top-level CSS at-rules in dynamic themes and added drop-shadows to floating dashboard links\r\n- Updated `README.md` and `Docs/CONTROLLER.md` with the queue/endpoint changes\r\n- Bumped Shoko.Abstractions to v6.0.0-alpha.144\r\n\r\n**Full Changelog**: https://github.com/natyusha/ShokoRelay/compare/v0.24.0...v0.24.1",
+      "archives": [
+        {
+          "runtime": "linux-arm64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.24.1/ShokoRelay-v0.24.1-dev_linux-arm64.zip",
+          "checksum": "sha256:4d954f1df14a36b2e9370557a21fc6d930d4a6d57dcceb05d2111d7355253688"
+        },
+        {
+          "runtime": "linux-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.24.1/ShokoRelay-v0.24.1-dev_linux-x64.zip",
+          "checksum": "sha256:c3e53c57b6877b8760958846f342e001be84940a46f0ff813eeefc3d47e2e6a4"
+        },
+        {
+          "runtime": "win-x64",
+          "abstraction": "6.0.0",
+          "url": "https://github.com/natyusha/ShokoRelay/releases/download/v0.24.1/ShokoRelay-v0.24.1-dev_win-x64.zip",
+          "checksum": "sha256:fb4b0bb99b72ed68fa67277d1b0347af75315113fea4c7fa1f23958a9fad0673"
+        }
+      ]
+    },
+    {
       "version": "0.24.0",
       "tag": "v0.24.0",
       "source_revision": "7129814b57a48126d187b2c5afaa70e8403b7c80",
