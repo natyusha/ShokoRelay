@@ -86,9 +86,10 @@ public static class ActionScheduleHelper
     public static async Task RunWithTaskLockAsync(string taskName, SemaphoreSlim semaphore, Func<Task> action, CancellationToken cancellationToken = default)
     {
         await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-        bool startedTask = TaskHelper.StartTask(taskName);
+        bool startedTask = false;
         try
         {
+            startedTask = TaskHelper.StartTask(taskName);
             await action().ConfigureAwait(false);
         }
         finally

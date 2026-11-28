@@ -1,7 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.AnimeThemes;
 

@@ -626,7 +626,7 @@ internal static class VfsShared
     /// <param name="cancellationToken">Optional cancellation token.</param>
     /// <returns>A task representing the asynchronous write operation.</returns>
     public static Task WriteTextAtomicAsync(string path, string content, CancellationToken cancellationToken = default) =>
-        WriteAtomicAsync(path, (temporaryPath, cancellationToken) => File.WriteAllTextAsync(temporaryPath, content, cancellationToken), cancellationToken);
+        WriteAtomicAsync(path, (temporaryPath, token) => File.WriteAllTextAsync(temporaryPath, content, token), cancellationToken);
 
     /// <summary>Atomically writes lines of text to a target file via a temporary file move.</summary>
     /// <param name="path">The target file path.</param>

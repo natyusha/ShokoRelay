@@ -55,12 +55,8 @@ public class BuildVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping atMapping,
                 VfsShared.VfsLock,
                 async () =>
                 {
-                    _progress.Report(10);
-                    var result = await Task.Run(() => vfsBuilder.Build((int?)null, Clean, token), token).ConfigureAwait(false);
-                    _progress.Report(70);
-
-                    await atMapping.ApplyMappingIfExistsAsync(null, token).ConfigureAwait(false);
-
+                    var result = await Task.Run(() => vfsBuilder.Build((int?)null, Clean, token, _progress.Slice(0m, 70m)), token).ConfigureAwait(false);
+                    await atMapping.ApplyMappingIfExistsAsync(null, token, _progress.Slice(70m, 100m)).ConfigureAwait(false);
                     ReportHelper.WriteReport($"{ShokoRelayConstants.TaskVfsBuild}.report", result, ReportHelper.BuildVfsReport, logger);
                     _progress.Report(100);
                 },

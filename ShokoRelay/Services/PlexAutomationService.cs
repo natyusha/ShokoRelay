@@ -45,26 +45,26 @@ public class PlexAutomationService(CollectionService collectionService, CriticRa
     public async Task<PlexAutomationRunResult> RunAutomationAsync(IProgress<decimal>? progress = null, CancellationToken token = default)
     {
         var stopwatch = Stopwatch.StartNew();
-        progress?.Report(10);
+        progress?.Report(0);
 
         var collectionsStopwatch = Stopwatch.StartNew();
-        var collectionsResult = await collectionService.BuildCollectionsAsync(null, cancellationToken: token).ConfigureAwait(false);
+        var collectionsResult = await collectionService.BuildCollectionsAsync(null, cancellationToken: token, progress: progress?.Slice(0m, 35m)).ConfigureAwait(false);
         collectionsStopwatch.Stop();
         ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexCollectionsBuild}.report", collectionsResult, ReportHelper.BuildCollectionsReport, logger);
-        progress?.Report(40);
+        progress?.Report(35);
 
         var ratingsStopwatch = Stopwatch.StartNew();
-        var ratingsResult = await criticRatingService.ApplyRatingsAsync(null, token).ConfigureAwait(false);
+        var ratingsResult = await criticRatingService.ApplyRatingsAsync(null, token, progress?.Slice(35m, 65m)).ConfigureAwait(false);
         ratingsStopwatch.Stop();
         ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexRatingsApply}.report", ratingsResult, ReportHelper.BuildRatingsReport, logger);
-        progress?.Report(70);
+        progress?.Report(65);
 
         TimeSpan? imageSyncElapsed = null;
         ImageSyncResult? imageSyncResult = null;
         if (Settings.Advanced.EnableImageSync)
         {
             var imagesStopwatch = Stopwatch.StartNew();
-            imageSyncResult = await imageSyncService.SyncImagesAsync(cancellationToken: token).ConfigureAwait(false);
+            imageSyncResult = await imageSyncService.SyncImagesAsync(cancellationToken: token, progress: progress?.Slice(65m, 90m)).ConfigureAwait(false);
             imagesStopwatch.Stop();
             imageSyncElapsed = imagesStopwatch.Elapsed;
             ReportHelper.WriteReport($"{ShokoRelayConstants.TaskPlexImagesSync}.report", imageSyncResult, ReportHelper.BuildImageSyncReport, logger);

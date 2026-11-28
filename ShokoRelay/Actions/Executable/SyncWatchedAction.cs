@@ -73,8 +73,8 @@ public class SyncWatchedAction(SyncToShoko syncToShoko, SyncToPlex syncToPlex, P
                 {
                     _progress.Report(10);
                     var result = ImportToPlex
-                        ? await syncToPlex.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, IncludeProgress, cancellationToken: token).ConfigureAwait(false)
-                        : await syncToShoko.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, IncludeProgress, cancellationToken: token).ConfigureAwait(false);
+                        ? await syncToPlex.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, IncludeProgress, cancellationToken: token, progress: _progress).ConfigureAwait(false)
+                        : await syncToShoko.SyncWatchedAsync(DryRun, SinceHours, IncludeRatings, IncludeProgress, cancellationToken: token, progress: _progress).ConfigureAwait(false);
 
                     result = result with { Direction = ImportToPlex ? "Plex<-Shoko" : "Plex->Shoko" };
                     ReportHelper.WriteReport(

@@ -5,7 +5,6 @@ using Shoko.Abstractions.FileSystem;
 using Shoko.Abstractions.Metadata.Containers;
 using Shoko.Abstractions.Metadata.Image.CrossReferences;
 using Shoko.Abstractions.Metadata.Image.Options;
-using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.Services;
 
@@ -258,7 +257,12 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                     .Any(xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource)
                             )
                             {
-                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource)
+                                await PurgeEntityImagesAsync(
+                                        episode,
+                                        ImageEntityType.Backdrop,
+                                        xref => xref.Source == ServiceRegistration.RelayPlexSource || xref.Source == ServiceRegistration.RelaySource,
+                                        cancellationToken: itemToken
+                                    )
                                     .ConfigureAwait(false);
                                 addStats(false, false, false, false);
                             }
@@ -322,7 +326,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 episodeLogName,
                                 $"[Local {labelType} Thumb] {episodeLogName}",
                                 uploadedBag,
-                                errorsBag
+                                errorsBag,
+                                itemToken
                             )
                             .ConfigureAwait(false);
                         addStats(fileExists, wasUploaded, wasSkipped, hasError);
@@ -339,7 +344,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                             if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
                             {
                                 logger.LogInformation("ImageSyncService: {Reason} ... Purging Plex thumbnail for -> {LogName}", fileExists ? "Local thumbnail found" : "TMDB Thumbnails enabled", episodeLogName);
-                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource, itemToken).ConfigureAwait(false);
                             }
                         }
                         else
@@ -349,7 +354,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 addStats(true, false, false, true);
                                 errorsBag.Add($"[Missing Plex Thumbnail] {episodeLogName} (No thumbnail generated or available in Plex)");
                                 if (episode.GetImageCrossReferences(plexBackdropFilter).Count > 0)
-                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                                    await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource, itemToken).ConfigureAwait(false);
                             }
                             else
                             {
@@ -406,7 +411,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                 var episodeLogName = $"{episode.Series?.GetDisplayTitle()} [{episode.ShokoSeriesID}] - {coordsText}";
 
                 logger.LogDebug("ImageSyncService: Episode thumbnail for -> {LogName} is no longer present in Plex ... Purging from Shoko", episodeLogName);
-                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource).ConfigureAwait(false);
+                await PurgeEntityImagesAsync(episode, ImageEntityType.Backdrop, ServiceRegistration.RelayPlexSource, cancellationToken).ConfigureAwait(false);
                 addStats(false, false, false, false);
             }
         }
@@ -452,7 +457,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                         $"group {group.PreferredTitle?.Value} [{group.LocalID}]",
                         $"[Collection Poster] {group.PreferredTitle?.Value}",
                         uploadedBag,
-                        errorsBag
+                        errorsBag,
+                        cancellationToken
                     )
                     .ConfigureAwait(false);
 
@@ -505,7 +511,7 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                     .Count > 0
                             )
                             {
-                                await PurgeEntityImagesAsync(series, config.Type, ServiceRegistration.RelaySource).ConfigureAwait(false);
+                                await PurgeEntityImagesAsync(series, config.Type, ServiceRegistration.RelaySource, token).ConfigureAwait(false);
                                 addStats(false, false, false, false);
                             }
                         return;
@@ -531,7 +537,8 @@ public class ImageSyncService(PlexClient plexClient, IMetadataService metadataSe
                                 $"series {series.GetDisplayTitle()} [{series.LocalID}]",
                                 $"[Local {config.Label}] {series.GetDisplayTitle()}",
                                 uploadedBag,
-                                errorsBag
+                                errorsBag,
+                                token
                             )
                             .ConfigureAwait(false);
 

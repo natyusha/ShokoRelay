@@ -148,30 +148,33 @@
   };
 
   /**
-   * Evaluates the full list of themes against active search terms, heart status, and pre-indexed server tags.
-   * @returns {Object[]} The filtered list of theme entries.
+   * Evaluates the full list of themes against active search terms, heart status, and pre-indexed server tags, ordered to match the active tree view.
+   * @returns {Object[]} The filtered and view-ordered list of theme entries.
    */
   const getFilteredItems = () => {
     const rawFilter = (uiFilter?.value || "").toLowerCase().trim();
-    if (!rawFilter) return webmTreeData;
+    let items = webmTreeData;
+    if (rawFilter) {
+      const words = rawFilter.split(/\s+/).filter(Boolean);
+      const isFavQuery = words.includes("favs");
+      const tagExclusions = [];
+      const tagInclusions = [];
+      const searchTerms = [];
 
-    const words = rawFilter.split(/\s+/).filter(Boolean);
-    const isFavQuery = words.includes("favs");
-    const tagExclusions = [];
-    const tagInclusions = [];
-    const searchTerms = [];
+      words.forEach((word) => {
+        if (word === "favs") return;
+        word.startsWith("-") ? tagExclusions.push(word.substring(1)) : word.startsWith("+") ? tagInclusions.push(word.substring(1)) : searchTerms.push(word);
+      });
 
-    words.forEach((word) => {
-      if (word === "favs") return;
-      word.startsWith("-") ? tagExclusions.push(word.substring(1)) : word.startsWith("+") ? tagInclusions.push(word.substring(1)) : searchTerms.push(word);
-    });
+      items = webmTreeData.filter((item) => {
+        if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;
+        const tags = item.tags || [];
+        if (tagExclusions.some((tag) => tags.includes(tag)) || tagInclusions.some((tag) => !tags.includes(tag))) return false;
+        return searchTerms.every((word) => item.searchIndex.includes(word));
+      });
+    }
 
-    return webmTreeData.filter((item) => {
-      if (isFavQuery && (!item.videoId || !favourites.has(item.videoId))) return false;
-      const tags = item.tags || [];
-      if (tagExclusions.some((tag) => tags.includes(tag)) || tagInclusions.some((tag) => !tags.includes(tag))) return false;
-      return searchTerms.every((word) => item.searchIndex.includes(word));
-    });
+    return useFolderView ? [...items].sort((left, right) => (left.folderSortKey < right.folderSortKey ? -1 : left.folderSortKey > right.folderSortKey ? 1 : 0)) : items;
   };
 
   /**
@@ -295,11 +298,10 @@
     rootUl.className = "tree";
     const hasFilter = !!uiFilter?.value.trim();
     const favAllowed = canModifyServerState();
-    const orderedItems = useFolderView ? [...items].sort((left, right) => (left.folderSortKey < right.folderSortKey ? -1 : left.folderSortKey > right.folderSortKey ? 1 : 0)) : items;
-    const multiSeriesGroups = useFolderView ? null : getMultiSeriesGroups(orderedItems);
+    const multiSeriesGroups = useFolderView ? null : getMultiSeriesGroups(items);
     const rootNode = { folders: new Map(), files: [] };
 
-    orderedItems.forEach((item) => {
+    items.forEach((item) => {
       let current = rootNode;
       getItemPathSegments(item, multiSeriesGroups).forEach((segment) => {
         if (!current.folders.has(segment)) current.folders.set(segment, { folders: new Map(), files: [] });

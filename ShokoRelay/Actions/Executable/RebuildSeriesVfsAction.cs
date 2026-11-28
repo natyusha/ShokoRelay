@@ -52,11 +52,8 @@ public class RebuildSeriesVfsAction(VfsBuilder vfsBuilder, AnimeThemesMapping at
         await VfsShared.VfsLock.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            _progress.Report(15);
-            await Task.Run(() => vfsBuilder.Build(primaryId, cleanRoot: false, token), token).ConfigureAwait(false);
-            _progress.Report(70);
-
-            await atMapping.ApplyMappingIfExistsAsync([primaryId], token).ConfigureAwait(false);
+            await Task.Run(() => vfsBuilder.Build(primaryId, cleanRoot: false, token, _progress.Slice(0m, 70m)), token).ConfigureAwait(false);
+            await atMapping.ApplyMappingIfExistsAsync([primaryId], token, _progress.Slice(70m, 95m)).ConfigureAwait(false);
 
             plexMetadata.InvalidateCache(primaryId);
             if (TriggerPlexUpdates && plexClient.IsEnabled)

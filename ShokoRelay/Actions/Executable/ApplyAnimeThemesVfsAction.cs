@@ -48,8 +48,7 @@ public class ApplyAnimeThemesVfsAction(AnimeThemesMapping atMapping, ConfigProvi
                 VfsShared.VfsLock,
                 async () =>
                 {
-                    _progress.Report(15);
-                    var result = await atMapping.ApplyMappingAsync(null, token).ConfigureAwait(false);
+                    var result = await atMapping.ApplyMappingAsync(null, token, _progress).ConfigureAwait(false);
                     ReportHelper.WriteReport($"{ShokoRelayConstants.TaskAtVfsBuild}.report", result, (builder, report) => ReportHelper.BuildAtVfsBuildReport(builder, report, []), logger);
                     _progress.Report(100);
                 },

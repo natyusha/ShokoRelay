@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Shoko.Abstractions.FileSystem;
-using Shoko.Abstractions.Utilities;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.AnimeThemes;

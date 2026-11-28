@@ -2,7 +2,6 @@ using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Enums;
 using Shoko.Abstractions.User.Services;
 using Shoko.Abstractions.User.Update;
-using Shoko.Abstractions.Utilities;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Sync;

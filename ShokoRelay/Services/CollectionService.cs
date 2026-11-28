@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Shoko.Abstractions.Extensions;
-using Shoko.Abstractions.Utilities;
 using Shoko.Abstractions.Video.Services;
 
 namespace ShokoRelay.Services;

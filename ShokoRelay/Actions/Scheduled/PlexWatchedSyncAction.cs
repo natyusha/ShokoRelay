@@ -48,7 +48,7 @@ public class PlexWatchedSyncAction(SyncToShoko watchedSyncService, PlexClient pl
                 async () =>
                 {
                     progress.Report(10);
-                    var result = await watchedSyncService.SyncWatchedAsync(false, lookback, cancellationToken: token).ConfigureAwait(false);
+                    var result = await watchedSyncService.SyncWatchedAsync(false, lookback, cancellationToken: token, progress: progress).ConfigureAwait(false);
                     progress.Report(100);
 
                     ReportHelper.WriteReport(

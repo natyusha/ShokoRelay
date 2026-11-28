@@ -41,7 +41,8 @@ public partial class VfsBuilder
                         hasPeer ? mapping.PartIndex : null,
                         hasPeer ? mapping.PartCount : 1,
                         versionIndex,
-                        mapping.IsVariation
+                        mapping.IsVariation,
+                        metadataService
                     )
                     : VfsHelper.SanitizeName(
                         VfsHelper.BuildStandardFileName(

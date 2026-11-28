@@ -1,5 +1,4 @@
 using Newtonsoft.Json;
-using Shoko.Abstractions.Utilities;
 using Shoko.QueueProcessor.Acquisition.Attributes;
 using Shoko.QueueProcessor.Builder;
 using Shoko.QueueProcessor.Concurrency;

@@ -18,6 +18,7 @@
     <Using Include="Shoko.Abstractions.Metadata.Services" />
     <Using Include="Shoko.Abstractions.Metadata.Shoko" />
     <Using Include="Shoko.Abstractions.Metadata.Enums" />
+    <Using Include="Shoko.Abstractions.Utilities" />
     <Using Include="Shoko.Abstractions.Metadata" />
     <Using Include="ShokoRelay.Helpers" />
     <Using Include="ShokoRelay.Config" />

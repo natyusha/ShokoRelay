@@ -69,21 +69,21 @@ public class RefreshSeriesPlexAction(
         await SyncHelper.SyncLock.WaitAsync(token).ConfigureAwait(false);
         try
         {
-            _progress.Report(15);
+            _progress.Report(10);
             plexMetadata.InvalidateCache(primaryId);
             await plexClient.RefreshSeriesMetadataAsync(primaryId, metadataService, token).ConfigureAwait(false);
 
-            _progress.Report(50);
+            _progress.Report(40);
             if (UpdateCollections)
-                await collectionService.BuildCollectionsAsync([primarySeries], clean: false, cancellationToken: token).ConfigureAwait(false);
+                await collectionService.BuildCollectionsAsync([primarySeries], clean: false, cancellationToken: token, progress: _progress.Slice(40m, 60m)).ConfigureAwait(false);
 
-            _progress.Report(70);
+            _progress.Report(60);
             if (ApplyRatings)
-                await criticRatingService.ApplyRatingsAsync([primaryId], token).ConfigureAwait(false);
+                await criticRatingService.ApplyRatingsAsync([primaryId], token, _progress.Slice(60m, 80m)).ConfigureAwait(false);
 
-            _progress.Report(85);
+            _progress.Report(80);
             if (SyncImages)
-                await imageSyncService.SyncImagesAsync([primaryId], token).ConfigureAwait(false);
+                await imageSyncService.SyncImagesAsync([primaryId], token, _progress.Slice(80m, 100m)).ConfigureAwait(false);
 
             _progress.Report(100);
         }

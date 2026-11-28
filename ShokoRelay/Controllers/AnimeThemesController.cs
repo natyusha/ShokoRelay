@@ -616,9 +616,9 @@ public class AnimeThemesController(
                         "spring" => "0002",
                         "summer" => "0003",
                         "fall" => "0004",
-                        _ when segment.EndsWith('s') && int.TryParse(segment[..^1], out int decade) => (1900 + decade).ToString("D4"),
-                        _ when int.TryParse(segment, out int year) => year.ToString("D4"),
-                        _ => segment.ToLowerInvariant(),
+                        var lower when lower.EndsWith('s') && int.TryParse(lower[..^1], out int decade) => (1900 + decade).ToString("D4"),
+                        var lower when int.TryParse(lower, out int year) => year.ToString("D4"),
+                        var lower => lower,
                     }
                 )
             )

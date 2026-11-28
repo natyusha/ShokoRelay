@@ -2,7 +2,6 @@ using System.Globalization;
 using System.Net;
 using Shoko.Abstractions.User;
 using Shoko.Abstractions.User.Services;
-using Shoko.Abstractions.Utilities;
 
 namespace ShokoRelay.Sync;
 

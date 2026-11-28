@@ -44,8 +44,7 @@ public class AuditVfsAction(VfsBuilder vfsBuilder, ILogger<AuditVfsAction> logge
                 VfsShared.VfsLock,
                 async () =>
                 {
-                    _progress.Report(15);
-                    var result = await Task.Run(() => vfsBuilder.Audit(token), token).ConfigureAwait(false);
+                    var result = await Task.Run(() => vfsBuilder.Audit(token, _progress), token).ConfigureAwait(false);
                     ReportHelper.WriteReport($"{ShokoRelayConstants.TaskVfsAudit}.report", result, ReportHelper.BuildVfsAuditReport, logger);
                     _progress.Report(100);
                 },
